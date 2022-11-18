@@ -2,7 +2,9 @@
 
 Pangolin is an interface for probabilistic reasoning focused on **fun**. The goal is to be the "first" probabilistic programming language, to bring out the underlying mathematical elegance and simplicity of probabilistic reasoning, and to make easy things easy.  It should feel particularly natural to Python programmers familiar with numpy.
 
-Most of the actual *work* of Pangolin is done by Martin Plummer's amazing [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand when you ask for answers. (JAGS is a descendent of the original [BUGS](https://en.wikipedia.org/wiki/WinBugs) program from the late 80s, and an inspiration for other well-used tools like [STAN](https://mc-stan.org/).)
+To use pangolin you just need to download the single file [`pangolin.py`](blob/main/pangolin.py).
+
+Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand when you ask for answers.
 
 Note: Pangolin is "academia-ware". It's not a package, it's a single 1800 line file written by one person. (Packages aren't fun, single files are fun) I've written a lot of tests, but it's likely that that more bugs remain. I would say that Pangolin was "alpha" but that would seem to imply a level of competence or at least aspiration that doesn't really exist here.
 
@@ -61,20 +63,25 @@ plt.savefig('regression.png')
 
 # FAQ
 
-* Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?
+**Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?**
 
-Mostly because JAGS supports discrete variables. Discrete variables are really useful *especially* when people are learning about probabilistic inference for the first time, which is the setting JAGS is intended for.
+Mostly because JAGS supports discrete variables, which is really useful when people are learning about probabilistic inference for the first time. This is the setting Pangolin is intended for.
 
 Even so, these other systems are based on Hamiltonian Monte Carlo rather than Gibbs sampling and so tend to perform better on "harder" problems. So I've been wondering if this might have been a mistake and it might be worth trying to support multiple backends.
 
-* Why Pangolin?
-
-Pangolins are cool.
-
 # Installation
 
-1. Install JAGS and make sure that it is in your path.
-2. Pangolin is a file. Download `pangolin.py` it and put it in the directory you're working.
+1. Install JAGS and make sure that it is in your path. After you've done this, if you type `jags` at the command line you should see something like this:
+
+  ```
+  % jags
+Welcome to JAGS 4.3.1 on Thu Jab 1 00:00:00 1970
+JAGS is free software and comes with ABSOLUTELY NO WARRANTY
+Loading module: basemod: ok
+Loading module: bugs: ok
+.
+```
+2. Pangolin is a single file. Download [it](blob/main/pangolin.py) it and put it in the directory you're working.
 
 # API
 
@@ -84,7 +91,7 @@ At a high level, this is the full API:
   * Also the infix operators `+`, `*`, `/`, `**`, and `@`
 * `IID`, `vmap`, `recurse`, `scan` - vectorization operators
 * `sample`, `E`, `P`, `var`, `std`, `cov`, `corr` - inference
-* `I` - Iverson operator (convert equality to random variable)
+* `I` - Iverson operator (convert Equalities to random variables)
 * `makerv` convert a number or numpy array to a random variable (rarely needed)
 * `jags_code` - see raw JAGS code
 
@@ -104,12 +111,14 @@ d.logis(a,b)       - logistic distribution
 d.lnorm(a,b)       - lognormal distribution
 d.nchisqr(a,b)     - Non-central chi-squared
 d.nt(a,b)          - non-central t
-d.norm(a,b)        - Normal distribution **USES PRECISION NOT VARIANCE**
+d.norm(a,b)        - Normal distribution
 d.par(a,b)         - Pareto
 d.t(a,b,c)         - Student T
 d.unif(a,b)        - uniform
 d.web(a,b)         - Weibull
 ```
+
+Note that like in JAGS, the normal distribution uses PRECISION, not VARIANCE for the second parameter. (For scalars, precision is 1/variance.)
 
 **Discrete univariate distributions**  (sec 9.2.2 of JAGS user manual)
 
@@ -145,7 +154,7 @@ d.normmix(a,b,c) - mixture of 1-D normals
 
 You can do things like 
 
-```
+```python
 d.norm(0,1).cdf(.7)
 d.norm(0,1).quantile(-0.5)
 ```
@@ -199,9 +208,10 @@ t.trunc(a)
 **Scalar functions triggered by infix operators**
 
 ```
-a + b - same as t.add(a,b) - elementwise addition
-a / b - same as t.div(a,b) - elementwise division
-a * b - same as t.mul(a,b) - elementwise multiplication
+a + b  - same as t.add(a,b) - elementwise addition
+a / b  - same as t.div(a,b) - elementwise division
+a * b  - same as t.mul(a,b) - elementwise multiplication
+a ** b - same as t.pow(a,b) - elementwise powers
 ```
 
 **Matrix functions**
@@ -210,7 +220,12 @@ a * b - same as t.mul(a,b) - elementwise multiplication
 a @ b - same as t.matmul(a,b) - matrix multiplication
 ```
 
-Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's `@` operator. You can only do it when `a` and `b` are both 1-d or 2-d arrays with compatible dimensions
+Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's `@` operator. You can only do it when `a` and `b` are both 1-d or 2-d arrays with compatible dimensions. Then:
+
+* If `a` and `b` are 1-d arrays, `a @ b` is the inner-product.
+* If `A` is a 2-d array and `b` is a 1-d array, `A @ b` is matrix-vector multiplication.
+* If `a` is a 1-d array and `B` is a 2-d array, `a @ B` is vector-matrix multiplication.
+* If `A` and `B` are 2-d arrays, `A @ B` is matrix multiplication.
 
 ```
 a.T - same as t.t(a) - transpose
@@ -222,11 +237,11 @@ If `a` is a 1-D array, you can do `a[b]` where `b` is:
 * An integer-valued random variable
 * Any slice with constant indices
 
-Currently you can't index N-D arrays at all (although you can implicitly do this through vectorization)
+Currently you can't index N-D arrays at all when N>1 (although you can implicitly do this through vectorization).
 
 ## Vectorization
 
-The following operators are for efficient vectorization: They allow you to express random variables that ultimately compile to `for` loops in JAGS. The principal reason to use them is for efficiency.
+Pangolin provides four operators for efficient vectorization: `IID`, `vmap`, `recurse`, and `scan`. (These are inspired by similar operators in Pyro/NumPyro/JAX) They allow you to express random variables that ultimately compile to `for` loops in JAGS. The principal reason to use them is for efficiency.
 
 ### IID
 
