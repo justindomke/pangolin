@@ -73,8 +73,8 @@ Even so, these other systems are based on Hamiltonian Monte Carlo rather than Gi
 
 1. Install JAGS and make sure that it is in your path. After you've done this, if you type `jags` at the command line you should see something like this:
 
-  ```
-  % jags
+```shell
+% jags
 Welcome to JAGS 4.3.1 on Thu Jab 1 00:00:00 1970
 JAGS is free software and comes with ABSOLUTELY NO WARRANTY
 Loading module: basemod: ok
@@ -99,54 +99,54 @@ At a high level, this is the full API:
 
 **Continuous univariate distributions** (sec 9.2.1 of JAGS user manual)
 
-```
-d.beta(a,b)        - beta
-d.chisqr(a)        - Chi squared
-d.dexp(a,b)        - Double eponential (or laplace)
-d.exp(a)           - Exponential
-d.f(a,b)           - F distribution
-d.gamma(a,b)       - gamma
-d.gen_gamma(a,b,c) - generalized gamma
-d.logis(a,b)       - logistic distribution
-d.lnorm(a,b)       - lognormal distribution
-d.nchisqr(a,b)     - Non-central chi-squared
-d.nt(a,b)          - non-central t
-d.norm(a,b)        - Normal distribution
-d.par(a,b)         - Pareto
-d.t(a,b,c)         - Student T
-d.unif(a,b)        - uniform
-d.web(a,b)         - Weibull
+```python
+d.beta(a,b)        # beta
+d.chisqr(a)        # Chi squared
+d.dexp(a,b)        # Double eponential (or laplace)
+d.exp(a)           # Exponential
+d.f(a,b)           # F distribution
+d.gamma(a,b)       # Gamma
+d.gen_gamma(a,b,c) # Generalized gamma
+d.logis(a,b)       # Logistic distribution
+d.lnorm(a,b)       # Lognormal distribution
+d.nchisqr(a,b)     # Non-central chi-squared
+d.nt(a,b)          # Non-central t
+d.norm(a,b)        # Normal distribution
+d.par(a,b)         # Pareto
+d.t(a,b,c)         # Student T
+d.unif(a,b)        # Uniform
+d.web(a,b)         # Weibull
 ```
 
 Note that like in JAGS, the normal distribution uses PRECISION, not VARIANCE for the second parameter. (For scalars, precision is 1/variance.)
 
 **Discrete univariate distributions**  (sec 9.2.2 of JAGS user manual)
 
-```
-d.bern(a)        - Bernoulli
-d.binom(a,b)     - Binomial
-d.cat(a)         - Categorical
-d.hyper(a,b,c,d) - noncentral hypergeometric
-d.negbin(a,b)    - negative binomial
-d.pois(a)        - Poisson
+```python
+d.bern(a)        # Bernoulli
+d.binom(a,b)     # Binomial
+d.cat(a)         # Categorical
+d.hyper(a,b,c,d) # Noncentral hypergeometric
+d.negbin(a,b)    # Negative binomial
+d.pois(a)        # Poisson
 ```
 
 **Multivariate** (sec 9.2.3 of JAGS user manual)
 
 
-```
-d.dirch(a)        - Dirichlet
-d.mnorm(a,b)      - multivariate normal **USES PRECISION NOT VARIANCE**
-d.mnorm_vcov(a,b) - multivariate normal **THIS ONE USES COVARIANCE**
-d.mt(a,b,c)       - Multivariate t
-d.multi(a,b)      - Multinomial
-d.sample(a,b)     - sampling without replacement (JAGS user manual has typo in title)
-d.wish(a,b)       - Wishart
+```python
+d.dirch(a)        # Dirichlet
+d.mnorm(a,b)      # Multivariate normal USES PRECISION NOT COVARIANCE
+d.mnorm_vcov(a,b) # Multivariate normal THIS ONE USES COVARIANCE
+d.mt(a,b,c)       # Multivariate t
+d.multi(a,b)      # Multinomial
+d.sample(a,b)     # Sampling without replacement (JAGS user manual has typo in title)
+d.wish(a,b)       # Wishart
 ```
 
 There's also one special distribution, a special sampling module has to be loaded if you use it:
 
-```
+```python
 d.normmix(a,b,c) - mixture of 1-D normals
 ```
 
@@ -161,9 +161,11 @@ d.norm(0,1).quantile(-0.5)
 
 ## Transformations
 
-t.sum(a) - sum of elements in a 1-d vector
-t.ifelse(x,a,b) - x must be an Equality. If x is true, gives a otherwise b.
-t.equals(a,b) - 1 if a equals b otherwise 0
+```python
+t.sum(a)        # sum of elements in a 1-d vector
+t.ifelse(x,a,b) # x must be an Equality. If x is true, gives a otherwise b.
+t.equals(a,b)   # 1 if a equals b otherwise 0
+```
 
 **Scalar functions**  (see table 9.1 in JAGS user manual)
 
@@ -174,7 +176,7 @@ These functions are all automatically vectorized according to JAGS rules. If `fu
 
 Most of these names are self-explanatory.
 
-```
+```python
 t.pow(a,b)
 t.abs(a)
 t.arccos(a)
@@ -207,17 +209,17 @@ t.trunc(a)
 
 **Scalar functions triggered by infix operators**
 
-```
-a + b  - same as t.add(a,b) - elementwise addition
-a / b  - same as t.div(a,b) - elementwise division
-a * b  - same as t.mul(a,b) - elementwise multiplication
-a ** b - same as t.pow(a,b) - elementwise powers
+```python
+a + b  # same as t.add(a,b) - elementwise addition
+a / b  # same as t.div(a,b) - elementwise division
+a * b  # same as t.mul(a,b) - elementwise multiplication
+a ** b # same as t.pow(a,b) - elementwise powers
 ```
 
 **Matrix functions**
 
-```
-a @ b - same as t.matmul(a,b) - matrix multiplication
+```python
+a @ b # same as t.matmul(a,b) - matrix multiplication
 ```
 
 Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's `@` operator. You can only do it when `a` and `b` are both 1-d or 2-d arrays with compatible dimensions. Then:
@@ -227,8 +229,8 @@ Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's 
 * If `a` is a 1-d array and `B` is a 2-d array, `a @ B` is vector-matrix multiplication.
 * If `A` and `B` are 2-d arrays, `A @ B` is matrix multiplication.
 
-```
-a.T - same as t.t(a) - transpose
+```python
+a.T # same as t.t(a) - transpose
 ```
 
 ## Indexing
@@ -245,7 +247,7 @@ Pangolin provides four operators for efficient vectorization: `IID`, `vmap`, `re
 
 ### IID
 
-```
+```python
 IID(x,N)
 ```
 
@@ -255,7 +257,7 @@ If `x` is any random variable, this returns a new random variable that is `N` ii
 
 This is slightly more general (and more complex) than `IID)`, (`IID` is implemented using `vmap`)
 
-```
+```python
 vmap(f)(*args)
 ```
 
@@ -263,7 +265,7 @@ Suppose that `f` is a function that takes some number of inputs and produces a r
 
 More generally, you can do
 
-```
+```python
 vmap(f,vec_pars)(*args)
 ```
 
@@ -282,13 +284,13 @@ You can't do `vmap(d.norm,[False,False])` since this doesn't vectorize over anyt
 
 ### recurse
 
-```
+```python
 out = recurse(f)(init,input)
 ```
 
 This is semantically equivalent to this python code:
 
-```
+```python
 carry = init
 out = []
 for my_input in input:
@@ -299,13 +301,13 @@ return np.stack(out)
 
 This also works when there are multiple inputs, e.g. you can do
 
-```
+```python
 out = recurse(f,init,input1,input2)
 ```
 
 Which is semantically equivalent to:
 
-```
+```python
 carry = init
 out = []
 for my_input in input:
@@ -320,13 +322,13 @@ This is slightly more general (and more complicated) than `recurse`. (`recurse` 
 
 A call to `scan` looks much like a call to `recurse`:
 
-```
+```python
 out = scan(f)(init,input)
 ```
 
 The difference is that in `scan`, `f` is assumed to be a function that produces *two* outputs. One is the "carry" and the other is the "output". The above call corresponds roughly to:
 
-```
+```python
 carry = init
 out = []
 for my_input in input:
@@ -343,7 +345,7 @@ If `x` and `y` are random variables and you do `x==y`, this produces an `Equalit
 
 So, for example,
 
-```
+```python
 I(x==y)
 ```
 
@@ -353,16 +355,16 @@ is a random variable that is 1 if x==y and 0 otherwise.
 
 The most basic routine is sampling
 
-```
-sample(x)                      - get samples for the random variable x
-sample(x,niter=50)             - do 500 iterations (default 1000)
-sample(x,Given(y==2))          - get conditional samples
-sample([x,y],Given(z==2,u>=7)) - conditional samples for two variables
+```python
+sample(x)                      # get samples for the random variable x
+sample(x,niter=50)             # do 500 iterations (default 1000)
+sample(x,Given(y==2))          # get conditional samples
+sample([x,y],Given(z==2,u>=7)) # conditional samples for two variables
 ```
 
 But for convenience you can also get expectations
 
-```
+```python
 E(x)
 E([x,y])
 E([x,y],Given(z==2,u>=7),niter=50)
@@ -372,7 +374,7 @@ You can similarly use `P` for probabilities (or densities), `var` for the varian
 
 ## Misc
 
-```
+```python
 jags_code(x)
 ```
 
