@@ -71,6 +71,12 @@ P(taxicab_color==0, Given(reported_color==0))
 >> 0.4138
 ```
 
+See also:
+* [Gaussian Process Regression](blob/main/Example-Hierarchical Regression.ipynb)
+* [Hierarchical Regression](blob/main/Example-Hierarchical Regression.ipynb)
+* [Time Series](blob/main/Example-Time series.ipynb)
+* [Tutorial](blob/main/Example-Tutorial.ipynb)
+
 # FAQ
 
 **Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?**
