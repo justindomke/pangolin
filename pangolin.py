@@ -1467,13 +1467,14 @@ def sample(var0,given=None,*,init=None,niter=1000):
         return samps
 
 def E(var,given=None,**vargs):
-
     if isinstance(var,Iterable):
         #for v in var:
         #    assert isinstance(v,RV), "can only compute E for random variables"
+        [var is makerv(v) for v in var]
         samps = sample(var,given,**vargs)
         return [np.mean(s,axis=0) for s in samps]
     else:
+        var = makerv(var)
         assert isinstance(var,RV), "can only compute E for random variables"
         samps = sample(var,given,**vargs)
         return np.mean(samps,axis=0)        

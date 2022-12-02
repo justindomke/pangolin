@@ -10,50 +10,37 @@ Note: Pangolin is "academia-ware". It's not a package, it's a single 1800 line f
 
 # Quick examples
 
-Here's Tverysky and Kehneman's famous 1982 taxicab problem: There's a city where 85% of taxis are green and 15% are blue. People are known to be able to remember the color of a taxi 80% of the time. If someone says the taxi is blue, what are the odds that the taxi is green?
+Here's a simple nonlinear regression model.
 
 ```python
-from pangolin import d,t,P
-
-cab_col  = d.bern(0.85)                  
-obs_prob = t.ifelse(cab_col==1, 0.8, 0.2)
-obs_col  = d.bern(obs_prob)
-P(cab_col==1,Given(obs_col==0)))
-
->> 0.5862
-```
-
-And here's a simple nonlinear regression model.
-
-```python
-from pangolin import d,t,sample
+from pangolin import d, t, sample, Given, vmap
 import numpy as np
 from matplotlib import pyplot as plt
 
 # training data
-x_train = [1,2,3,4,5,6,7,8,9,10]
-y_train = [2,1,1,7,10,12,13,13,19,28]
+x_train = np.array([1,2,3,4,5,6,7,8,9,10])
+y_train = np.array([2,1,1,7,10,12,13,13,19,28])
 
 # test inputs
 x_test = np.arange(0,11,.1)
+
+# define diagonal normal distribution; vectorize over mean only
+diag_norm = vmap(d.norm,[True,False])
 
 # model for training and test data
 w0     = d.norm(0,.10)      # bias term
 w1     = d.norm(0,.10)      # linear term
 w2     = d.norm(0,.10)      # quadratic term
 s      = t.exp(d.norm(0,1)) # noise strength
-y      = [d.norm(w0 + w1*xi + w2*xi**2,1/s) for xi in x_train]
-y_test = [d.norm(w0 + w1*xi + w2*xi**2,1/s) for xi in x_test]
-
-# list of observations
-observations = [yi==y_traini for (yi,y_traini) in zip(y,y_train)]
+y      = diag_norm(w0 + w1*x_train + w2*x_train**2,1/s)
+y_test = diag_norm(w0 + w1*x_test  + w2*x_test**2 ,1/s)
 
 # do inference
-y_pred = sample(y_test,Given(*observations))
+y_pred = sample(y_test,Given(y==y_train))
 
 # plot results
 plt.plot(x_train,y_train,'b.')
-plt.plot(x_test,np.array(y_pred)[:,::100],'r.',alpha=0.1);
+plt.plot(x_test,np.array(y_pred)[::100,:].T,'r.',alpha=0.1);
 plt.xlabel('x')
 plt.ylabel('y')
 plt.savefig('regression.png')
@@ -61,13 +48,38 @@ plt.savefig('regression.png')
 
 ![regression posterior](regression.png)
 
+
+And here's Tverysky and Kehneman's famous 1977 [taxicab problem](https://www.oxfordreference.com/view/10.1093/oi/authority.20110803102304404): There's a city where 85% of taxis are green and 15% are blue. Some taxi was involved in a hit-and-run incident, and a witness identified the taxi as blue. Under some testing under similar conditions, this witness was able to correctly identify the color of the taxi in 80% of cases. What are the odds that the taxi really is blue?
+
+```python
+from pangolin import d, t, P, Given
+
+# taxicab is Green (1) with probability 0.85.
+taxicab_color  = d.bern(0.85)
+
+# People report color Green (1) with probability 
+# 0.8 if taxicab was Green (1), and 
+# 0.2 if taxicab was Blue (0).
+
+reported_color = d.bern(
+    t.ifelse(taxicab_color==1, 0.8, 0.2)
+)
+# Find the probability of taxicab being blue 
+# given that the reported color was blue.
+P(taxicab_color==0, Given(reported_color==0))
+
+>> 0.4138
+```
+
 # FAQ
 
 **Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?**
 
-Mostly because JAGS supports discrete variables, which is really useful when people are learning about probabilistic inference for the first time. This is the setting Pangolin is intended for.
+The primary reason is that JAGS had better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems do allow discrete variables (like PyMC) but these require using an entirely different sampling method, which is far less battle-hardened than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
 
-Even so, these other systems are based on Hamiltonian Monte Carlo rather than Gibbs sampling and so tend to perform better on "harder" problems. So I've been wondering if this might have been a mistake and it might be worth trying to support multiple backends.
+**Why use Pangolin rather than JAGS?**
+
+Because it's (hopefully) easier.
 
 # Installation
 
@@ -100,7 +112,7 @@ At a high level, this is the full API:
 **Continuous univariate distributions** (sec 9.2.1 of JAGS user manual)
 
 ```python
-d.beta(a,b)        # beta
+d.beta(a,b)        # Beta
 d.chisqr(a)        # Chi squared
 d.dexp(a,b)        # Double eponential (or laplace)
 d.exp(a)           # Exponential
@@ -111,7 +123,7 @@ d.logis(a,b)       # Logistic distribution
 d.lnorm(a,b)       # Lognormal distribution
 d.nchisqr(a,b)     # Non-central chi-squared
 d.nt(a,b)          # Non-central t
-d.norm(a,b)        # Normal distribution
+d.norm(a,b)        # Normal distribution USES PRECISION NOT VARIANCE
 d.par(a,b)         # Pareto
 d.t(a,b,c)         # Student T
 d.unif(a,b)        # Uniform
@@ -123,31 +135,31 @@ Note that like in JAGS, the normal distribution uses PRECISION, not VARIANCE for
 **Discrete univariate distributions**  (sec 9.2.2 of JAGS user manual)
 
 ```python
-d.bern(a)        # Bernoulli
-d.binom(a,b)     # Binomial
-d.cat(a)         # Categorical
-d.hyper(a,b,c,d) # Noncentral hypergeometric
-d.negbin(a,b)    # Negative binomial
-d.pois(a)        # Poisson
+d.bern(a)           # Bernoulli
+d.binom(a,b)        # Binomial
+d.cat(a)            # Categorical
+d.hyper(a,b,c,d)    # Noncentral hypergeometric
+d.negbin(a,b)       # Negative binomial
+d.pois(a)           # Poisson
 ```
 
 **Multivariate** (sec 9.2.3 of JAGS user manual)
 
 
 ```python
-d.dirch(a)        # Dirichlet
-d.mnorm(a,b)      # Multivariate normal USES PRECISION NOT COVARIANCE
-d.mnorm_vcov(a,b) # Multivariate normal THIS ONE USES COVARIANCE
-d.mt(a,b,c)       # Multivariate t
-d.multi(a,b)      # Multinomial
-d.sample(a,b)     # Sampling without replacement (JAGS user manual has typo in title)
-d.wish(a,b)       # Wishart
+d.dirch(a)          # Dirichlet
+d.mnorm(a,b)        # Multivariate normal USES PRECISION NOT COVARIANCE
+d.mnorm_vcov(a,b)   # Multivariate normal THIS ONE USES COVARIANCE
+d.mt(a,b,c)         # Multivariate t
+d.multi(a,b)        # Multinomial
+d.sample(a,b)       # Sampling without replacement (JAGS user manual has typo in title)
+d.wish(a,b)         # Wishart
 ```
 
-There's also one special distribution, a special sampling module has to be loaded if you use it:
+There's also one special distribution, a special sampling module has to be loaded if you use it. (Pangolin does this automatically.)
 
 ```python
-d.normmix(a,b,c) - mixture of 1-D normals
+d.normmix(a,b,c)    # Mixture of 1-D normals
 ```
 
 **CDFs etc** (A seemingly somewhat random subset of the scalar distributions provide CDFs and quantiles (inverse CDFs) — table 6.2 of JAGS user manual)
@@ -162,9 +174,9 @@ d.norm(0,1).quantile(-0.5)
 ## Transformations
 
 ```python
-t.sum(a)        # sum of elements in a 1-d vector
-t.ifelse(x,a,b) # x must be an Equality. If x is true, gives a otherwise b.
-t.equals(a,b)   # 1 if a equals b otherwise 0
+t.sum(a)            # sum of elements in a 1-d vector
+t.ifelse(x,a,b)     # x must be an Equality. If x is true, gives a otherwise b.
+t.equals(a,b)       # 1 if a equals b otherwise 0
 ```
 
 **Scalar functions**  (see table 9.1 in JAGS user manual)
@@ -210,16 +222,16 @@ t.trunc(a)
 **Scalar functions triggered by infix operators**
 
 ```python
-a + b  # same as t.add(a,b) - elementwise addition
-a / b  # same as t.div(a,b) - elementwise division
-a * b  # same as t.mul(a,b) - elementwise multiplication
-a ** b # same as t.pow(a,b) - elementwise powers
+a + b               # same as t.add(a,b) - elementwise addition
+a / b               # same as t.div(a,b) - elementwise division
+a * b               # same as t.mul(a,b) - elementwise multiplication
+a ** b              # same as t.pow(a,b) - elementwise powers
 ```
 
 **Matrix functions**
 
 ```python
-a @ b # same as t.matmul(a,b) - matrix multiplication
+a @ b               # same as t.matmul(a,b) - matrix multiplication
 ```
 
 Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's `@` operator. You can only do it when `a` and `b` are both 1-d or 2-d arrays with compatible dimensions. Then:
@@ -230,7 +242,7 @@ Matrix multiplication (`t.matmul` / `@`) tries to copy the semantics of numpy's 
 * If `A` and `B` are 2-d arrays, `A @ B` is matrix multiplication.
 
 ```python
-a.T # same as t.t(a) - transpose
+a.T                 # same as t.t(a) - transpose
 ```
 
 ## Indexing
@@ -356,10 +368,10 @@ is a random variable that is 1 if x==y and 0 otherwise.
 The most basic routine is sampling
 
 ```python
-sample(x)                      # get samples for the random variable x
-sample(x,niter=50)             # do 500 iterations (default 1000)
-sample(x,Given(y==2))          # get conditional samples
-sample([x,y],Given(z==2,u>=7)) # conditional samples for two variables
+sample(x)                       # get samples for the random variable x
+sample(x,niter=50)              # do 500 iterations (default 1000)
+sample(x,Given(y==2))           # get conditional samples
+sample([x,y],Given(z==2,u>=7))  # conditional samples for two variables
 ```
 
 But for convenience you can also get expectations
