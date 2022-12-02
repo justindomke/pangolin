@@ -72,9 +72,9 @@ P(taxicab_color==0, Given(reported_color==0))
 ```
 
 See also:
-* [Gaussian Process Regression](blob/main/Example-Hierarchical Regression.ipynb)
-* [Hierarchical Regression](blob/main/Example-Hierarchical Regression.ipynb)
-* [Time Series](blob/main/Example-Time series.ipynb)
+* [Gaussian Process Regression]("blob/main/Example-GP Regression.ipynb")
+* [Hierarchical Regression]("blob/main/Example-Hierarchical Regression.ipynb")
+* [Time Series]("blob/main/Example-Time series.ipynb")
 * [Tutorial](blob/main/Example-Tutorial.ipynb)
 
 # FAQ
