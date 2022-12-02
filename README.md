@@ -10,7 +10,35 @@ Note: Pangolin is "academia-ware". It's not a package, it's a single 1800 line f
 
 # Quick examples
 
-Here's a simple nonlinear regression model.
+What's the mean and variance of a Bernoulli distribution?
+
+```python
+from pangolin import d, E, var
+x = d.bern(0.25)
+E(x), var(x)
+>> (0.277, 0.200271)
+```
+
+Do the same thing *much* more accurately:
+
+```python
+from pangolin import d, E, var
+x = d.bern(0.25)
+E(x,niter=1000000), var(x,niter=1000000)
+>> (0.250237, 0.187192623004)
+```
+
+Say that $x$ is a standard Gaussian variable and $y$ is $x$ with extra Gaussian noise. What's the correlation of $x$ and $y$?
+
+```python
+from pangolin import d, corr
+x = d.norm(0,1)
+y = d.norm(x,1)
+corr(x,y)
+>> 0.7057903530951414
+```
+
+Nonlinear regression.
 
 ```python
 from pangolin import d, t, sample, Given, vmap
@@ -294,7 +322,7 @@ For example, these are legal uses of `vmap`:
 * `vmap(d.norm)([1,2,3],[4,5,6])`  
   a normal distribution with mean `[1,2,3]` and diagonal precision `[4,5,6]`.
 * `vmap(d.norm,[True,False])([1,2,3],4)`  
-  a normal distribution with mean `[1,2,3]` and diagonal precision `[4,4/4]`.
+  a normal distribution with mean `[1,2,3]` and diagonal precision `[4,4,4]`.
 * `vmap(d.norm,[False,True])(1,[4,5,6])`  
   a normal distribution with mean `[1,1,1]` and diagonal variance `[4,5,6]`.
 
