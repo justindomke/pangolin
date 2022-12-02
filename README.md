@@ -6,7 +6,7 @@ To use pangolin you just need to download the single file [`pangolin.py`](blob/m
 
 Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand when you ask for answers.
 
-Note: Pangolin is "academia-ware". It's not a package, it's a single 1800 line file written by one person. (Packages aren't fun, single files are fun) I've written a lot of tests, but it's likely that that more bugs remain. I would say that Pangolin was "alpha" but that would seem to imply a level of competence or at least aspiration that doesn't really exist here.
+Note: Pangolin is "academia-ware", a single 1800 line file written by one person. I've written a lot of tests, but it's likely some remain at this point.
 
 # Quick examples
 
@@ -19,7 +19,7 @@ E(x), var(x)
 >> (0.277, 0.200271)
 ```
 
-Do the same thing *much* more accurately:
+Do the same thing much more accurately:
 
 ```python
 from pangolin import d, E, var
@@ -38,7 +38,7 @@ corr(x,y)
 >> 0.7057903530951414
 ```
 
-Nonlinear regression.
+Simple nonlinear regression.
 
 ```python
 from pangolin import d, t, sample, Given, vmap
@@ -99,7 +99,7 @@ P(taxicab_color==0, Given(reported_color==0))
 >> 0.4138
 ```
 
-See also:
+More examples:
 * [Gaussian Process Regression](blob/main/Example-GP+Regression.ipynb)
 * [Hierarchical Regression](blob/main/Example-Hierarchical+Regression.ipynb)
 * [Time Series](blob/main/Example-Time+series.ipynb)
