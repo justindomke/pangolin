@@ -463,9 +463,9 @@ class d:
         "Bernoulli"
         return AllScalarDistribution(a,fun_str='dbern',has_quantiles=True)
 
-    def binom(a,b):
+    def bin(a,b):
         "Binomial"
-        return AllScalarDistribution(a,fun_str='dbinom',has_quantiles=True)
+        return AllScalarDistribution(a,b,fun_str='dbin',has_quantiles=True)
     
     def cat(a):
         "Categorical"
@@ -1702,10 +1702,13 @@ def jags(code,monitor_vars,*,inits=None,niter=10000,nchains=1,**evidence):
             raise NotImplementedError("VAR" + str(data.shape))
     f.close()
 
-    if inits is not None:
+    if True:#inits is not None:
         # write inits
         f = open("inits.R","w")
-        for var in inits:
+        f.write(".RNG.seed <- " + str(np.random.randint(0,10000000)) + "\n")
+        f.write('.RNG.name <- "base::Wichmann-Hill"\n')
+        if inits is not None:
+            #for var in inits:
             #assert var.shape==()
             data = np.array(inits[var])
             if data.shape == ():
@@ -1725,7 +1728,7 @@ def jags(code,monitor_vars,*,inits=None,niter=10000,nchains=1,**evidence):
     if evidence != {}:
         script += 'data in "data.R"\n'
     script += "compile, nchains(" + str(nchains) + ")\n"
-    if inits:
+    if True:#inits:
         script += 'parameters in "inits.R"\n'
     script += "initialize\n"
     script += "update " + str(niter) + "\n"
