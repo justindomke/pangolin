@@ -2,11 +2,11 @@
 
 Pangolin is an interface for probabilistic reasoning focused on **fun**. The goal is to be the "first" probabilistic programming language, to bring out the underlying mathematical elegance and simplicity of probabilistic reasoning, and to make easy things easy.  It should feel particularly natural to Python programmers familiar with numpy.
 
-To use pangolin you just need to download the single file [`pangolin.py`](blob/main/pangolin.py).
+Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand, so it "feels" like everything is happening in python.
 
-Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand when you ask for answers.
+To use pangolin you just need to install JAGS and download the single file [`pangolin.py`](pangolin.py).
 
-Note: Pangolin is "academia-ware", a single 1800 line file written by one person. I've written a lot of tests, but it's likely some remain at this point.
+Note: Pangolin is "academia-ware", a single 1800 line file written by one person. There are a lot of tests, but it's likely that bugs remain. 
 
 # Quick examples
 
@@ -100,10 +100,13 @@ P(taxicab_color==0, Given(reported_color==0))
 ```
 
 More examples:
-* [Gaussian Process Regression](Example-GP Regression.ipynb)
-* [Hierarchical Regression](Example-Hierarchical Regression.ipynb)
-* [Time Series](Example-Time series.ipynb)
 * [Tutorial](Example-Tutorial.ipynb)
+* [Gaussian Process Regression](Example-GP-Regression.ipynb)
+* [Hierarchical Regression](Example-Hierarchical-Regression.ipynb)
+* [Time Series](Example-Time-series.ipynb)
+* [Simulation Based Calibration](Example-Simulation-Based-Calibration.ipynb)
+* [Using `vmap`](Example-Using-vmap.ipynb)
+* [Using `scan`](Example-Using-scan.ipynb)
 
 # FAQ
 
@@ -117,7 +120,7 @@ Because it's (hopefully) easier.
 
 # Installation
 
-1. Install JAGS and make sure that it is in your path. After you've done this, if you type `jags` at the command line you should see something like this:
+1. Install [JAGS](https://sourceforge.net/projects/mcmc-jags/) and make sure that it is in your path. After you've done this, if you type `jags` at the command line you should see something like this:
 
 ```shell
 % jags
@@ -127,19 +130,21 @@ Loading module: basemod: ok
 Loading module: bugs: ok
 .
 ```
-2. Pangolin is a single file. Download [it](blob/main/pangolin.py) it and put it in the directory you're working.
+2. Pangolin is a single file. Download [it](pangolin.py) and put it in the directory you're working.
 
 # API
 
 At a high level, this is the full API:
-* `d.*` - distributions
-* `t.*` - transformations
+* `d.*` - distributions (see blow)
+* `t.*` - transformations (see blow)
   * Also the infix operators `+`, `*`, `/`, `**`, and `@`
 * `IID`, `vmap`, `recurse`, `scan` - vectorization operators
 * `sample`, `E`, `P`, `var`, `std`, `cov`, `corr` - inference
 * `I` - Iverson operator (convert Equalities to random variables)
 * `makerv` convert a number or numpy array to a random variable (rarely needed)
 * `jags_code` - see raw JAGS code
+
+Using `d.norm` to access the Gaussian distribution is intended to follow as closely as possible the conventions of JAGS. For more description of these distributions see the [JAGS user manual](https://sourceforge.net/projects/mcmc-jags/files/Manuals/4.x/). 
 
 ## Distributions
 
