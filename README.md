@@ -100,16 +100,16 @@ P(taxicab_color==0, Given(reported_color==0))
 ```
 
 More examples:
-* [Gaussian Process Regression](blob/main/Example-GP+Regression.ipynb)
-* [Hierarchical Regression](blob/main/Example-Hierarchical+Regression.ipynb)
-* [Time Series](blob/main/Example-Time+series.ipynb)
-* [Tutorial](blob/main/Example-Tutorial.ipynb)
+* [Gaussian Process Regression](Example-GP+Regression.ipynb)
+* [Hierarchical Regression](Example-Hierarchical+Regression.ipynb)
+* [Time Series](Example-Time+series.ipynb)
+* [Tutorial](Example-Tutorial.ipynb)
 
 # FAQ
 
 **Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?**
 
-The primary reason is that JAGS had better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems do allow discrete variables (like PyMC) but these require using an entirely different sampling method, which is far less battle-hardened than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
+Primarily just because JAGS has better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems (like PyMC) do allow discrete variables but these require using a entirely different sampling methods, which are less tested and robust than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
 
 **Why use Pangolin rather than JAGS?**
 
