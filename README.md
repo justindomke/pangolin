@@ -1,6 +1,6 @@
 # Pangolin
 
-Pangolin is an interface for probabilistic reasoning focused on **fun**. The goal is to be the "first" probabilistic programming language, to bring out the underlying mathematical elegance and simplicity of probabilistic reasoning, and to make easy things easy.  It should feel particularly natural to Python programmers familiar with numpy.
+Pangolin is a probabilistic programming interface focused on **fun**. The goal is to be the "first" probabilistic programming language, to bring out the underlying mathematical elegance and simplicity of probabilistic reasoning, and to make easy things easy.  It should feel particularly natural to Python programmers familiar with numpy.
 
 Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAGS](https://sourceforge.net/projects/mcmc-jags/) package. Essentially, Pangolin is a Python interface that generates JAGS code and then calls JAGS on demand, so it "feels" like everything is happening in python.
 
@@ -114,9 +114,13 @@ More examples:
 
 Primarily just because JAGS has better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems (like PyMC) do allow discrete variables but these require using a entirely different sampling methods, which are less tested and robust than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
 
-**Why use Pangolin rather than JAGS?**
+**Why use Pangolin rather than JAGS itself?**
 
 Because it's (hopefully) easier.
+
+**Why "Pangolin"?**
+
+Because keratin scales make up around 20% of the body weight of pangolins—which is emblematic of something or other with Bayesian inference.
 
 # Installation
 
