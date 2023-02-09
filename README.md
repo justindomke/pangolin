@@ -101,7 +101,7 @@ P(taxicab_color==0, Given(reported_color==0))
 
 More examples:
 * [Tutorial](Example-Tutorial.ipynb)
-* [Gaussian Process Regression](Example-GP-Regression.ipynb)
+* [Gaussian Process Regression](Example-GP-regression.ipynb)
 * [Hierarchical Regression](Example-Hierarchical-Regression.ipynb)
 * [Time Series](Example-Time-series.ipynb)
 * [Simulation Based Calibration](Example-Simulation-Based-Calibration.ipynb)
