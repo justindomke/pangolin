@@ -139,8 +139,8 @@ Loading module: bugs: ok
 # API
 
 At a high level, this is the full API:
-* `d.*` - distributions (see blow)
-* `t.*` - transformations (see blow)
+* `d.*` - distributions (see below)
+* `t.*` - transformations (see below)
   * Also the infix operators `+`, `*`, `/`, `**`, and `@`
 * `IID`, `vmap`, `recurse`, `scan` - vectorization operators
 * `sample`, `E`, `P`, `var`, `std`, `cov`, `corr` - inference
