@@ -6,7 +6,7 @@ Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAG
 
 To use pangolin you just need to install JAGS and download the single file [`pangolin.py`](pangolin.py).
 
-Note: Pangolin is "academia-ware", a single 1800 line file written by one person. There are a lot of tests, but it's likely that bugs remain. 
+Note: Pangolin is "academia-ware", a single 1800 line file written by one person.
 
 # Quick examples
 
@@ -333,7 +333,7 @@ For example, these are legal uses of `vmap`:
 * `vmap(d.norm,[True,False])([1,2,3],4)`  
   a normal distribution with mean `[1,2,3]` and diagonal precision `[4,4,4]`.
 * `vmap(d.norm,[False,True])(1,[4,5,6])`  
-  a normal distribution with mean `[1,1,1]` and diagonal variance `[4,5,6]`.
+  a normal distribution with mean `[1,1,1]` and diagonal precision `[4,5,6]`.
 
 You can't do `vmap(d.norm,[False,False])` since this doesn't vectorize over anything. (If you want this, use `IID`.)
 
