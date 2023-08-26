@@ -6,7 +6,7 @@ Most of the actual *work* of Pangolin is done by Martin Plummer's legendary [JAG
 
 To use pangolin you just need to install JAGS and download the single file [`pangolin.py`](pangolin.py).
 
-Note: Pangolin is "academia-ware", a single 1800 line file written by one person. There are a lot of tests, but it's likely that bugs remain. 
+Note: Pangolin is "academia-ware", a single 1800 line file written by one person.
 
 # Quick examples
 
@@ -112,7 +112,7 @@ More examples:
 
 **Why use JAGS rather than [STAN](https://mc-stan.org/) or [NumPyro](https://num.pyro.ai/en/stable/getting_started.html) or [PyMC](https://www.pymc.io/welcome.html)?**
 
-Primarily just because JAGS has better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems (like PyMC) do allow discrete variables but these require using a entirely different sampling methods, which are less tested and robust than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
+Either because (a) it's simpler, and "looks more like math", (b) you want to be more tightly integrated into the rest of the python universe, or (c) just because JAGS has better support for discrete variables. All these systems primary use Hamiltonian Monte Carlo (HMC) as a sampling method, which is typically more efficient than the "Gibbs + many many tricks" method that JAGS uses. But HMC is not easy to adapt to work with discrete variables. Some of these systems (like PyMC) do allow discrete variables but these require using a entirely different sampling methods, which are less tested and robust than JAGS or the HMC algorithms in STAN/NumPyro/PyMC/etc.
 
 **Why use Pangolin rather than JAGS itself?**
 
@@ -333,7 +333,7 @@ For example, these are legal uses of `vmap`:
 * `vmap(d.norm,[True,False])([1,2,3],4)`  
   a normal distribution with mean `[1,2,3]` and diagonal precision `[4,4,4]`.
 * `vmap(d.norm,[False,True])(1,[4,5,6])`  
-  a normal distribution with mean `[1,1,1]` and diagonal variance `[4,5,6]`.
+  a normal distribution with mean `[1,1,1]` and diagonal precision `[4,5,6]`.
 
 You can't do `vmap(d.norm,[False,False])` since this doesn't vectorize over anything. (If you want this, use `IID`.)
 
