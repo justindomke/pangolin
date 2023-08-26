@@ -32,30 +32,33 @@ class Node:
 
 
 def dfs(node, upstream):
-    if node in upstream:
+    # if node in upstream:
+    if is_in(node, upstream):
         return
-    
+
     if isinstance(node, Node):
         for p in node.parents:
             dfs(p, upstream)
-    
-    #upstream.add(node)
-    upstream[node] = None # use dict as ordered set
+
+    # upstream.add(node)
+    upstream[node] = None  # use dict as ordered set
+
 
 def upstream_nodes(nodes):
     # transform into a list if needed
-    if isinstance(nodes,Node):
+    if isinstance(nodes, Node):
         return upstream_nodes([nodes])
 
-    #upstream = set()
+    # upstream = set()
     upstream = {}
     for node in nodes:
-        dfs(node,upstream)
+        dfs(node, upstream)
     return upstream.keys()
 
-def is_in(node,nodes):
+
+def is_in(node, nodes):
     for p in nodes:
-        if id(node)==id(p):
+        if id(node) == id(p) or node.id == p.id:
             return True
     return False
 
