@@ -58,7 +58,7 @@ def test_normal_normal2():
     x = normal_scale(z, c)
     # transform
     rule = transforms.NormalNormalTransformationRule()
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,observed_vars=[x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -76,7 +76,7 @@ def test_vmapped_transformation_apply1():
     # transform
     base_rule = transforms.NormalNormalTransformationRule()
     rule = transforms.VMappedTransformationRule(base_rule)
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -98,7 +98,7 @@ def test_vmapped_transformation_apply2():
     # transform
     base_rule = transforms.NormalNormalTransformationRule()
     rule = transforms.VMappedTransformationRule(base_rule)
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -120,7 +120,7 @@ def test_vmapped_transformation_apply3():
     # transform
     base_rule = transforms.NormalNormalTransformationRule()
     rule = transforms.VMappedTransformationRule(base_rule)
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -141,7 +141,7 @@ def test_beta_binomial1():
     x = binomial(n, z)
     # transform
     rule = transforms.BetaBinomialTransformationRule()
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -159,7 +159,7 @@ def test_vmap_beta_binomial1():
     # transform
     base_rule = transforms.BetaBinomialTransformationRule()
     rule = transforms.VMappedTransformationRule(base_rule)
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
     print(f"{replacements=}")
     new_x = replacements[x]
     new_z = replacements[z]
@@ -180,7 +180,7 @@ def test_double_vmap_normal_normal():
     base_rule1 = transforms.NormalNormalTransformationRule()
     base_rule2 = transforms.VMappedTransformationRule(base_rule1)
     rule = transforms.VMappedTransformationRule(base_rule2)
-    replacements = rule.apply(x)
+    replacements = rule.apply(x,[x])
 
     new_x = replacements[x]
     new_z = replacements[z]
