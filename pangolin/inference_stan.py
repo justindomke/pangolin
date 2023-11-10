@@ -20,6 +20,7 @@ import pangolin
 from . import interface, dag, util, inference
 from . import ezstan
 import textwrap
+import numpy as np
 
 import random
 
@@ -209,19 +210,18 @@ def gencode_dist_factory_swapargs(name):
 
 def gencode_unsupported():
     def gencode_dist(cond_dist, loopdepth, ref, *parent_refs):
-        raise NotImplementedError(f"JAGS does not support distribution {cond_dist}")
+        raise NotImplementedError(f"Stan does not support distribution {cond_dist}")
 
     return gencode_dist
 
 
 gencode_fns = {
     interface.normal_scale: gencode_dist_factory("normal"),
-    # interface.normal_scale: gencode_normal_scale,
-    # interface.normal_prec: gencode_dist_factory("dnorm"),
-    # interface.bernoulli: gencode_dist_factory("dbern"),
+    interface.normal_prec: gencode_unsupported(),
+    interface.uniform: gencode_dist_factory("uniform"),
+    interface.bernoulli: gencode_dist_factory("bernoulli"),
     # # interface.binomial: gencode_dist_factory("dbin"),
     # interface.binomial: gencode_dist_factory_swapargs("dbin"),
-    # interface.uniform: gencode_dist_factory("dunif"),
     # interface.beta: gencode_dist_factory("dbeta"),
     # interface.exponential: gencode_dist_factory("dexp"),
     # interface.dirichlet: gencode_dist_factory("ddirch"),
@@ -242,7 +242,7 @@ gencode_fns = {
 
 
 class_gencode_fns = {
-    # interface.VMapDist: gencode_vmapdist,
+    interface.VMapDist: gencode_vmapdist,
     # interface.Index: gencode_index,
     # interface.Sum: gencode_unsupported(),
     # interface.CondProb: gencode_unsupported(),
@@ -323,6 +323,75 @@ class Reference:
         return len(self.shape)
 
 
+def stan_type_string(cond_dist):
+    if isinstance(cond_dist, interface.VMapDist):
+        return stan_type_string(cond_dist.base_cond_dist)
+    elif isinstance(cond_dist, interface.Constant):
+        if np.issubdtype(cond_dist.value.dtype, np.floating):
+            return "real"
+        elif np.issubdtype(cond_dist.value.dtype, np.integer):
+            # return "int"
+            return "real"
+        else:
+            raise NotImplementedError("Array neither float nor integer type")
+    elif cond_dist in [interface.normal_scale, interface.uniform]:
+        return "real"
+    elif cond_dist in [interface.bernoulli]:
+        return "int<lower=0,upper=1>"
+    else:
+        raise NotImplementedError()
+
+
+def stan_code_flat(requested_vars, given_vars, given_vals):
+    included_vars = dag.upstream_nodes(requested_vars + given_vars)
+
+    evidence = util.WriteOnceDict()
+
+    n = 0
+    ids = {}
+    for var in dag.upstream_nodes(requested_vars + given_vars):
+        ids[var] = f"v{n}"
+        n += 1
+
+    # conditioning variables
+    for var, val in zip(given_vars, given_vals):
+        evidence[ids[var]] = val
+
+    parameters_code = "parameters{\n"
+    data_code = "data{\n"
+    for var in included_vars:
+        # mycode = "real " + ids[var]
+        mycode = stan_type_string(var.cond_dist)
+        mycode += " " + ids[var]
+        if var.shape != ():
+            mycode += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
+        mycode += ";\n"
+        print(f"{var=}")
+        if var in given_vars or isinstance(var.cond_dist, pangolin.Constant):
+            data_code += mycode
+        else:
+            parameters_code += mycode
+    parameters_code += "}\n"
+    data_code += "}\n"
+    code = data_code + parameters_code
+
+    code += "model{\n"
+    for var in included_vars:
+        if isinstance(var.cond_dist, interface.Constant):
+            evidence[ids[var]] = var.cond_dist.value  # constant RVs
+        else:
+            ref = Reference(ids[var], var.shape)
+            parent_refs = [Reference(ids[p], p.shape) for p in var.parents]
+            cond_dist = var.cond_dist
+            code += gencode(cond_dist, 0, ref, *parent_refs)  # others
+
+    code += "}\n"
+
+    monitor_vars = [ids[var] for var in requested_vars]
+
+    return code, monitor_vars, evidence
+
+
 def sample_flat(requested_vars, given_vars, given_vals, *, niter):
     """
     Do MCMC using Numpyro.
@@ -348,51 +417,9 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
     random_vars = inference.upstream_with_descendent(requested_vars, given_vars)
     latent_vars = [node for node in random_vars if node not in given_vars]
 
-    included_vars = dag.upstream_nodes(requested_vars + given_vars)
-
-    evidence = util.WriteOnceDict()
-
-    n = 0
-    ids = {}
-    for var in dag.upstream_nodes(requested_vars + given_vars):
-        ids[var] = f"v{n}"
-        n += 1
-
-    # conditioning variables
-    for var, val in zip(given_vars, given_vals):
-        evidence[ids[var]] = val
-
-    # declare all variable with shapes
-    parameters_code = "parameters{\n"
-    data_code = "data{\n"
-    for var in included_vars:
-        mycode = "real " + ids[var]
-        if var.shape != ():
-            mycode += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
-        mycode += ";\n"
-        print(f"{var=}")
-        if var in given_vars or isinstance(var.cond_dist,pangolin.Constant):
-            data_code += mycode
-        else:
-            parameters_code += mycode
-    parameters_code += "}\n"
-    data_code += "}\n"
-    code = data_code + parameters_code
-
-
-    code += "model{\n"
-    for var in included_vars:
-        if isinstance(var.cond_dist, interface.Constant):
-            evidence[ids[var]] = var.cond_dist.value  # constant RVs
-        else:
-            ref = Reference(ids[var], var.shape)
-            parent_refs = [Reference(ids[p], p.shape) for p in var.parents]
-            cond_dist = var.cond_dist
-            code += gencode(cond_dist, 0, ref, *parent_refs)  # others
-
-    code += "}\n"
-
-    monitor_vars = [ids[var] for var in requested_vars]
+    code, monitor_vars, evidence = stan_code_flat(
+        requested_vars, given_vars, given_vals
+    )
 
     print("CODE")
     print(code)
@@ -403,37 +430,3 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
     results = ezstan.stan(code, monitor_vars, niter=niter, nchains=1, **evidence)
 
     return results
-
-
-def jags_code(vars):
-    import jax.tree_util
-
-    flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
-    n = 0
-    ids = {}
-    for var in dag.upstream_nodes(flat_vars):
-        ids[var] = f"v{n}"
-        n += 1
-
-    # declare all variable with shapes
-    code = "var "
-    for var in flat_vars:
-        code += ids[var]
-        if var.shape != ():
-            code += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
-        if var != flat_vars[-1]:
-            code += ", "
-    code += ";\n"
-
-    code += "model{\n"
-    for var in flat_vars:
-        if isinstance(var.cond_dist, interface.Constant):
-            pass
-        else:
-            ref = Reference(ids[var], var.shape)
-            parent_refs = [Reference(ids[p], p.shape) for p in var.parents]
-            cond_dist = var.cond_dist
-            code += gencode(cond_dist, 0, ref, *parent_refs)  # others
-
-    code += "}\n"
-    return code
