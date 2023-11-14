@@ -1,65 +1,43 @@
-"""
-how should this work?
-- need a routine to generate code for a single distribution
-- that routine should NOT take a RV as input, otherwise things will become a
-nightmare when we get to vmap
-- that routine must be told what number to use for each dist
-- that routine must be told about loop indices, so it can work inside of vmap
-
-Maybe we should have a Reference object.
-
-Rules:
-- If it's a normal dist, just return the code, easy.
-- If it's a VMapDist, create a loop, insert the loop variable name into the references
-for each RV and recurse
-- If it's an Index, create as many nested loops as the output should have, loop over
-everything
-
-"""
 import pangolin
 from . import interface, dag, util, inference
 from . import ezstan
 import textwrap
 import numpy as np
 
-import random
+"""
+Programmatically generate and run Stan code.
+"""
+
+# Improvements to be done someday
+# - Find branches without observed descendents, place in generated quantities block
+# - Put stuff in transformed data block when possible
 
 
 def indent(code, n):
     return textwrap.indent(code, "    " * n)
 
 
-# def gencode_normal_scale(cond_dist, loopdepth, ref, *parent_refs):
-#     assert cond_dist == interface.normal_scale
-#     return f"{ref} ~ dnorm({parent_refs[0]},1/({parent_refs[1]})^2)\n"
-
-
 def gencode_categorical(cond_dist, loopdepth, ref, *parent_refs):
     """
-    special code needed since JAGS is 1-indexed
+    special code needed since Stan is 1-indexed
     """
     assert cond_dist == interface.categorical
     assert len(parent_refs) == 1
     code1 = f"tmp_{ref} ~ dcat({parent_refs[0]})\n"
-    code2 = f"{ref} <- tmp_{ref}-1\n"
+    code2 = f"{ref} = tmp_{ref}-1\n"
     return code1 + code2
-
-
-# def gencode_mul(cond_dist, loopdepth, ref, *parent_refs):
-#     assert cond_dist == interface.mul
-#     return f"{ref} <- ({parent_refs[0]}) * ({parent_refs[1]})\n"
 
 
 def gencode_infix_factory(infix_str):
     def gencode_infix(cond_dist, loopdepth, ref, *parent_refs):
-        return f"{ref} <- ({parent_refs[0]}) {infix_str} ({parent_refs[1]})\n"
+        return f"{ref} = ({parent_refs[0]}) {infix_str} ({parent_refs[1]});\n"
 
     return gencode_infix
 
 
 def gencode_deterministic_factory(fun_str):
     def gencode_deterministic(cond_dist, loopdepth, ref, *parent_refs):
-        return f"{ref} <- {fun_str}{util.comma_separated(parent_refs)}\n"
+        return f"{ref} = {fun_str}{util.comma_separated(parent_refs)};\n"
 
     return gencode_deterministic
 
@@ -99,7 +77,7 @@ def slice_to_str(my_slice, ref):
         axis = ref.nth_open_axis(0)
         stop = ref.shape[axis]
     if step:
-        raise NotImplementedError("JAGS doesn't support step in slices :(")
+        raise NotImplementedError("Stan doesn't support step in slices :(")
 
     # JAGS 1-indexed and inclusive so start increase but not stop
     loop_index_str = f"{start + 1}:{stop}"
@@ -186,7 +164,7 @@ def gencode_index(cond_dist, loopdepth, ref, parent_ref, *index_refs):
             parent_loop_index = "1+" + str(my_index_ref)  # JAGS 1 indexed
             parent_ref = parent_ref.index(0, parent_loop_index)
 
-    middle_code = str(ref) + " <- " + str(parent_ref) + "\n"
+    middle_code = str(ref) + " = " + str(parent_ref) + ";\n"
     middle_code = middle_code
     code = loop_code + middle_code + end_code
     return code
@@ -220,9 +198,9 @@ gencode_fns = {
     interface.normal_prec: gencode_unsupported(),
     interface.uniform: gencode_dist_factory("uniform"),
     interface.bernoulli: gencode_dist_factory("bernoulli"),
-    # # interface.binomial: gencode_dist_factory("dbin"),
+    interface.binomial: gencode_dist_factory("binomial"),
     # interface.binomial: gencode_dist_factory_swapargs("dbin"),
-    # interface.beta: gencode_dist_factory("dbeta"),
+    interface.beta: gencode_dist_factory("beta"),
     # interface.exponential: gencode_dist_factory("dexp"),
     # interface.dirichlet: gencode_dist_factory("ddirch"),
     # # interface.categorical: gencode_dist_factory("dcat"),
@@ -230,11 +208,11 @@ gencode_fns = {
     # interface.multinomial: gencode_dist_factory_swapargs("dmulti"),
     # interface.multi_normal_cov: gencode_dist_factory("mnorm.vcov"),
     # interface.beta_binomial: gencode_unsupported(),
-    # interface.mul: gencode_infix_factory("*"),
-    # interface.add: gencode_infix_factory("+"),
+    interface.mul: gencode_infix_factory("*"),
+    interface.add: gencode_infix_factory("+"),
     # interface.sub: gencode_infix_factory("-"),
     # interface.div: gencode_infix_factory("/"),
-    # interface.pow: gencode_infix_factory("^"),
+    interface.pow: gencode_infix_factory("^"),
     # interface.matmul: gencode_infix_factory("%*%"),
     # interface.abs: gencode_deterministic_factory("abs"),
     # interface.exp: gencode_deterministic_factory("exp"),
@@ -243,7 +221,7 @@ gencode_fns = {
 
 class_gencode_fns = {
     interface.VMapDist: gencode_vmapdist,
-    # interface.Index: gencode_index,
+    interface.Index: gencode_index,
     # interface.Sum: gencode_unsupported(),
     # interface.CondProb: gencode_unsupported(),
     # interface.Mixture: gencode_unsupported(),
@@ -323,23 +301,47 @@ class Reference:
         return len(self.shape)
 
 
-def stan_type_string(cond_dist):
+def stan_type_string(cond_dist, *parent_type_strings):
     if isinstance(cond_dist, interface.VMapDist):
-        return stan_type_string(cond_dist.base_cond_dist)
+        # return stan_type_string(cond_dist.base_cond_dist)
+        # tmp_var = interface.RV(cond_dist.base_cond_dist, *var.parents)
+        # return stan_type_string(tmp_var)
+        return stan_type_string(cond_dist.base_cond_dist, *parent_type_strings)
     elif isinstance(cond_dist, interface.Constant):
         if np.issubdtype(cond_dist.value.dtype, np.floating):
             return "real"
         elif np.issubdtype(cond_dist.value.dtype, np.integer):
-            # return "int"
-            return "real"
+            return "int"
+            # return "real"  # TODO FIX
         else:
             raise NotImplementedError("Array neither float nor integer type")
+    elif isinstance(cond_dist, interface.Index):
+        return parent_type_strings[0]
     elif cond_dist in [interface.normal_scale, interface.uniform]:
         return "real"
     elif cond_dist in [interface.bernoulli]:
         return "int<lower=0,upper=1>"
+    elif cond_dist in [interface.beta]:
+        return "real<lower=0,upper=1>"
+    elif cond_dist in [
+        interface.add,
+        interface.mul,
+        interface.add,
+        interface.sub,
+        interface.mul,
+        interface.div,
+        interface.pow,
+        interface.abs,
+        interface.exp,
+        interface.matmul,
+    ]:
+        assert len(parent_type_strings) == 2
+        if all(type_string == "int" for type_string in parent_type_strings):
+            return "int"
+        else:
+            return "real"
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f"type string not implemented for {cond_dist}")
 
 
 def stan_code_flat(requested_vars, given_vars, given_vals):
@@ -353,15 +355,23 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
         ids[var] = f"v{n}"
         n += 1
 
+    parameters_code = "parameters{\n"
+    data_code = "data{\n"
+    # TODO: add transformed_data_code for extra efficiency
+    model_code = "model{\n"
+    transformed_parameters_code = "transformed parameters{\n"
+
     # conditioning variables
     for var, val in zip(given_vars, given_vals):
         evidence[ids[var]] = val
 
-    parameters_code = "parameters{\n"
-    data_code = "data{\n"
+    type_strings = {}
     for var in included_vars:
-        # mycode = "real " + ids[var]
-        mycode = stan_type_string(var.cond_dist)
+        # mycode = stan_type_string(var)
+        parent_type_strings = [type_strings[p] for p in var.parents]
+        type_strings[var] = stan_type_string(var.cond_dist, *parent_type_strings)
+        mycode = type_strings[var]
+
         mycode += " " + ids[var]
         if var.shape != ():
             mycode += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
@@ -369,23 +379,30 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
         print(f"{var=}")
         if var in given_vars or isinstance(var.cond_dist, pangolin.Constant):
             data_code += mycode
-        else:
+        elif var.cond_dist.is_random:
             parameters_code += mycode
-    parameters_code += "}\n"
-    data_code += "}\n"
-    code = data_code + parameters_code
-
-    code += "model{\n"
-    for var in included_vars:
-        if isinstance(var.cond_dist, interface.Constant):
-            evidence[ids[var]] = var.cond_dist.value  # constant RVs
         else:
+            transformed_parameters_code += mycode
+
+    for var in included_vars:
+        if isinstance(var.cond_dist, interface.Constant):  # constant RVs
+            evidence[ids[var]] = var.cond_dist.value
+        else:  # others
             ref = Reference(ids[var], var.shape)
             parent_refs = [Reference(ids[p], p.shape) for p in var.parents]
             cond_dist = var.cond_dist
-            code += gencode(cond_dist, 0, ref, *parent_refs)  # others
+            mycode = gencode(cond_dist, 0, ref, *parent_refs)
+            if cond_dist.is_random:
+                model_code += mycode
+            else:
+                transformed_parameters_code += mycode
 
-    code += "}\n"
+    parameters_code += "}\n"
+    data_code += "}\n"
+    model_code += "}\n"
+    transformed_parameters_code += "}\n"
+
+    code = data_code + parameters_code + transformed_parameters_code + model_code
 
     monitor_vars = [ids[var] for var in requested_vars]
 
