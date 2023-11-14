@@ -15,6 +15,7 @@ import jax
 class CondDist:
     def __init__(self, name):
         self.name = name  # only for printing, no functionality
+        self._frozen = True  # freeze after init
 
     def __call__(self, *parents):
         """when you call a conditional distribution you get a RV"""
@@ -30,6 +31,20 @@ class CondDist:
     @property
     def is_random(self):
         raise NotImplementedError()
+
+    _frozen = False
+
+    def __setattr__(self, key, value):
+        """
+        Redefine __setattr__ so that CondDists are immutable after init
+        """
+        if self._frozen:
+            raise Exception(
+                'CondDists are "frozen" — attributes cannot be changed '
+                "after assigned"
+            )
+        else:
+            self.__dict__[key] = value
 
 
 class Constant(CondDist):
@@ -262,8 +277,8 @@ class Index(CondDist):
     """
 
     def __init__(self, *slices):
-        super().__init__("index")
         self.slices = slices
+        super().__init__("index")
 
     @property
     def advanced_at_start(self):
@@ -1007,36 +1022,36 @@ def viz(vars, observed_vars=(), labels=None):
 
 viz_upstream = viz  # TODO: delete after changing calls
 
-
-def viz_samples(vars, precision=2):
-    vars = jax.tree_util.tree_leaves(vars)
-    nodes = dag.upstream_nodes(vars)
-
-    from . import new_infer as infer
-
-    samps = infer.sample(nodes, niter=1)
-
-    def fn(node):
-        i = nodes.index(node)
-        s = np.array(samps[i][0])
-        label = np.array_str(s, precision=precision)
-        label = np.array2string(
-            s,
-            precision=precision,
-            formatter={"float_kind": lambda x: f"%.{precision}f" % x},
-        )
-        return dict(label=label)
-
-    return viz_generic(nodes, fn)
-
-
-def viz_samples_live(vars, reps=25, wait=1, precision=2):
-    from IPython.display import clear_output, display, Image, SVG
-    import IPython.display
-    import time
-
-    for i in range(reps):
-        clear_output(wait=True)
-        graph = viz_samples(vars, precision=precision)
-        IPython.display.display_png(graph)
-        time.sleep(wait)
+# TODO: Fix to remove new_infer
+# def viz_samples(vars, precision=2):
+#     vars = jax.tree_util.tree_leaves(vars)
+#     nodes = dag.upstream_nodes(vars)
+#
+#     from . import new_infer as infer
+#
+#     samps = infer.sample(nodes, niter=1)
+#
+#     def fn(node):
+#         i = nodes.index(node)
+#         s = np.array(samps[i][0])
+#         label = np.array_str(s, precision=precision)
+#         label = np.array2string(
+#             s,
+#             precision=precision,
+#             formatter={"float_kind": lambda x: f"%.{precision}f" % x},
+#         )
+#         return dict(label=label)
+#
+#     return viz_generic(nodes, fn)
+#
+#
+# def viz_samples_live(vars, reps=25, wait=1, precision=2):
+#     from IPython.display import clear_output, display, Image, SVG
+#     import IPython.display
+#     import time
+#
+#     for i in range(reps):
+#         clear_output(wait=True)
+#         graph = viz_samples(vars, precision=precision)
+#         IPython.display.display_png(graph)
+#         time.sleep(wait)
