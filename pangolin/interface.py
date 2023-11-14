@@ -743,7 +743,7 @@ def vmap_eval(f, in_axes, axis_size, *args):
 
 
 class vmap:  # not a RV!
-    def __init__(self, f, in_axes, axis_size=None):
+    def __init__(self, f, in_axes=0, axis_size=None):
         self.f = f
         self.in_axes = in_axes
         self.axis_size = axis_size
