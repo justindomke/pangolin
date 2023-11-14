@@ -35,14 +35,8 @@ class CondDist:
         raise NotImplementedError()
 
     def __setattr__(self, key, value):
-        """
-        Redefine __setattr__ so that CondDists are immutable after init
-        """
         if self._frozen:
-            raise Exception(
-                'CondDists are "frozen" — attributes cannot be changed '
-                "after assigned"
-            )
+            raise Exception("CondDists are immutable after init.")
         else:
             self.__dict__[key] = value
 
@@ -828,11 +822,14 @@ def makerv(a):
 
 
 class RV(dag.Node):
+    _frozen = False
+
     def __init__(self, cond_dist, *parents):
         super().__init__(*parents)
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = cond_dist.get_shape(*parents_shapes)
         self.cond_dist = cond_dist
+        self._frozen = True
 
     def __add__(self, b):
         return add(self, b)
@@ -888,6 +885,12 @@ class RV(dag.Node):
         if self.parents:
             ret += util.comma_separated(self.parents, str)
         return ret
+
+    def __setattr__(self, key, value):
+        if self._frozen:
+            raise Exception("RVs are immutable after init.")
+        else:
+            self.__dict__[key] = value
 
 
 class AbstractCondDist(CondDist):
