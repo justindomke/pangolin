@@ -30,7 +30,7 @@ def vecstring(a):
 def read_coda(nchains):
     # first get all the variables
 
-    f = open("CODAindex.txt")
+    f = open(".jags/CODAindex.txt")
     lines = f.readlines()
     var_start = {}
     var_end = {}
@@ -74,7 +74,8 @@ def read_coda(nchains):
     # this is so we can figure out the size
 
     data = [
-        np.loadtxt("CODAchain" + str(chain + 1) + ".txt") for chain in range(nchains)
+        np.loadtxt(".jags/CODAchain" + str(chain + 1) + ".txt")
+        for chain in range(nchains)
     ]
     # add extra dimension if necessary (because simple sample)
     data = [di[None, :] if di.ndim == 1 else di for di in data]
@@ -136,10 +137,14 @@ def jags(code, monitor_vars, *, inits=None, niter=10000, nchains=1, **evidence):
     assert hasattr(monitor_vars, "__iter__")
     # assert niter > 1, "niter must be at least 2 to avoid some subtle bug"
 
+    newpath = ".jags"
+    if not os.path.exists(newpath):
+        os.makedirs(newpath)
+
     id = random.randint(0, 10**12)
 
     # write the model to a file
-    model_fname = f"model{id}.bug"
+    model_fname = f".jags/model{id}.bug"
     f = open(model_fname, "w")
     f.write(code)
     f.flush()
@@ -148,7 +153,7 @@ def jags(code, monitor_vars, *, inits=None, niter=10000, nchains=1, **evidence):
     # TODO: avoid repetition below and deal with more than 2 dimensions
 
     # write data
-    data_fname = f"data{id}.R"
+    data_fname = f".jags/data{id}.R"
     f = open(data_fname, "w")
     for var in evidence:
         # assert var.shape==()
@@ -176,7 +181,7 @@ def jags(code, monitor_vars, *, inits=None, niter=10000, nchains=1, **evidence):
 
     if True:  # inits is not None:
         # write inits
-        inits_fname = f"inits{id}.R"
+        inits_fname = f".jags/inits{id}.R"
         f = open(inits_fname, "w")
         f.write(".RNG.seed <- " + str(np.random.randint(0, 10000000)) + "\n")
         f.write('.RNG.name <- "base::Wichmann-Hill"\n')
@@ -218,8 +223,8 @@ def jags(code, monitor_vars, *, inits=None, niter=10000, nchains=1, **evidence):
     for var in monitor_vars:
         script += "monitor " + var + "\n"
     script += "update " + str(niter) + "\n"
-    script += "coda *\n"
-    script_fname = f"script{id}.txt"
+    script += "coda *, stem(.jags/CODA)\n"
+    script_fname = f".jags/script{id}.txt"
     f = open(script_fname, "w")
     f.write(script)
     f.close()
@@ -256,7 +261,7 @@ def jags(code, monitor_vars, *, inits=None, niter=10000, nchains=1, **evidence):
         # return [None for v in monitor_vars]
 
     # read in variable information
-    f = open("CODAindex.txt")
+    f = open(".jags/CODAindex.txt")
     lines = f.readlines()
     var_start = {}
     var_end = {}
