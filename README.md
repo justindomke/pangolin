@@ -39,6 +39,23 @@ Pangolin is a probabilistic inference research project. It has the following goa
 It remains to be seen to what degree all these goals can be accomplished at the same 
 time. (That's what makes this a research project!)
 
+Here are some design principles which hopefully serve the above goals:
+
+* **Unopinionated.** Probabilistic inference is an open research question. We don't 
+  know the best way to do it. So, where possible, we should avoid making assumptions 
+  about how program transformations or how inference will be done. It should be easy 
+  to write a new program transformation or create a new inference backend without 
+  having to conform to some rigid 
+* **Immutability.** Pangolin enforces that all random variables and distributions 
+  are frozen after creation. This is crucial for how much of the code works. We also 
+  think it makes it easier to reason about what's happening under the hood and makes 
+  it easier to extend.
+  * All the *current* inference methods and transformations are also immutable. (You 
+    do `xs = sample(x)` rather than something like `mcmc.run(); xs = mcmc.
+    get_samples()`.) However, in keeping with being *unopinionated*, there's nothing 
+    stopping you from writing an inference method that works in a different way 
+    including being mutable.
+
 At the moment, we **do not advise** trying to use this code. However, an earlier 
 version of Pangolin is available and based on much the same ideas, except only 
 supporting JAGS as a backend. It can be found with documentation, in the 
