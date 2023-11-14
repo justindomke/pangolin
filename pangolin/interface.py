@@ -13,6 +13,8 @@ import jax
 
 
 class CondDist:
+    _frozen = False
+
     def __init__(self, name):
         self.name = name  # only for printing, no functionality
         self._frozen = True  # freeze after init
@@ -31,8 +33,6 @@ class CondDist:
     @property
     def is_random(self):
         raise NotImplementedError()
-
-    _frozen = False
 
     def __setattr__(self, key, value):
         """
