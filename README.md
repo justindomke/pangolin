@@ -39,13 +39,13 @@ Pangolin is a probabilistic inference research project. It has the following goa
 It remains to be seen to what degree all these goals can be accomplished at the same 
 time. (That's what makes this a research project!)
 
-Here are some design principles which hopefully serve the above goals:
+Here are some design principles which we think serve the above goals:
 
 * **Unopinionated.** Probabilistic inference is an open research question. We don't 
   know the best way to do it. So, where possible, we should avoid making assumptions 
-  about how program transformations or how inference will be done. It should be easy 
-  to write a new program transformation or create a new inference backend without 
-  having to conform to some rigid 
+  about how inference will be done. It should be easy to write a new program 
+  transformation or create a new inference backend without having to conform to some 
+  API we invented. 
 * **Immutability.** Pangolin enforces that all random variables and distributions 
   are frozen after creation. This is crucial for how much of the code works. We also 
   think it makes it easier to reason about what's happening under the hood and makes 
@@ -55,6 +55,19 @@ Here are some design principles which hopefully serve the above goals:
     get_samples()`.) However, in keeping with being *unopinionated*, there's nothing 
     stopping you from writing an inference method that works in a different way 
     including being mutable.
+* **Follow existing conventions.** Wherever possible, we borrow syntax from our 
+  favorite libraries:
+  * Distribution names and arguments are borrowed from Stan.
+  * Random variables are (with great effort) indexed exactly as in NumPy (including 
+    full support for advanced indexing with slices and multi-dimensional indices, etc.)
+  * For array-valued random variables, the `@` matrix-multiplication operator behaves 
+    exactly as in NumPy. 
+  * Array operations also behave as in NumPy. For example if `x` is a random 
+    variable with `x.shape=(7,2)` you can do `y=pangolin.sum(x,axis=1)` to 
+   get a new random variable with `y.shape=(7,)`. (Currently only few operations 
+   are supported)
+  * Random variables can be placed in PyTrees and manipulated as in Jax.
+  * `pangolin.vmap` has exactly the same syntax as `jax.vmap`.
 
 At the moment, we **do not advise** trying to use this code. However, an earlier 
 version of Pangolin is available and based on much the same ideas, except only 

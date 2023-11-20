@@ -37,89 +37,114 @@ def test_reference4():
     assert str(r3) == "sup[k,i,j]"
 
 
-def test_normal1():
-    x = normal_scale(0, 1)
-    [xs] = inference_stan.sample_flat([x], [], [], niter=10000)
-    assert np.abs(np.mean(xs) - 0.0) < 0.1
-
-
-def test_normal2():
-    z = normal_scale(0, 1)
-    x = normal_scale(z, 1)
-    x_val = np.array(1.0)
-    [zs] = inference_stan.sample_flat([z], [x], [x_val], niter=10000)
-    assert np.abs(np.mean(zs) - 0.5) < 0.1
-
-
-def test_vmap_normal1():
-    z = vmap(lambda: normal(np.array(0), np.array(1)), in_axes=None, axis_size=2)()
-    [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
-    assert zs.shape == (10000, 2)
-    assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
-
-
-def test_vmap_normal2():
-    z = plate(N=2)(lambda: normal(np.array(0), np.array(1)))
-    [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
-    assert zs.shape == (10000, 2)
-    assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
-
-
-def test_vmap_normal3():
-    z = plate(N=2)(lambda: normal(0, 1))
-    [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
-    assert zs.shape == (10000, 2)
-    assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
-
-
-def test_vmap_normal4():
-    z = normal(0, 1)
-    x = plate(N=2)(lambda: normal(z, 1))
-    [zs, xs] = inference_stan.sample_flat([z, x], [], [], niter=10000)
-    assert zs.shape == (10000,)
-    assert xs.shape == (10000, 2)
-    assert np.abs(np.mean(zs) - 0) < 0.1
-    assert max(np.abs(np.mean(xs, axis=0) - np.array([0, 0]))) < 0.1
-
-
-def test_vmap_normal5():
-    z = normal(0, 1)
-    x = plate(N=2)(lambda: normal(z, 1))
-    [xs] = inference_stan.sample_flat([x], [z], [np.array(0.7)], niter=10000)
-    assert xs.shape == (10000, 2)
-    assert max(np.abs(np.mean(xs, axis=0) - np.array([0.7, 0.7]))) < 0.1
-
-
-def test_vmap_normal6():
-    z = normal(0, 1)
-    x = plate(N=2)(lambda: normal(z, 1))
-    x_val = np.array([-1.2, 0.7])
-    [zs] = inference_stan.sample_flat([z], [x], [x_val], niter=10000)
-    assert zs.shape == (10000,)
-    expected = np.sum(x_val) / 3  # average with zero
-    assert np.abs(np.mean(zs) - expected) < 0.1
-
-
-def test_uniform():
-    z = uniform(0, 1)
-    [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
-    assert np.abs(np.mean(zs) - 0.5) < 0.1
-
-
-def test_uniform_bernoulli():
-    z = uniform(0, 1)
-    x = bernoulli(z)
-    [zs] = inference_stan.sample_flat([z], [x], [np.array(1)], niter=10000)
-    assert np.abs(np.mean(zs) - 0.75) < 0.1
-    [zs] = inference_stan.sample_flat([z], [x], [np.array(0)], niter=10000)
-    assert np.abs(np.mean(zs) - 0.25) < 0.1
-
-
+# def test_normal1():
+#     x = normal_scale(0, 1)
+#     [xs] = inference_stan.sample_flat([x], [], [], niter=10000)
+#     assert np.abs(np.mean(xs) - 0.0) < 0.1
+#
+#
+# def test_normal2():
+#     z = normal_scale(0, 1)
+#     x = normal_scale(z, 1)
+#     x_val = np.array(1.0)
+#     [zs] = inference_stan.sample_flat([z], [x], [x_val], niter=10000)
+#     assert np.abs(np.mean(zs) - 0.5) < 0.1
+#
+#
+# def test_vmap_normal1():
+#     z = vmap(lambda: normal(np.array(0), np.array(1)), in_axes=None, axis_size=2)()
+#     [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
+#     assert zs.shape == (10000, 2)
+#     assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
+#
+#
+# def test_vmap_normal2():
+#     z = plate(N=2)(lambda: normal(np.array(0), np.array(1)))
+#     [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
+#     assert zs.shape == (10000, 2)
+#     assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
+#
+#
+# def test_vmap_normal3():
+#     z = plate(N=2)(lambda: normal(0, 1))
+#     [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
+#     assert zs.shape == (10000, 2)
+#     assert max(np.abs(np.mean(zs, axis=0) - np.array([0, 0]))) < 0.1
+#
+#
+# def test_vmap_normal4():
+#     z = normal(0, 1)
+#     x = plate(N=2)(lambda: normal(z, 1))
+#     [zs, xs] = inference_stan.sample_flat([z, x], [], [], niter=10000)
+#     assert zs.shape == (10000,)
+#     assert xs.shape == (10000, 2)
+#     assert np.abs(np.mean(zs) - 0) < 0.1
+#     assert max(np.abs(np.mean(xs, axis=0) - np.array([0, 0]))) < 0.1
+#
+#
+# def test_vmap_normal5():
+#     z = normal(0, 1)
+#     x = plate(N=2)(lambda: normal(z, 1))
+#     [xs] = inference_stan.sample_flat([x], [z], [np.array(0.7)], niter=10000)
+#     assert xs.shape == (10000, 2)
+#     assert max(np.abs(np.mean(xs, axis=0) - np.array([0.7, 0.7]))) < 0.1
+#
+#
+# def test_vmap_normal6():
+#     z = normal(0, 1)
+#     x = plate(N=2)(lambda: normal(z, 1))
+#     x_val = np.array([-1.2, 0.7])
+#     [zs] = inference_stan.sample_flat([z], [x], [x_val], niter=10000)
+#     assert zs.shape == (10000,)
+#     expected = np.sum(x_val) / 3  # average with zero
+#     assert np.abs(np.mean(zs) - expected) < 0.1
+#
+#
+# def test_uniform():
+#     z = uniform(0, 1)
+#     [zs] = inference_stan.sample_flat([z], [], [], niter=10000)
+#     assert np.abs(np.mean(zs) - 0.5) < 0.1
+#
+#
+# def test_uniform_bernoulli():
+#     z = uniform(0, 1)
+#     x = bernoulli(z)
+#     [zs] = inference_stan.sample_flat([z], [x], [np.array(1)], niter=10000)
+#     assert np.abs(np.mean(zs) - 0.75) < 0.1
+#     [zs] = inference_stan.sample_flat([z], [x], [np.array(0)], niter=10000)
+#     assert np.abs(np.mean(zs) - 0.25) < 0.1
+#
+#
+# def test_deterministic1():
+#     x = normal(0, 1)
+#     y = x * x + x
+#     [ys] = inference_stan.sample_flat([y], [], [], niter=10000)
+#     assert np.abs(np.mean(ys) - 1.0) < 0.1
+#
+#
 # def test_indexing1():
 #     x = np.random.randn(5)
 #     y = makerv(x)[:]
 #     expected = x[:]
-#     assert_sample_close(y, expected)
+#     [ys] = inference_stan.sample_flat([y], [], [], niter=10000)
+#     assert np.allclose(ys[0], x)
+#
+#
+# def test_beta_binomial():
+#     α = 0.71
+#     β = 1.52
+#     N = 7
+#
+#     z = beta(α, β)
+#     x = [bernoulli(z) for i in range(N)]
+#     x_val = [np.array(0)] * 3 + [np.array(1)] * (N - 3)
+#     [zs] = inference_stan.sample_flat([z], x, x_val, niter=10000)
+#     α_post = α + (N - 3)
+#     β_post = β + 3
+#     mean_expected = α_post / (α_post + β_post)
+#     var_expected = α_post * β_post / (α_post + β_post) ** 2 / (α_post + β_post + 1)
+#     assert np.abs(np.mean(zs) - mean_expected) < 0.03
+#     assert np.abs(np.var(zs) - var_expected) < 0.03
 
 
 # def test_indexing2():

@@ -76,63 +76,63 @@ def test_log_prob_flat1():
 #     assert np.allclose(l1(2.), l2(0.5, 2.5))
 
 
-def test_deterministic_sample1():
-    x = normal(0, 1)
-    y = x ** 2
-    (xs, ys) = new_infer.sample((x, y), niter=100)
-    assert xs.shape == (100,)
-    assert ys.shape == (100,)
-    assert np.allclose(ys, xs ** 2)
+# def test_deterministic_sample1():
+#     x = normal(0, 1)
+#     y = x**2
+#     (xs, ys) = new_infer.sample((x, y), niter=100)
+#     assert xs.shape == (100,)
+#     assert ys.shape == (100,)
+#     assert np.allclose(ys, xs**2)
 
-
-def test_sample_flat1():
-    z = normal(0.0, 1.0)
-    [zs] = new_infer.sample_flat([z], niter=10)
-    assert zs.shape == (10,)
-
-
-def test_sample_flat2():
-    z = normal(0.0, 1.0)
-    x = normal(z, 1.0)
-    [zs] = new_infer.sample_flat([z], [x], [1.0], niter=10)
-    assert zs.shape == (10,)
-
-
-def test_sample1():
-    z = normal(0.0, 1.0)
-    zs = new_infer.sample(z, niter=10)
-    assert zs.shape == (10,)
-
-
-def test_sample2():
-    z = normal(0.0, 1.0)
-    x = normal(z, 1)
-    y = normal(z, 1)
-    ys = new_infer.sample(y, x, 1.0, niter=10)
-    assert ys.shape == (10,)
-
-
-def test_sample3():
-    z = normal(0.0, 1.0)
-    x = normal(z, 0.00001)
-    y = normal(z, 0.00001)
-    x_obs = 0.5
-    zs = new_infer.sample(z, x, x_obs, niter=10)
-    print(f"{zs=}")
-
-
-def test_sample4():
-    z = normal(0.0, 0.999)
-    x = normal(z, 0.00001)
-    y = normal(z, 0.00002)
-    x_obs = 0.5
-    ys = new_infer.sample(y, x, x_obs, niter=10)
-    print(f"{ys=}")
-
-    # ys = infer.sample(y, x, x_obs, niter=10)
-    # assert ys.shape == (10,)
-    # print(f"{ys=}")
-    # assert np.all(np.abs(ys - (x_obs+2)) < .01)
+# moved to test_all_inference
+# def test_sample_flat1():
+#     z = normal(0.0, 1.0)
+#     [zs] = new_infer.sample_flat([z], niter=10)
+#     assert zs.shape == (10,)
+#
+#
+# def test_sample_flat2():
+#     z = normal(0.0, 1.0)
+#     x = normal(z, 1.0)
+#     [zs] = new_infer.sample_flat([z], [x], [1.0], niter=10)
+#     assert zs.shape == (10,)
+#
+#
+# def test_sample1():
+#     z = normal(0.0, 1.0)
+#     zs = new_infer.sample(z, niter=10)
+#     assert zs.shape == (10,)
+#
+#
+# def test_sample2():
+#     z = normal(0.0, 1.0)
+#     x = normal(z, 1)
+#     y = normal(z, 1)
+#     ys = new_infer.sample(y, x, 1.0, niter=10)
+#     assert ys.shape == (10,)
+#
+#
+# def test_sample3():
+#     z = normal(0.0, 1.0)
+#     x = normal(z, 0.00001)
+#     y = normal(z, 0.00001)
+#     x_obs = 0.5
+#     zs = new_infer.sample(z, x, x_obs, niter=10)
+#     print(f"{zs=}")
+#
+#
+# def test_sample4():
+#     z = normal(0.0, 0.999)
+#     x = normal(z, 0.00001)
+#     y = normal(z, 0.00002)
+#     x_obs = 0.5
+#     ys = new_infer.sample(y, x, x_obs, niter=10)
+#     print(f"{ys=}")
+#
+#     # ys = infer.sample(y, x, x_obs, niter=10)
+#     # assert ys.shape == (10,)
+#     # print(f"{ys=}")
+#     # assert np.all(np.abs(ys - (x_obs+2)) < .01)
 
 
 def test_new_cond_log_prob_flat1():
@@ -279,57 +279,58 @@ def test_new_ancestor_sample2():
     assert z_samp1 == expected_z_samp
 
 
-def test_new_sample_flat1():
-    x = normal(0.5, 2.7)
-    niter = 10_000
-    # won't actually do MCMC because it can use ancestor sampling
-    [xs] = new_infer.sample_flat([x], niter=niter)
-    assert xs.shape == (niter,)
-    assert np.abs(np.mean(xs) - 0.5) < 0.1
-    assert np.abs(np.std(xs) - 2.7) < 0.1
-
-
-def test_new_sample_flat2():
-    x = normal(0.5, 2.7)
-    y = 3 * x + x ** 2
-    niter = 10_000
-    # won't actually do MCMC because it can use ancestor sampling
-    [xs, ys] = new_infer.sample_flat([x, y], niter=niter)
-    assert xs.shape == (niter,)
-    assert ys.shape == (niter,)
-    assert np.abs(np.mean(xs) - 0.5) < 0.1
-    assert np.abs(np.std(xs) - 2.7) < 0.1
-    assert np.allclose(ys, 3 * xs + xs ** 2)
-
-
-def test_new_sample_flat3():
-    x = normal(0, 1)
-    y = normal(x, 1)
-    niter = 10_000
-
-    [xs] = new_infer.sample_flat([x], [y], [1], niter=niter)
-    assert xs.shape == (niter,)
-    print(f"{np.mean(xs)=}")
-    print(f"{np.var(xs)=}")
-    assert np.abs(np.mean(xs) - 0.5) < 0.03
-    assert np.abs(np.var(xs) - 0.5) < 0.03
-
-
-def test_new_sample_flat4():
-    x = normal(0, 1)
-    y = normal(x, 1)
-    z = normal(y, 1)
-    niter = 10_000
-
-    vars = new_infer.variables_to_sample([y], [x, z])
-    assert set(vars) == {y, z}
-
-    [ys] = new_infer.sample_flat([y], [x, z], [-2, 7], niter=niter)
-    assert ys.shape == (niter,)
-    print(f"{np.mean(ys)=}")
-    print(f"{np.var(ys)=}")
-    assert np.abs(np.mean(ys) - (-2 + 7) / 2) < 0.03
-    assert np.abs(np.var(ys) - 1 / 2) < 0.03
+# moved to test_all_inference
+# def test_new_sample_flat1():
+#     x = normal(0.5, 2.7)
+#     niter = 10_000
+#     # won't actually do MCMC because it can use ancestor sampling
+#     [xs] = new_infer.sample_flat([x], niter=niter)
+#     assert xs.shape == (niter,)
+#     assert np.abs(np.mean(xs) - 0.5) < 0.1
+#     assert np.abs(np.std(xs) - 2.7) < 0.1
+#
+#
+# def test_new_sample_flat2():
+#     x = normal(0.5, 2.7)
+#     y = 3 * x + x**2
+#     niter = 10_000
+#     # won't actually do MCMC because it can use ancestor sampling
+#     [xs, ys] = new_infer.sample_flat([x, y], niter=niter)
+#     assert xs.shape == (niter,)
+#     assert ys.shape == (niter,)
+#     assert np.abs(np.mean(xs) - 0.5) < 0.1
+#     assert np.abs(np.std(xs) - 2.7) < 0.1
+#     assert np.allclose(ys, 3 * xs + xs**2)
+#
+#
+# def test_new_sample_flat3():
+#     x = normal(0, 1)
+#     y = normal(x, 1)
+#     niter = 10_000
+#
+#     [xs] = new_infer.sample_flat([x], [y], [1], niter=niter)
+#     assert xs.shape == (niter,)
+#     print(f"{np.mean(xs)=}")
+#     print(f"{np.var(xs)=}")
+#     assert np.abs(np.mean(xs) - 0.5) < 0.03
+#     assert np.abs(np.var(xs) - 0.5) < 0.03
+#
+#
+# def test_new_sample_flat4():
+#     x = normal(0, 1)
+#     y = normal(x, 1)
+#     z = normal(y, 1)
+#     niter = 10_000
+#
+#     vars = new_infer.variables_to_sample([y], [x, z])
+#     assert set(vars) == {y, z}
+#
+#     [ys] = new_infer.sample_flat([y], [x, z], [-2, 7], niter=niter)
+#     assert ys.shape == (niter,)
+#     print(f"{np.mean(ys)=}")
+#     print(f"{np.var(ys)=}")
+#     assert np.abs(np.mean(ys) - (-2 + 7) / 2) < 0.03
+#     assert np.abs(np.var(ys) - 1 / 2) < 0.03
 
 
 # def test_vmap1():
@@ -495,39 +496,40 @@ def test_cond_prob1():
 def test_cond_prob2():
     cond_dist = CondProb(normal_scale)
     x_val = 0.123
-    loc = .456
-    scale = .789
+    loc = 0.456
+    scale = 0.789
     out = new_infer.eval_dist(cond_dist, x_val, loc, scale)
     expected = jnp.exp(dists.Normal(loc, scale).log_prob(x_val))
     assert np.allclose(out, expected)
 
 
-def test_indexing1():
-    x_numpy = np.random.randn(3, 7)
-    y_numpy = x_numpy[:, [0, 1, 2]]
-    x = makerv(x_numpy)
-    y = x[:, [0, 1, 2]]
-    y_samp = new_infer.sample(y, niter=1)[0]
-    assert np.allclose(y_numpy, y_samp)
-
-
-def test_indexing2():
-    x_numpy = np.random.randn(3, 5, 7)
-    idx1 = np.random.randint(low=0, high=3, size=[11, 13])
-    idx2 = np.random.randint(low=0, high=3, size=[11, 13])
-    y_numpy = x_numpy[:, idx1, idx2]
-    x = makerv(x_numpy)
-    y = x[:, idx1, idx2]
-    y_samp = new_infer.sample(y, niter=1)[0]
-    assert np.allclose(y_numpy, y_samp)
-
-
-def test_indexing3():
-    x_numpy = np.random.randn(3, 5, 7)
-    idx0 = np.random.randint(low=0, high=3, size=[11, 13])
-    idx2 = np.random.randint(low=0, high=3, size=[11, 13])
-    y_numpy = x_numpy[idx0, 1::2, idx2]
-    x = makerv(x_numpy)
-    y = x[idx0, 1::2, idx2]
-    y_samp = new_infer.sample(y, niter=1)[0]
-    assert np.allclose(y_numpy, y_samp)
+# all these moved to test_all_inference
+# def test_indexing1():
+#     x_numpy = np.random.randn(3, 7)
+#     y_numpy = x_numpy[:, [0, 1, 2]]
+#     x = makerv(x_numpy)
+#     y = x[:, [0, 1, 2]]
+#     y_samp = new_infer.sample(y, niter=1)[0]
+#     assert np.allclose(y_numpy, y_samp)
+#
+#
+# def test_indexing2():
+#     x_numpy = np.random.randn(3, 5, 7)
+#     idx1 = np.random.randint(low=0, high=3, size=[11, 13])
+#     idx2 = np.random.randint(low=0, high=3, size=[11, 13])
+#     y_numpy = x_numpy[:, idx1, idx2]
+#     x = makerv(x_numpy)
+#     y = x[:, idx1, idx2]
+#     y_samp = new_infer.sample(y, niter=1)[0]
+#     assert np.allclose(y_numpy, y_samp)
+#
+#
+# def test_indexing3():
+#     x_numpy = np.random.randn(3, 5, 7)
+#     idx0 = np.random.randint(low=0, high=3, size=[11, 13])
+#     idx2 = np.random.randint(low=0, high=3, size=[11, 13])
+#     y_numpy = x_numpy[idx0, 1::2, idx2]
+#     x = makerv(x_numpy)
+#     y = x[idx0, 1::2, idx2]
+#     y_samp = new_infer.sample(y, niter=1)[0]
+#     assert np.allclose(y_numpy, y_samp)

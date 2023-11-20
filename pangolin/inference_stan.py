@@ -62,6 +62,15 @@ def gencode(cond_dist, loopdepth, id, *parent_ids):
     return gencode_fn(cond_dist, loopdepth, id, *parent_ids)
 
 
+def gencode_dirichlet(cond_dist, loopdepth, ref, *parent_refs):
+    """
+    get code for a dirichlet (cast input to vector)
+    """
+    return (
+        f"{ref} ~ dirichlet(to_vector" + util.comma_separated(parent_refs, str) + ");\n"
+    )
+
+
 def gencode_matmul(cond_dist, loopdepth, ref, *parent_refs):
     assert len(parent_refs) == 2
     a = parent_refs[0]
@@ -72,13 +81,13 @@ def gencode_matmul(cond_dist, loopdepth, ref, *parent_refs):
     assert b.num_empty <= 2
 
     if a.num_empty == 1 and b.num_empty == 1:
-        return f"{ref} = (to_row_vector({a}) * to_vector({b}));"
+        return f"{ref} = (to_row_vector({a}) * to_vector({b}));\n"
     elif a.num_empty == 1 and b.num_empty == 2:
-        return f"{ref} = to_vector(to_row_vector({a}) * to_matrix({b}));"
+        return f"{ref} = to_array_1d(to_row_vector({a}) * to_matrix({b}));\n"
     elif a.num_empty == 2 and b.num_empty == 1:
-        return f"{ref} = (to_matrix({a}) * to_vector({b}));"
+        return f"{ref} = to_array_1d(to_matrix({a}) * to_vector({b}));\n"
     elif a.num_empty == 2 and b.num_empty == 2:
-        return f"{ref} = (to_matrix({a}) * to_matrix({b}));"
+        return f"{ref} = to_array_2d(to_matrix({a}) * to_matrix({b}));\n"
     else:
         raise NotImplementedError("should be impossible...")
 
@@ -99,7 +108,8 @@ gencode_fns = {
     # interface.binomial: gencode_dist_factory_swapargs("dbin"),
     interface.beta: gencode_dist_factory("beta"),
     # interface.exponential: gencode_dist_factory("dexp"),
-    interface.dirichlet: gencode_dist_factory("dirichlet"),
+    # interface.dirichlet: gencode_dist_factory("dirichlet"),
+    interface.dirichlet: gencode_dirichlet,
     # # interface.categorical: gencode_dist_factory("dcat"),
     # interface.categorical: gencode_categorical,
     # interface.multinomial: gencode_dist_factory_swapargs("dmulti"),
@@ -142,13 +152,13 @@ class StanType:
         self.upper = upper
 
     def declare(self, varname):
-        if self.base_type == "int":
+        if self.base_type == "int" or self.base_type == "real":
             if self.shape != ():
                 s = "array[" + util.comma_separated(self.shape, str, False) + "] "
             else:
                 s = ""
 
-            s += "int"
+            s += f"{self.base_type}"
 
             if self.lower and self.upper:
                 s += f"<lower={self.lower},upper={self.upper}>"
@@ -158,37 +168,6 @@ class StanType:
                 s += f"<upper={self.upper}>"
 
             return s + " " + varname + ";"
-
-        elif self.base_type == "real":
-            batch_shape = self.shape[:-2]
-            event_shape = self.shape[-2:]
-
-            if batch_shape != ():
-                s = "array[" + util.comma_separated(batch_shape, str, False) + "] "
-            else:
-                s = ""
-
-            if event_shape == ():
-                s += "real"
-            elif len(event_shape) == 1:
-                s += "vector"
-            elif len(event_shape) == 2:
-                s += "matrix"
-            else:
-                assert False, "should be impossible"
-
-            if self.lower and self.upper:
-                s += f"<lower={self.lower},upper={self.upper}>"
-            elif self.lower:
-                s += f"<lower={self.lower}>"
-            elif self.upper:
-                s += f"<upper={self.upper}>"
-
-            if event_shape != ():
-                s += "[" + util.comma_separated(event_shape, str, False) + "]"
-
-            return s + " " + varname + ";"
-
         elif self.base_type == "simplex":
             batch_shape = self.shape[:-1]
             event_shape = self.shape[-1:]
@@ -270,7 +249,7 @@ def base_type(cond_dist, *parent_types):
     elif isinstance(cond_dist, interface.Sum):
         return StanType("real")
     elif isinstance(cond_dist, interface.VMapDist):
-        return base_type(cond_dist.base_cond_dist)
+        return base_type(cond_dist.base_cond_dist, *parent_types)
     else:
         raise NotImplementedError(f"type string not implemented for {cond_dist}")
 

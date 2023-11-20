@@ -7,10 +7,21 @@ import pytest
 from pangolin import inference_jags, inference_numpyro, inference_stan
 import numpy as np
 from pangolin.interface import makerv, vmap, plate
-from pangolin.interface import normal, beta, binomial
+from pangolin.interface import (
+    normal,
+    beta,
+    binomial,
+    exp,
+    abs,
+    sum,
+    dirichlet,
+    multinomial,
+)
 import jax
+from jax import numpy as jnp
+from pangolin import ezstan
 
-inference_engines = [inference_jags, inference_stan, inference_numpyro]
+inference_engines = [inference_jags, inference_numpyro, inference_stan]
 
 # automatically run tests on all of these
 pytestmark = pytest.mark.parametrize("inference", inference_engines)
@@ -56,6 +67,24 @@ def test_branched_sampling3(inference):
     assert zs.shape == (100,)
     assert max(np.abs(zs - x_obs)) < 0.01
     assert max(np.abs(ys - x_obs)) < 0.01
+
+
+def test_dirichlet_multinomial(inference):
+    if inference in [inference_numpyro]:
+        return  # no support for constraints (yet)
+
+    alpha = np.array([1.1, 1.3, 1.6])
+    z = dirichlet(alpha)
+    x = multinomial(5, z)
+    x_val = np.array([2, 1, 2])
+    niter = 10_000
+    [zs] = inference.sample_flat([z], [x], [x_val], niter=niter)
+    mean_zs = np.mean(zs, axis=0)
+    alpha_post = alpha + x_val
+    mean_post = alpha_post / np.sum(alpha_post)
+    print(f"{mean_zs=}")
+    print(f"{mean_post=}")
+    assert np.max(np.abs(mean_zs - mean_post)) < 0.1
 
 
 def test_deterministic_sample1(inference):
@@ -543,3 +572,128 @@ def test_indexing41(inference):
                 in_axes=in_axis1,
             )(x)
             assert_one_sample_close(inference, y, expected)
+
+
+###############################################################################
+# Test basic deterministic functions
+###############################################################################
+
+
+def test_exp(inference):
+    x_numpy = np.random.randn(5, 3)
+    x = makerv(x_numpy)
+    y = vmap(vmap(exp))(x)
+    expected = np.exp(x_numpy)
+    assert_one_sample_close(inference, y, expected)
+
+
+def test_abs(inference):
+    x_numpy = np.random.randn(5, 3)
+    x = makerv(x_numpy)
+    y = vmap(vmap(abs))(x)
+    expected = np.abs(x_numpy)
+    assert_one_sample_close(inference, y, expected)
+
+
+def test_pow(inference):
+    x_numpy = np.random.rand(5, 3)
+    y_numpy = np.random.rand(5, 3)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = vmap(vmap(lambda xi, yi: xi**yi))(x, y)
+    expected = x_numpy**y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_sub(inference):
+    x_numpy = np.random.randn(5, 3)
+    y_numpy = np.random.randn(5, 3)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = vmap(vmap(lambda xi, yi: xi - yi))(x, y)
+    expected = x_numpy - y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_div(inference):
+    x_numpy = np.random.rand(5, 3)
+    y_numpy = np.random.rand(5, 3)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = vmap(vmap(lambda xi, yi: xi / yi))(x, y)
+    expected = x_numpy / y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_vec_vec_mul(inference):
+    x_numpy = np.random.rand(5)
+    y_numpy = np.random.rand(5)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = x @ y
+    expected = x_numpy @ y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_mat_vec_mul(inference):
+    x_numpy = np.random.rand(3, 5)
+    y_numpy = np.random.rand(5)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = x @ y
+    expected = x_numpy @ y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_vec_mat_mul(inference):
+    x_numpy = np.random.rand(5)
+    y_numpy = np.random.rand(5, 3)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = x @ y
+    expected = x_numpy @ y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_mat_mat_mul(inference):
+    x_numpy = np.random.rand(5, 4)
+    y_numpy = np.random.rand(4, 3)
+    x = makerv(x_numpy)
+    y = makerv(y_numpy)
+    z = x @ y
+    expected = x_numpy @ y_numpy
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_sum(inference):
+    x_numpy = np.random.rand(5, 4)
+    x = makerv(x_numpy)
+    z = sum(x, axis=1)
+    expected = np.sum(x_numpy, axis=1)
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_vmap_sum1(inference):
+    x_numpy = np.random.rand(5, 4, 6)
+    x = makerv(x_numpy)
+    z = vmap(lambda xi: sum(xi, axis=1))(x)
+    expected = jax.vmap(lambda xi: jnp.sum(xi, axis=1))(x_numpy)
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_vmap_sum2(inference):
+    x_numpy = np.random.rand(5, 4, 6)
+    x = makerv(x_numpy)
+    z = vmap(lambda xi: sum(xi, axis=0), in_axes=2)(x)
+    expected = jax.vmap(lambda xi: jnp.sum(xi, axis=0), in_axes=2)(x_numpy)
+    assert_one_sample_close(inference, z, expected)
+
+
+def test_vmap_sum3(inference):
+    x_numpy = np.random.rand(4, 5, 6, 7)
+    x = makerv(x_numpy)
+    z = vmap(lambda xi: sum(sum(xi, axis=1), axis=0), in_axes=2)(x)
+    expected = jax.vmap(lambda xi: jnp.sum(jnp.sum(xi, axis=1), axis=0), in_axes=2)(
+        x_numpy
+    )
+    assert_one_sample_close(inference, z, expected)
