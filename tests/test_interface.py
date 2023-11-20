@@ -639,3 +639,112 @@ def test_indexing6():
 # def test_indexing7():
 #     x_numpy = np.random.randn(5, 6, 7, 8, 9)
 #     y_numpy = x[:, [1, 2, 3]]
+
+
+def test_eq_normal1():
+    x = normal(0, 1)
+    y = normal(0, 1)
+    assert x != y
+    assert x.cond_dist == y.cond_dist
+
+
+def test_eq_normal2():
+    x = normal(0, 1)
+    y = normal(2, 3)
+    assert x != y
+    assert x.cond_dist == y.cond_dist
+
+
+def test_eq_constant1():
+    data = np.random.randn(3)
+    c = Constant(data)
+    d = Constant(data)
+    assert c == d
+
+
+def test_eq_constant2():
+    data1 = np.random.randn(3)
+    data2 = data1 + 0.0
+    c = Constant(data1)
+    d = Constant(data2)
+    assert c == d
+
+
+def test_eq_constant3():
+    data1 = np.random.randn(3)
+    data2 = data1 + 1e-9
+    c = Constant(data1)
+    d = Constant(data2)
+    assert c != d
+
+
+def test_eq_vmap1():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    assert d1 == d2
+
+
+def test_eq_vmap2():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_prec, in_axes=[0, 1], axis_size=5)
+    assert d1 != d2
+
+
+def test_eq_vmap3():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_scale, in_axes=[1, 0], axis_size=5)
+    assert d1 != d2
+
+
+def test_eq_vmap4():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=4)
+    assert d1 != d2
+
+
+def test_eq_vmap5():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(d1, in_axes=[0, 1], axis_size=5)
+    d3 = VMapDist(d1, in_axes=[0, 1], axis_size=5)
+    assert d1 != d2
+    assert d1 != d3
+    assert d2 == d3
+
+
+def test_eq_vmap6():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d3 = VMapDist(d1, in_axes=[0, 1], axis_size=5)
+    d4 = VMapDist(d2, in_axes=[0, 1], axis_size=5)
+    assert d1 == d2
+    assert d1 != d3
+    assert d1 != d4
+    assert d2 != d3
+    assert d2 != d4
+    assert d3 == d4
+
+
+def test_eq_vmap7():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d2 = VMapDist(normal_scale, in_axes=[0, 1], axis_size=5)
+    d3 = VMapDist(d1, in_axes=[0, 1], axis_size=5)
+    d4 = VMapDist(d2, in_axes=[0, 1], axis_size=4)
+    assert d1 == d2
+    assert d1 != d3
+    assert d1 != d4
+    assert d2 != d3
+    assert d2 != d4
+    assert d3 != d4
+
+
+def test_eq_vmap8():
+    d1 = VMapDist(normal_scale, in_axes=[0, 1])
+    d2 = VMapDist(normal_scale, in_axes=[0, 1])
+    d3 = VMapDist(d1, in_axes=[0, 1])
+    d4 = VMapDist(d2, in_axes=[0, 1])
+    assert d1 == d2
+    assert d1 != d3
+    assert d1 != d4
+    assert d2 != d3
+    assert d2 != d4
+    assert d3 == d4

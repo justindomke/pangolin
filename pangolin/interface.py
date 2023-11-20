@@ -13,6 +13,14 @@ import jax
 
 
 class CondDist:
+    """
+    Equivalent `CondDist`s should be equal if they represent the same distribution (
+    regardless of if they occupy the same place in memory). For simple cases
+    like `normal_scale` or `add`, this makes no difference. But for `CondDist`s that
+    are programmatically constructed with parameters (like `VmapDist`) they must
+    override `__eq__` so that this happens.
+    """
+
     _frozen = False
 
     def __init__(self, name):
@@ -40,10 +48,19 @@ class CondDist:
         else:
             self.__dict__[key] = value
 
+    # def __eq__(self, other):
+    #     """
+    #     Two *equivalent* `CondDist`s should be equal.
+    #     """
+    #     if type(self) == type(other):
+    #         return self.__dict__ == other.__dict__
+    #     return False
+
 
 class Constant(CondDist):
     def __init__(self, value):
         self.value = np.array(value)
+        self.value.flags.writeable = False
         # super().__init__(self.value.shape)
         super().__init__("Constant")
 
@@ -68,6 +85,16 @@ class Constant(CondDist):
             .replace("\n", "")
             .replace("  ", " ")
         )
+
+    def __eq__(self, other):
+        if isinstance(other, Constant):
+            return self.value.shape == other.value.shape and np.all(
+                self.value == other.value
+            )
+        return False
+
+    def __hash__(self):
+        return hash(self.value.tobytes())
 
 
 class AllScalarCondDist(CondDist):
@@ -259,6 +286,14 @@ class Sum(CondDist):
     def __str__(self):
         return f"sum(axis={self.axis})"
 
+    def __eq__(self, other):
+        if isinstance(other, Sum):
+            return self.axis == other.axis
+        return False
+
+    def __hash__(self):
+        return hash(self.axis)
+
 
 def slice_length(size, slice):
     return len(np.ones(size)[slice])
@@ -339,6 +374,14 @@ class Index(CondDist):
         new_slices = tuple(slice_str(s) for s in self.slices)
         return "index" + util.comma_separated(new_slices)
 
+    def __eq__(self, other):
+        if isinstance(other, Index):
+            return self.slices == other.slices
+        return False
+
+    def __hash__(self):
+        return hash(str(self.slices))
+
 
 def index(var, indices):
     if not isinstance(indices, tuple):
@@ -380,6 +423,14 @@ class CondProb(CondDist):
     def __str__(self):
         return "CondProb(" + str(self.base_cond_dist) + ")"
 
+    def __eq__(self, other):
+        if isinstance(other, CondProb):
+            return self.base_cond_dist == other.base_cond_dist
+        return False
+
+    def __hash__(self):
+        return hash(self.base_cond_dist)
+
 
 # See: https://mc-stan.org/docs/stan-users-guide/summing-out-the-responsibility-parameter.html
 
@@ -407,6 +458,17 @@ class Mixture(CondDist):
     @property
     def is_random(self):
         return True
+
+    def __eq__(self, other):
+        if isinstance(other, Mixture):
+            return (
+                self.component_cond_dist == other.component_cond_dist
+                and self.in_axes == other.in_axes
+            )
+        return False
+
+    def __hash__(self):
+        return hash((self.component_cond_dist, self.in_axes))
 
 
 def mix(mixture_var, fun):
@@ -634,6 +696,18 @@ class VMapDist(CondDist):
             + str(self.base_cond_dist)
             + ")"
         )
+
+    def __eq__(self, other):
+        if isinstance(other, VMapDist):
+            return (
+                self.base_cond_dist == other.base_cond_dist
+                and self.in_axes == other.in_axes
+                and self.axis_size == other.axis_size
+            )
+        return False
+
+    def __hash__(self):
+        return hash((self.base_cond_dist, self.in_axes, self.axis_size))
 
 
 ################################################################################
