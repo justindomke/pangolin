@@ -62,6 +62,27 @@ def gencode(cond_dist, loopdepth, id, *parent_ids):
     return gencode_fn(cond_dist, loopdepth, id, *parent_ids)
 
 
+def gencode_matmul(cond_dist, loopdepth, ref, *parent_refs):
+    assert len(parent_refs) == 2
+    a = parent_refs[0]
+    b = parent_refs[1]
+    assert a.num_empty >= 1
+    assert a.num_empty <= 2
+    assert b.num_empty >= 1
+    assert b.num_empty <= 2
+
+    if a.num_empty == 1 and b.num_empty == 1:
+        return f"{ref} = (to_row_vector({a}) * to_vector({b}));"
+    elif a.num_empty == 1 and b.num_empty == 2:
+        return f"{ref} = to_vector(to_row_vector({a}) * to_matrix({b}));"
+    elif a.num_empty == 2 and b.num_empty == 1:
+        return f"{ref} = (to_matrix({a}) * to_vector({b}));"
+    elif a.num_empty == 2 and b.num_empty == 2:
+        return f"{ref} = (to_matrix({a}) * to_matrix({b}));"
+    else:
+        raise NotImplementedError("should be impossible...")
+
+
 def gencode_unsupported():
     def gencode_dist(cond_dist, loopdepth, ref, *parent_refs):
         raise NotImplementedError(f"Stan does not support distribution {cond_dist}")
@@ -90,7 +111,7 @@ gencode_fns = {
     interface.sub: gencode_infix_factory("-"),
     interface.div: gencode_infix_factory("/"),
     interface.pow: gencode_infix_factory("^"),
-    interface.matmul: gencode_unsupported(),  # stan needs specific matrix/vector types
+    interface.matmul: gencode_matmul,
     interface.abs: gencode_deterministic_factory("abs"),
     interface.exp: gencode_deterministic_factory("exp"),
 }
@@ -114,20 +135,80 @@ class_gencode_fns = {
 
 
 class StanType:
-    def __init__(self, base_type, event_shape=None, batch_shape=None):
+    def __init__(self, base_type, shape=None, lower=None, upper=None):
         self.base_type = base_type
-        self.event_shape = event_shape
-        self.batch_shape = batch_shape
+        self.shape = shape
+        self.lower = lower
+        self.upper = upper
 
     def declare(self, varname):
-        if self.batch_shape is not None and self.batch_shape != ():
-            s = "array[" + util.comma_separated(self.batch_shape, str, False) + "] "
+        if self.base_type == "int":
+            if self.shape != ():
+                s = "array[" + util.comma_separated(self.shape, str, False) + "] "
+            else:
+                s = ""
+
+            s += "int"
+
+            if self.lower and self.upper:
+                s += f"<lower={self.lower},upper={self.upper}>"
+            elif self.lower:
+                s += f"<lower={self.lower}>"
+            elif self.upper:
+                s += f"<upper={self.upper}>"
+
+            return s + " " + varname + ";"
+
+        elif self.base_type == "real":
+            batch_shape = self.shape[:-2]
+            event_shape = self.shape[-2:]
+
+            if batch_shape != ():
+                s = "array[" + util.comma_separated(batch_shape, str, False) + "] "
+            else:
+                s = ""
+
+            if event_shape == ():
+                s += "real"
+            elif len(event_shape) == 1:
+                s += "vector"
+            elif len(event_shape) == 2:
+                s += "matrix"
+            else:
+                assert False, "should be impossible"
+
+            if self.lower and self.upper:
+                s += f"<lower={self.lower},upper={self.upper}>"
+            elif self.lower:
+                s += f"<lower={self.lower}>"
+            elif self.upper:
+                s += f"<upper={self.upper}>"
+
+            if event_shape != ():
+                s += "[" + util.comma_separated(event_shape, str, False) + "]"
+
+            return s + " " + varname + ";"
+
+        elif self.base_type == "simplex":
+            batch_shape = self.shape[:-1]
+            event_shape = self.shape[-1:]
+
+            if batch_shape != ():
+                s = "array[" + util.comma_separated(batch_shape, str, False) + "] "
+            else:
+                s = ""
+
+            assert len(event_shape) == 1
+
+            s += f"simplex[{event_shape[0]}]"
+
+            assert self.lower is None, "simplex should not have bounds"
+            assert self.upper is None, "simplex should not have bounds"
+
+            return s + " " + varname + ";"
+
         else:
-            s = ""
-        s += self.base_type
-        if self.event_shape is not None and self.event_shape != ():
-            s += "[" + util.comma_separated(self.event_shape, str, False) + "]"
-        return s + " " + varname + ";"
+            raise NotImplementedError(f"type {self.base_type} not implemented")
 
 
 # One theory for how to do Stan declarations:
@@ -144,84 +225,59 @@ class StanType:
 # - the vector inputs are given by vmapping over the non-last dims
 
 
-def stan_type(var, *parent_types):
-    if var.cond_dist in (interface.normal_scale, interface.uniform):
+def base_type(cond_dist, *parent_types):
+    """
+    get the type of a cond_dist without worrying about shape
+    """
+    if cond_dist in [
+        interface.add,
+        interface.mul,
+        interface.add,
+        interface.sub,
+        interface.mul,
+        interface.pow,
+        interface.abs,
+        interface.matmul,
+    ]:
+        if all(t.base_type == "int" for t in parent_types):
+            return StanType("int")
+        else:
+            return StanType("real")
+    elif cond_dist in [interface.div, interface.exp]:
         return StanType("real")
-    elif var.cond_dist in (interface.beta,):
-        return StanType("real<lower=0,upper=1>")
-    elif var.cond_dist in (interface.bernoulli,):
-        return StanType("int<lower=0,upper=1>")
-    elif isinstance(var.cond_dist, interface.Constant):
-        if np.issubdtype(var.cond_dist.value.dtype, np.floating):
-            # if you can, declare as a vector
-            # should this be done in the final stage?
-            # should we declare a matrix if we can?
-            if var.ndim == 0:
-                return StanType("real", var.shape, None)
-            elif var.ndim == 1:
-                return StanType("vector", var.shape, None)
-            elif var.ndim == 2:
-                return StanType("matrix", var.shape, None)
-            else:
-                return StanType("matrix", var.shape[-2:], var.shape[:-2])
-        elif np.issubdtype(var.cond_dist.value.dtype, np.integer):
-            return StanType("int", None, var.shape)
+    elif cond_dist in (interface.normal_scale, interface.uniform):
+        return StanType("real")
+    elif cond_dist in (interface.beta,):
+        return StanType("real", lower=0, upper=1)
+    elif cond_dist in (interface.bernoulli,):
+        return StanType("int", lower=0, upper=1)
+    elif isinstance(cond_dist, interface.Constant):
+        if np.issubdtype(cond_dist.value.dtype, np.floating):
+            return StanType("real")
+        elif np.issubdtype(cond_dist.value.dtype, np.integer):
+            return StanType("int")
         else:
             raise NotImplementedError("Array neither float nor integer type")
-    elif var.cond_dist in (interface.dirichlet,):
-        return StanType("simplex", var.shape)
-    elif var.cond_dist in (interface.multinomial,):
-        return StanType("int", None, var.shape)
-    elif isinstance(var.cond_dist, interface.Index):
-        return StanType(parent_types[0])
-
+    elif cond_dist in (interface.multinomial, interface.binomial):
+        return StanType("int")
+    elif cond_dist in (interface.dirichlet,):
+        return StanType("simplex")
+    elif isinstance(cond_dist, interface.Index):
+        # TODO: need to check if last dimension is being indexed
+        t = parent_types[0]
+        assert t.base_type != "simplex", "don't handle this case yet"
+        return StanType(t.base_type, lower=t.lower, upper=t.upper)
+    elif isinstance(cond_dist, interface.Sum):
+        return StanType("real")
+    elif isinstance(cond_dist, interface.VMapDist):
+        return base_type(cond_dist.base_cond_dist)
     else:
-        raise NotImplementedError(f"type string not implemented for {var}")
+        raise NotImplementedError(f"type string not implemented for {cond_dist}")
 
 
-# def stan_type_string(cond_dist, *parent_type_strings):
-#     if isinstance(cond_dist, interface.VMapDist):
-#         # return stan_type_string(cond_dist.base_cond_dist)
-#         # tmp_var = interface.RV(cond_dist.base_cond_dist, *var.parents)
-#         # return stan_type_string(tmp_var)
-#         return stan_type_string(cond_dist.base_cond_dist, *parent_type_strings)
-#     elif isinstance(cond_dist, interface.Constant):
-#         if np.issubdtype(cond_dist.value.dtype, np.floating):
-#             return "real"
-#         elif np.issubdtype(cond_dist.value.dtype, np.integer):
-#             return "int"
-#             # return "real"  # TODO FIX
-#         else:
-#             raise NotImplementedError("Array neither float nor integer type")
-#     elif isinstance(cond_dist, (interface.Index, interface.Sum)):
-#         return parent_type_strings[0]
-#     elif cond_dist in [interface.normal_scale, interface.uniform, interface.dirichlet]:
-#         return "real"
-#     elif cond_dist in [interface.bernoulli]:
-#         return "int<lower=0,upper=1>"
-#     elif cond_dist in [interface.beta]:
-#         return "real<lower=0,upper=1>"
-#     elif cond_dist in [interface.binomial, interface.multinomial]:
-#         return "int"
-#     elif cond_dist in [
-#         interface.add,
-#         interface.mul,
-#         interface.add,
-#         interface.sub,
-#         interface.mul,
-#         interface.div,
-#         interface.pow,
-#         interface.abs,
-#         interface.exp,
-#         interface.matmul,
-#     ]:
-#         # assert len(parent_type_strings) == 2
-#         if all(type_string == "int" for type_string in parent_type_strings):
-#             return "int"
-#         else:
-#             return "real"
-#     else:
-#         raise NotImplementedError(f"type string not implemented for {cond_dist}")
+def stan_type(var, *parent_types):
+    t = base_type(var.cond_dist, *parent_types)
+    return StanType(t.base_type, var.shape, t.lower, t.upper)
 
 
 def stan_code_flat(requested_vars, given_vars, given_vals):
@@ -254,31 +310,19 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
         parent_types = [types[p] for p in var.parents]
         types[var] = stan_type(var, *parent_types)
 
-        mycode = types[var].declare(ids[var]) + "\n"
-
-        # mycode = type_strings[var]
-        # mycode += " " + ids[var]
-        # if var.shape != ():
-        #     mycode += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
-        # mycode += ";\n"
-
-        # if var.ndim == 0:
-        #     mycode = type_strings[var] + " " + ids[var] + ";\n"
-        # elif type_strings[var] == "real" and var.ndim == 1:
-        #     mycode = "vector[" + str(var.shape[0]) + "] " + ids[var] + ";\n"
-        # else:
-        #     mycode = type_strings[var]
-        #     mycode += " " + ids[var]
-        #     if var.shape != ():
-        #         mycode += "[" + util.comma_separated(var.shape, str, parens=False) + "]"
-        #     mycode += ";\n"
-
         print(f"{var=}")
         if var in given_vars or isinstance(var.cond_dist, pangolin.Constant):
+            # transformed DATA can be int
+            mycode = types[var].declare(ids[var]) + "\n"
             data_code += mycode
         elif var.cond_dist.is_random:
+            mycode = types[var].declare(ids[var]) + "\n"
             parameters_code += mycode
         else:
+            # transformed PARAMS can't be
+            if types[var].base_type == "int":
+                types[var].base_type = "real"
+            mycode = types[var].declare(ids[var]) + "\n"
             transformed_parameters_code += mycode
 
     for var in included_vars:
