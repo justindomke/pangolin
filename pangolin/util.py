@@ -8,7 +8,7 @@ def comma_separated(stuff, fun=None, parens=True):
         ret += "("
     for i, thing in enumerate(stuff):
         if fun is None:
-            ret += thing
+            ret += thing  # should this be str(thing)?
         else:
             ret += fun(thing)
         if i < len(stuff) - 1:
