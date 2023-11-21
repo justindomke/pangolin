@@ -104,6 +104,7 @@ gencode_fns = {
     interface.normal_prec: gencode_unsupported(),
     interface.uniform: gencode_dist_factory("uniform"),
     interface.bernoulli: gencode_dist_factory("bernoulli"),
+    interface.bernoulli_logit: gencode_dist_factory("bernoulli_logit"),
     interface.binomial: gencode_dist_factory("binomial"),
     # interface.binomial: gencode_dist_factory_swapargs("dbin"),
     interface.beta: gencode_dist_factory("beta"),
@@ -228,7 +229,7 @@ def base_type(cond_dist, *parent_types):
         return StanType("real")
     elif cond_dist in (interface.beta,):
         return StanType("real", lower=0, upper=1)
-    elif cond_dist in (interface.bernoulli,):
+    elif cond_dist in (interface.bernoulli, interface.bernoulli_logit):
         return StanType("int", lower=0, upper=1)
     elif isinstance(cond_dist, interface.Constant):
         if np.issubdtype(cond_dist.value.dtype, np.floating):
@@ -278,7 +279,7 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
 
     # conditioning variables
     for var, val in zip(given_vars, given_vals):
-        evidence[ids[var]] = val
+        evidence[ids[var]] = np.array(val)  # cast to array
 
     # type_strings = {}
     types = {}
