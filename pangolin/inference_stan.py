@@ -290,7 +290,7 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
         parent_types = [types[p] for p in var.parents]
         types[var] = stan_type(var, *parent_types)
 
-        print(f"{var=}")
+        # print(f"{var=}")
         if var in given_vars or isinstance(var.cond_dist, pangolin.Constant):
             # transformed DATA can be int
             mycode = types[var].declare(ids[var]) + "\n"
@@ -359,11 +359,11 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
         requested_vars, given_vars, given_vals
     )
 
-    print("CODE")
-    print(code)
+    # print("CODE")
+    # print(code)
 
-    print("EVIDENCE")
-    print(evidence)
+    # print("EVIDENCE")
+    # print(evidence)
 
     results = ezstan.stan(code, monitor_vars, niter=niter, nchains=1, **evidence)
 
