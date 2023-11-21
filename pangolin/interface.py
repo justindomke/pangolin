@@ -6,6 +6,10 @@ import jax
 
 # import util
 
+# things to add:
+# jax "expit" / JAGS "ilogit" / Stan "inverse_logit"
+# numpyro "BernoulliLogits" / JAGS (none) / Stan bernoulli_logit
+# log_sum_exp
 
 ################################################################################
 # Conditional distributions
@@ -135,6 +139,7 @@ class VecMatCondDist(CondDist):
 normal_scale = AllScalarCondDist(2, "normal_scale", True)
 normal_prec = AllScalarCondDist(2, "normal_prec", True)
 bernoulli = AllScalarCondDist(1, "bernoulli", True)
+bernoulli_logit = AllScalarCondDist(1, "bernoulli_logit", True)
 binomial = AllScalarCondDist(2, "binomial", True)
 uniform = AllScalarCondDist(2, "uniform", True)
 beta = AllScalarCondDist(2, "beta", True)
@@ -897,6 +902,7 @@ def makerv(a):
 
 class RV(dag.Node):
     _frozen = False
+    __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
     def __init__(self, cond_dist, *parents):
         super().__init__(*parents)
@@ -935,6 +941,9 @@ class RV(dag.Node):
 
     def __matmul__(self, a):
         return matmul(self, a)
+
+    def __rmatmul__(self, a):
+        return matmul(a, self)
 
     def __getitem__(self, idx):
         return index(self, idx)
