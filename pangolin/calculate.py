@@ -1,10 +1,10 @@
 import jax.tree_util
 from . import util
 import numpy as np
-from . import inference_numpyro, inference_jags
+from . import inference_numpyro, inference_jags, inference_stan
 from . import dag
 
-engines = ["numpyro", "jags"]
+engines = ["numpyro", "jags", "stan"]
 
 
 class Calculate:
@@ -59,6 +59,8 @@ class Calculate:
             inference = inference_jags
         elif self.engine == "numpyro":
             inference = inference_numpyro
+        elif self.engine == "stan":
+            inference = inference_stan
         else:
             raise Exception(f"inference must be in {engines}")
 
