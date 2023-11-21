@@ -251,6 +251,7 @@ numpyro_dists = {
     interface.exponential: dist.Exponential,
     interface.beta_binomial: dist.BetaBinomial,
     interface.multinomial: dist.Multinomial,
+    interface.multi_normal_cov: dist.MultivariateNormal,
 }
 
 
@@ -263,9 +264,9 @@ def log_prob_vmap(cond_dist, observed_val, *parent_vals):
 
 
 def sample_vmap(cond_dist, rng_key, *parent_vals):
-    print(f"{cond_dist=}")
-    print(f"{rng_key=}")
-    print(f"{parent_vals=}")
+    # print(f"{cond_dist=}")
+    # print(f"{rng_key=}")
+    # print(f"{parent_vals=}")
     my_sample = functools.partial(sample, cond_dist.base_cond_dist)
     rng_keys = jax.random.split(rng_key, cond_dist.axis_size)
     samps = jax.vmap(
