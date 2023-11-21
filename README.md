@@ -1,4 +1,11 @@
-Pangolin is a probabilistic inference research project. It has the following goals:
+Pangolin is a probabilistic inference research project. To get a quick feel for how 
+it works, see these examples:
+
+* [8 schools](blob/main/demo-8-schools.ipynb)
+* [logistic regression](blob/main/demo-logistic-regression.ipynb)
+* [GP regression](blob/main/demo-GP-regression.ipynb)
+
+It has the following goals:
 
 * **Feel like numpy.** Provide an interface for interacting with probability 
   distributions that feels natural to anyone who's played around with 
