@@ -244,6 +244,7 @@ numpyro_dists = {
     interface.uniform: dist.Uniform,
     interface.normal_scale: dist.Normal,
     interface.bernoulli: dist.Bernoulli,
+    interface.bernoulli_logit: dist.BernoulliLogits,
     interface.categorical: dist.Categorical,
     interface.dirichlet: dist.Dirichlet,
     interface.binomial: dist.Binomial,

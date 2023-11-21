@@ -48,6 +48,10 @@ def gencode(cond_dist, loopdepth, id, *parent_ids):
     return gencode_fn(cond_dist, loopdepth, id, *parent_ids)
 
 
+def gencode_bernoulli_logit(cond_dist, loopdepth, ref, *parent_refs):
+    return f"{ref} ~ dbern(ilogit({parent_refs[0]}));\n"
+
+
 def gencode_normal_scale(cond_dist, loopdepth, ref, *parent_refs):
     assert cond_dist == interface.normal_scale
     return f"{ref} ~ dnorm({parent_refs[0]},1/({parent_refs[1]})^2)\n"
@@ -136,6 +140,7 @@ gencode_fns = {
     interface.normal_scale: gencode_normal_scale,
     interface.normal_prec: gencode_dist_factory("dnorm"),
     interface.bernoulli: gencode_dist_factory("dbern"),
+    interface.bernoulli_logit: gencode_bernoulli_logit,
     # interface.binomial: gencode_dist_factory("dbin"),
     interface.binomial: gencode_dist_factory("dbin", [1, 0]),
     interface.uniform: gencode_dist_factory("dunif"),
