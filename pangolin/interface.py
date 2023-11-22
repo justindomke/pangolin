@@ -117,6 +117,38 @@ class AllScalarCondDist(CondDist):
         return self.random
 
 
+def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
+    def getdist(*parents):
+        assert len(parents) == cond_dist.num_parents
+        parents = tuple(makerv(p) for p in parents)
+        vec_shape = None
+        in_axes = []
+        # make sure vectorizable
+        for p in parents:
+            if p.shape == ():
+                # scalars are always OK
+                in_axes.append(None)
+            else:
+                if vec_shape:
+                    assert (
+                        p.shape == vec_shape
+                    ), "can only vectorize scalars + arrays of same shape"
+                else:
+                    vec_shape = p.shape
+                in_axes.append(0)
+
+        if vec_shape is None:
+            return cond_dist(*parents)
+        else:
+            in_axes = tuple(in_axes)
+            d = cond_dist
+            for i in range(len(vec_shape)):
+                d = vmap(d, in_axes)
+            return d(*parents)
+
+    return getdist
+
+
 class VecMatCondDist(CondDist):
     """AA Represents a distribution that takes a vector of length N, a matrix of size NxN and is a vector of length N"""
 
@@ -153,6 +185,13 @@ div = AllScalarCondDist(2, "div", False)
 pow = AllScalarCondDist(2, "pow", False)
 abs = AllScalarCondDist(1, "abs", False)
 exp = AllScalarCondDist(1, "exp", False)
+
+# implicitly vectorized ops
+vec_add = implicit_vectorized_scalar_cond_dist(add)
+vec_sub = implicit_vectorized_scalar_cond_dist(sub)
+vec_mul = implicit_vectorized_scalar_cond_dist(mul)
+vec_div = implicit_vectorized_scalar_cond_dist(div)
+vec_pow = implicit_vectorized_scalar_cond_dist(pow)
 
 
 def normal(loc, scale=None, prec=None):
@@ -912,32 +951,32 @@ class RV(dag.Node):
         self._frozen = True
 
     def __add__(self, b):
-        return add(self, b)
+        return vec_add(self, b)
 
     __radd__ = __add__
 
     def __sub__(self, b):
-        return sub(self, b)
+        return vec_sub(self, b)
 
     def __rsub__(self, b):
-        return sub(b, self)
+        return vec_sub(b, self)
 
     def __mul__(self, b):
-        return mul(self, b)
+        return vec_mul(self, b)
 
     __rmul__ = __mul__
 
     def __truediv__(self, b):
-        return div(self, b)
+        return vec_div(self, b)
 
     def __rtruediv__(self, b):
-        return div(b, self)
+        return vec_div(b, self)
 
     def __pow__(self, b):
-        return pow(self, b)
+        return vec_pow(self, b)
 
     def __rpow__(self, a):
-        return pow(a, self)
+        return vec_pow(a, self)
 
     def __matmul__(self, a):
         return matmul(self, a)
