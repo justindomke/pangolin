@@ -219,7 +219,7 @@ def sample(cond_dist, key, *parent_vals):
     elif dist_class in class_sample_funs:
         return class_sample_funs[dist_class](cond_dist, key, *parent_vals)
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f"no sample fun implemented for {cond_dist}")
 
 
 def evaluate(cond_dist, *parent_vals):
@@ -233,7 +233,7 @@ def evaluate(cond_dist, *parent_vals):
     elif dist_class in class_evaluation_funs:
         return class_evaluation_funs[dist_class](cond_dist, *parent_vals)
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f"no eval fun implemented for {cond_dist}")
 
 
 ################################################################################
