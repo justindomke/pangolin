@@ -1,22 +1,26 @@
-import pytest
-from pangolin import inference_jags, inference_numpyro, inference_stan
 import numpy as np
-from pangolin.interface import makerv, vmap, plate, RV
-from pangolin.interface import normal, beta, binomial
-import jax
+from pangolin.interface import makerv, normal, vmap, plate
 
 
 def run_single_test(a, b, expected_shape):
-    if expected_shape is None:
-        # expectd to fail
-        try:
-            c = a + b
-        except AssertionError as e:
-            return
-        assert False, "failed to raise assertion error as expected"
-    else:
-        c = a + b
-        assert c.shape == expected_shape
+    funs = [
+        lambda a, b: a + b,
+        lambda a, b: a - b,
+        lambda a, b: a * b,
+        lambda a, b: a / b,
+        lambda a, b: a**b,
+    ]
+    for fun in funs:
+        if expected_shape is None:
+            # expected to fail
+            try:
+                c = a + b
+            except AssertionError as e:
+                return
+            assert False, "failed to raise assertion error as expected"
+        else:
+            c = fun(a, b)
+            assert c.shape == expected_shape
 
 
 def run_all_tests(a, b, expected_shape):
@@ -71,7 +75,13 @@ def test_vector_matrix():
 
 
 def test_matrix_matrix():
-    a = makerv([[2, 3, 4], [5, 6, 7]])
-    b = makerv([[2, 3, 4], [5, 6, 7]])
-    c = a + b
-    assert c.shape == (2, 3)
+    a = [[2, 3, 4], [5, 6, 7]]
+    b = [[2, 3, 4], [5, 6, 7]]
+    run_all_tests(a, b, (2, 3))
+
+
+def test_vmap_over_vec():
+    a = makerv(np.random.randn(5, 3))
+    b = makerv(np.random.randn(5))
+    c = vmap(lambda a_i, b_i: a_i + b_i)(a, b)
+    assert c.shape == (5, 3)
