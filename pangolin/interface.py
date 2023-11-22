@@ -946,6 +946,10 @@ class RV(dag.Node):
         return matmul(a, self)
 
     def __getitem__(self, idx):
+        if self.ndim == 0:
+            raise Exception("can't index scalar RV")
+        elif isinstance(idx, tuple) and len(idx) > self.ndim:
+            raise Exception("RV indexed with more dimensions than exist")
         return index(self, idx)
 
     @property
