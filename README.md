@@ -4,6 +4,7 @@ it works, see these examples:
 * [8 schools](demo-8-schools.ipynb)
 * [logistic regression](demo-logistic-regression.ipynb)
 * [GP regression](demo-GP-regression.ipynb)
+* [Item-response theory models](demo-IRT.ipynb)
 
 It has the following goals:
 
