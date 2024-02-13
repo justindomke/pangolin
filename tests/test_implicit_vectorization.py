@@ -10,11 +10,15 @@ def run_single_test(a, b, expected_shape):
         lambda a, b: a / b,
         lambda a, b: a**b,
     ]
+    print(f"{a=}")
+    print(f"{b=}")
+
     for fun in funs:
         if expected_shape is None:
             # expected to fail
             try:
                 c = a + b
+                print(f"{c=}")
             except AssertionError as e:
                 return
             assert False, "failed to raise assertion error as expected"
@@ -28,6 +32,8 @@ def run_all_tests(a, b, expected_shape):
     given inputs a and b (int/float or list of int/float)
     test all combinations of adding give the right shape
     """
+    # for a_op in [None, makerv, np.array]:
+    #     for b_op in [None, makerv, np.array]:
     for a_op in [None, makerv, np.array]:
         for b_op in [None, makerv, np.array]:
             if (a_op is makerv) or (b_op is makerv):

@@ -4,194 +4,7 @@ from . import dag, util
 import numpy as np
 import jax
 
-# import util
-
-# things to add:
-# jax "expit" / JAGS "ilogit" / Stan "inverse_logit"
-# numpyro "BernoulliLogits" / JAGS (none) / Stan bernoulli_logit
-# log_sum_exp
-
-################################################################################
-# Conditional distributions
-################################################################################
-
-
-class CondDist:
-    """
-    Equivalent `CondDist`s should be equal if they represent the same distribution (
-    regardless of if they occupy the same place in memory). For simple cases
-    like `normal_scale` or `add`, this makes no difference. But for `CondDist`s that
-    are programmatically constructed with parameters (like `VmapDist`) they must
-    override `__eq__` so that this happens.
-    """
-
-    _frozen = False
-
-    def __init__(self, name):
-        self.name = name  # only for printing, no functionality
-        self._frozen = True  # freeze after init
-
-    def __call__(self, *parents):
-        """when you call a conditional distribution you get a RV"""
-        parents = (makerv(p) for p in parents)
-        return RV(self, *parents)
-
-    def get_shape(self, *parents_shapes):
-        raise NotImplementedError("Must construct for specific cases")
-
-    def __repr__(self):
-        return self.name
-
-    @property
-    def is_random(self):
-        raise NotImplementedError()
-
-    def __setattr__(self, key, value):
-        if self._frozen:
-            raise Exception("CondDists are immutable after init.")
-        else:
-            self.__dict__[key] = value
-
-    # def __eq__(self, other):
-    #     """
-    #     Two *equivalent* `CondDist`s should be equal.
-    #     """
-    #     if type(self) == type(other):
-    #         return self.__dict__ == other.__dict__
-    #     return False
-
-
-class Constant(CondDist):
-    def __init__(self, value):
-        self.value = np.array(value)
-        self.value.flags.writeable = False
-        # super().__init__(self.value.shape)
-        super().__init__("Constant")
-
-    def get_shape(self):
-        return self.value.shape
-
-    @property
-    def is_random(self):
-        return False
-
-    def __repr__(self):
-        array_str = repr(self.value)  # get base string
-        array_str = array_str[6:-1]  # cut off "array(" and ")"
-        array_str = array_str.replace("\n", "")  # remove newlines
-        array_str = array_str.replace(" ", "")  # remove specs
-        return "Constant(" + array_str + ")"
-
-    def __str__(self):
-        # return str(self.value).replace("\n", "").replace("  ", " ")
-        return (
-            np.array2string(self.value, precision=3)
-            .replace("\n", "")
-            .replace("  ", " ")
-        )
-
-    def __eq__(self, other):
-        if isinstance(other, Constant):
-            return self.value.shape == other.value.shape and np.all(
-                self.value == other.value
-            )
-        return False
-
-    def __hash__(self):
-        return hash(self.value.tobytes())
-
-
-class AllScalarCondDist(CondDist):
-    def __init__(self, num_parents, name, random):
-        self.num_parents = num_parents
-        self.random = random
-        super().__init__(name)
-
-    def get_shape(self, *parents_shapes):
-        for shape in parents_shapes:
-            assert shape == (), "all parents must have shape ()"
-        return ()
-
-    @property
-    def is_random(self):
-        return self.random
-
-
-def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
-    def getdist(*parents):
-        assert len(parents) == cond_dist.num_parents
-        parents = tuple(makerv(p) for p in parents)
-        vec_shape = None
-        in_axes = []
-        # make sure vectorizable
-        for p in parents:
-            if p.shape == ():
-                # scalars are always OK
-                in_axes.append(None)
-            else:
-                if vec_shape:
-                    assert (
-                        p.shape == vec_shape
-                    ), "can only vectorize scalars + arrays of same shape"
-                else:
-                    vec_shape = p.shape
-                in_axes.append(0)
-
-        if vec_shape is None:
-            return cond_dist(*parents)
-        else:
-            in_axes = tuple(in_axes)
-            d = cond_dist
-            for i in range(len(vec_shape)):
-                d = vmap(d, in_axes)
-            return d(*parents)
-
-    return getdist
-
-
-class VecMatCondDist(CondDist):
-    """AA Represents a distribution that takes a vector of length N, a matrix of size NxN and is a vector of length N"""
-
-    def __init__(self, name):
-        super().__init__(name)
-
-    def get_shape(self, vec_shape, mat_shape):
-        assert len(vec_shape) == 1
-        assert len(mat_shape) == 2
-        N = vec_shape[0]
-        assert mat_shape == (N, N)
-        return (N,)
-
-    @property
-    def is_random(self):
-        return True
-
-
-# create stuff here (no functionality in this package)
-normal_scale = AllScalarCondDist(2, "normal_scale", True)
-normal_prec = AllScalarCondDist(2, "normal_prec", True)
-bernoulli = AllScalarCondDist(1, "bernoulli", True)
-bernoulli_logit = AllScalarCondDist(1, "bernoulli_logit", True)
-binomial = AllScalarCondDist(2, "binomial", True)
-uniform = AllScalarCondDist(2, "uniform", True)
-beta = AllScalarCondDist(2, "beta", True)
-exponential = AllScalarCondDist(2, "exponential", True)
-beta_binomial = AllScalarCondDist(3, "beta_binomial", True)
-multi_normal_cov = VecMatCondDist("multi_normal_cov")
-add = AllScalarCondDist(2, "add", False)
-sub = AllScalarCondDist(2, "sub", False)
-mul = AllScalarCondDist(2, "mul", False)
-div = AllScalarCondDist(2, "div", False)
-pow = AllScalarCondDist(2, "pow", False)
-abs = AllScalarCondDist(1, "abs", False)
-exp = AllScalarCondDist(1, "exp", False)
-
-# implicitly vectorized ops
-vec_add = implicit_vectorized_scalar_cond_dist(add)
-vec_sub = implicit_vectorized_scalar_cond_dist(sub)
-vec_mul = implicit_vectorized_scalar_cond_dist(mul)
-vec_div = implicit_vectorized_scalar_cond_dist(div)
-vec_pow = implicit_vectorized_scalar_cond_dist(pow)
+from .ir import *
 
 
 def normal(loc, scale=None, prec=None):
@@ -205,387 +18,11 @@ def normal(loc, scale=None, prec=None):
             raise Exception("must provide scale or prec but not both")
 
 
-class MatMul(CondDist):
-    def __init__(self):
-        super().__init__("matmul")
-
-    def get_shape(self, a_shape, b_shape):
-        # TODO: generalize ?
-        assert len(a_shape) >= 1, "args to @ must have at least 1 dim"
-        assert len(b_shape) >= 1, "args to @ must have at least 1 dim"
-        assert len(a_shape) <= 2, "args to @ must have at most 2 dims"
-        assert len(b_shape) <= 2, "args to @ must have at most 2 dims"
-
-        # https://numpy.org/doc/stable/reference/generated/numpy.matmul.html
-        # The behavior depends on the arguments in the following way.
-        # * If both arguments are 2-D they are multiplied like conventional matrices.
-        # * If either argument is N-D, N > 2, it is treated as a stack of matrices
-        #   residing in the last two indexes and broadcast accordingly.
-        # * If the first argument is 1-D, it is promoted to a matrix by prepending a
-        #   1 to its dimensions. After matrix multiplication the prepended 1 is removed.
-        # * If the second argument is 1-D, it is promoted to a matrix by appending a
-        #   1 to its dimensions. After matrix multiplication the appended 1 is removed.
-
-        if len(a_shape) == 1 and len(b_shape) == 1:
-            # inner product
-            assert a_shape == b_shape
-            return ()
-        elif len(a_shape) == 1 and len(b_shape) == 2:
-            # vector-matrix product
-            assert a_shape[0] == b_shape[0]
-            return (b_shape[1],)
-        elif len(a_shape) == 2 and len(b_shape) == 1:
-            # matrix-vector product
-            assert a_shape[1] == b_shape[0]
-            return (a_shape[0],)
-        elif len(a_shape) == 2 and len(b_shape) == 2:
-            # matrix-matrix product
-            assert a_shape[1] == b_shape[0]
-            return (a_shape[0], b_shape[1])
-        else:
-            raise Exception("bug: should be impossible")
-
-    @property
-    def is_random(self):
-        return False
-
-
-matmul = MatMul()
-
-
-class Categorical(CondDist):
-    def __init__(self):
-        super().__init__("categorical")
-
-    def get_shape(self, weights_shape):
-        # TODO: check shape
-        return ()
-
-    @property
-    def is_random(self):
-        return True
-
-
-categorical = Categorical()
-
-
-class Dirichlet(CondDist):
-    def __init__(self):
-        super().__init__("dirichlet")
-
-    def get_shape(self, weights_shape):
-        # TODO: check shape
-        return weights_shape
-
-    @property
-    def is_random(self):
-        return True
-
-
-dirichlet = Dirichlet()
-
-
-class Multinomial(CondDist):
-    def __init__(self):
-        super().__init__("multinomial")
-
-    def get_shape(self, n_shape, p_shape):
-        assert n_shape == ()
-        assert len(p_shape) == 1
-        return p_shape
-
-    @property
-    def is_random(self):
-        return True
-
-
-multinomial = Multinomial()
-
-
 def sum(x, axis=None):
     x = makerv(x)
     sum_op = Sum(axis)
 
     return sum_op(x)
-
-
-class Sum(CondDist):
-    def __init__(self, axis):
-        self.axis = axis
-        super().__init__("sum")
-
-    def get_shape(self, x_shape):
-        if self.axis is None:
-            return ()
-        else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
-
-    @property
-    def is_random(self):
-        return False
-
-    def __repr__(self):
-        return f"Sum(axis={self.axis})"
-
-    def __str__(self):
-        return f"sum(axis={self.axis})"
-
-    def __eq__(self, other):
-        if isinstance(other, Sum):
-            return self.axis == other.axis
-        return False
-
-    def __hash__(self):
-        return hash(self.axis)
-
-
-def slice_length(size, slice):
-    return len(np.ones(size)[slice])
-
-
-class Index(CondDist):
-    """
-    Index into a RV
-    Note: slices must be FIXED when array is created
-    """
-
-    def __init__(self, *slices):
-        self.slices = slices
-        super().__init__("index")
-
-    @property
-    def advanced_at_start(self):
-        # numpy has stupid rules: if advanced indices are separated by a slice
-        # then all advanced indices go to start of output
-        # otherwise go to location of first advanced index
-        num_advanced = self.slices.count(None)
-        if num_advanced <= 1:
-            return False
-        first_advanced = self.slices.index(None)
-        slice_probe = self.slices[first_advanced : first_advanced + num_advanced]
-        if all(s is None for s in slice_probe):
-            return False  # in place
-        else:
-            return True
-
-    def get_shape(self, var_shape, *indices_shapes):
-        for idx_shape1 in indices_shapes:
-            for idx_shape2 in indices_shapes:
-                assert (
-                    idx_shape1 == idx_shape2
-                ), "all indices must have same shape (no broadcasting yet)"
-
-        output_shape = ()
-        idx_added = False
-        for n, my_slice in enumerate(self.slices):
-            if my_slice:
-                output_shape += (slice_length(var_shape[n], my_slice),)
-            else:
-                idx_shape = indices_shapes[0]  # do here in case all sliced!
-                if not idx_added:
-                    if self.advanced_at_start:
-                        output_shape = idx_shape + output_shape
-                    else:
-                        output_shape += idx_shape
-                    idx_added = True
-        return output_shape
-
-    @property
-    def is_random(self):
-        return False
-
-    def __repr__(self):
-        return "Index(slices=" + repr(self.slices) + ")"
-
-    def __str__(self):
-        def slice_str(s):
-            match s:
-                case None:
-                    return "∅"
-                case slice(start=None, stop=None, step=None):
-                    return ":"
-                case slice(start=a, stop=b, step=c):
-                    if a is None:
-                        a = ""
-                    if b is None:
-                        b = ""
-                    if c is None:
-                        c = ""
-                    return f"{a}:{b}:{c}"
-                case _:
-                    raise Exception("not a slice")
-
-        new_slices = tuple(slice_str(s) for s in self.slices)
-        return "index" + util.comma_separated(new_slices)
-
-    def __eq__(self, other):
-        if isinstance(other, Index):
-            return self.slices == other.slices
-        return False
-
-    def __hash__(self):
-        return hash(str(self.slices))
-
-
-def index(var, indices):
-    if not isinstance(indices, tuple):
-        indices = (indices,)  # TODO: this makes me nervous...
-
-    # add extra full slices
-    indices = indices + (slice(None, None, None),) * (var.ndim - len(indices))
-
-    slices = []
-    parents = []
-    for index in indices:
-        if isinstance(index, slice):
-            slices.append(index)
-        else:
-            parents.append(index)
-            slices.append(None)
-    return Index(*slices)(var, *parents)
-
-
-class CondProb(CondDist):
-    def __init__(self, cond_dist):
-        assert isinstance(cond_dist, CondDist), "CondProb must be called on a CondDist"
-        assert (
-            cond_dist.is_random
-        ), "CondProb must be called on a CondDist with cond_dist.is_random=True"
-        self.base_cond_dist = cond_dist
-        super().__init__("CondProb")
-
-    def get_shape(self, value, *parent_values):
-        return ()
-
-    @property
-    def is_random(self):
-        return False
-
-    def __repr__(self):
-        return "CondProb(base_cond_dist=" + repr(self.base_cond_dist) + ")"
-
-    def __str__(self):
-        return "CondProb(" + str(self.base_cond_dist) + ")"
-
-    def __eq__(self, other):
-        if isinstance(other, CondProb):
-            return self.base_cond_dist == other.base_cond_dist
-        return False
-
-    def __hash__(self):
-        return hash(self.base_cond_dist)
-
-
-# See: https://mc-stan.org/docs/stan-users-guide/summing-out-the-responsibility-parameter.html
-
-
-class Mixture(CondDist):
-    def __init__(self, component_cond_dist, in_axes):
-        self.component_cond_dist = component_cond_dist
-        self.in_axes = in_axes
-        super().__init__("Mixture")
-
-    def get_shape(self, weights_shape, *parents_shapes):
-        assert len(weights_shape) == 1, "weights must be 1D"
-        axis_size = weights_shape[0]
-        remaining_shapes, axis_size = get_sliced_shapes(
-            parents_shapes, self.in_axes, axis_size
-        )
-        return self.component_cond_dist.get_shape(*remaining_shapes)
-
-    def __repr__(self):
-        return f"Mixture(component_cond_dist={repr(self.component_cond_dist)}, in_axes={repr(self.in_axes)})"
-
-    def __str__(self):
-        return f"Mixture({str(self.component_cond_dist)}, {str(self.in_axes)})"
-
-    @property
-    def is_random(self):
-        return True
-
-    def __eq__(self, other):
-        if isinstance(other, Mixture):
-            return (
-                self.component_cond_dist == other.component_cond_dist
-                and self.in_axes == other.in_axes
-            )
-        return False
-
-    def __hash__(self):
-        return hash((self.component_cond_dist, self.in_axes))
-
-
-def mix(mixture_var, fun):
-    """
-    Take a discrete variable that defines a mixture and a function that maps that variable to a dists
-    e.g.
-    y = make_mixture([0.25, 0.75], lambda z: normal_scale(-0.5+z, 3.3))
-    """
-    if mixture_var.cond_dist == bernoulli:
-        vals = np.arange(2)
-    else:
-        raise NotImplementedError("handle other dists")
-    prob_fun = CondProb(mixture_var.cond_dist)
-    prob_axes = (0,) + (None,) * len(mixture_var.parents)
-    weights = vmap(prob_fun, prob_axes)(vals, *mixture_var.parents)
-
-    # QUESTION:
-    # will this work inside of a vmap or similar?
-    # I think the main thing that won't work inside of vmap is something that examines
-    # the parents of the input arguments
-    vmapped_rv = vmap(fun, 0)(vals)
-    assert isinstance(vmapped_rv, RV), "output must be an RV"
-    vmapped_cond_dist = vmapped_rv.cond_dist
-    component_cond_dist = vmapped_cond_dist.base_cond_dist
-    assert component_cond_dist.is_random, "output must be random"
-    parents = vmapped_rv.parents
-    in_axes = vmapped_cond_dist.in_axes
-    return Mixture(component_cond_dist, in_axes)(weights, *parents)
-
-
-# class MixtureDist(CondDist):
-#     def __init__(self, index_dist, component_dist, in_axes, num_index_params=1):
-#         self.index_dist = index_dist
-#         self.component_dist = component_dist
-#         self.num_index_params = num_index_params
-#         self.in_axes = in_axes
-#         super().__init__("mixture")
-#
-#     def get_shape(self, *parents_shapes):
-#         index_shapes = parents_shapes[: self.num_index_params]
-#         component_shapes = parents_shapes[self.num_index_params :]
-#         dummy_shapes, _ = get_sliced_shapes(
-#             component_shapes, self.in_axes, in_axis=None
-#         )
-#
-#         return self.component_dist.get_shape(*dummy_shapes)
-#
-#     def __repr__(self):
-#         return (
-#             "MixtureDist(index_dist="
-#             + repr(self.index_dist)
-#             + ", component_dist="
-#             + repr(self.component_dist)
-#             + ",in_axes="
-#             + repr(self.in_axes)
-#             + ")"
-#         )
-#
-#     def __str__(self):
-#         new_in_axes = jax.tree_util.tree_map(
-#             lambda x: blank if x is None else x,
-#             self.in_axes,
-#             is_leaf=util.is_leaf_with_none,
-#         )
-#         return (
-#             "mixture("
-#             + str(new_in_axes)
-#             + ","
-#             + str(self.index_dist)
-#             + ","
-#             + str(self.component_dist)
-#             + ")"
-#         )
 
 
 # Remember, transforms don't have any functionality!
@@ -651,108 +88,50 @@ def mix(mixture_var, fun):
 # inverse_softplus = ScalarTransform("inverse_softplus")
 # softplus = ScalarTransform("softplus")
 
-
 ################################################################################
-# Low-level vmap operation: Turns one cond_dist into another
+# log prob
 ################################################################################
 
 
-def split_shape(shape, i):
-    if i is None:
-        new_shape = shape
-        new_axis_size = None
-    else:
-        lo, mid, hi = (shape[:i], shape[i], shape[i + 1 :])
-        new_shape = lo + hi
-        new_axis_size = shape[i]
-    return new_shape, new_axis_size
+class InvalidAncestorQuery(Exception):
+    pass
 
 
-class Blank:
-    def __repr__(self):
-        return "∅"
+def log_prob(vars, given_vars=None):
+    """
+    Given some set of RVs, get a new RV that represents the conditional
+    log-probability of those RVs. (Evaluated in simple "ancestor order")
+    """
 
-    def __str__(self):
-        return "∅"
+    # if any vars are upstream of given, then can't do
 
+    flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
+    flat_given_vars, given_vars_treedef = jax.tree_util.tree_flatten(given_vars)
 
-def get_sliced_shapes(shapes, in_axes, axis_size):
-    axis_size = axis_size
-    remaining_shapes = []
-    for i, shape in zip(in_axes, shapes):
-        new_shape, new_axis_size = split_shape(shape, i)
-        remaining_shapes.append(new_shape)
-        if axis_size is None:
-            axis_size = new_axis_size
-        elif new_axis_size is not None:
-            assert axis_size == new_axis_size, "incoherent axis size"
-    return remaining_shapes, axis_size
+    upstream_of_given = dag.upstream_nodes(flat_given_vars)
+    if any(n in upstream_of_given and not n in flat_given_vars for n in flat_vars):
+        raise InvalidAncestorQuery("evaluated node upstream of given")
 
+    nodes = dag.upstream_nodes(
+        flat_vars, block_condition=lambda p: p in flat_given_vars
+    )
 
-blank = Blank()
+    l = None
 
+    for node in nodes:
+        if node.cond_dist.random:
+            # if found a node not in vars or given, then bad query
+            if not (node in flat_vars or node in flat_given_vars):
+                raise InvalidAncestorQuery("unexpected random node")
 
-class VMapDist(CondDist):
-    def __init__(self, base_cond_dist, in_axes, axis_size=None):
-        assert isinstance(base_cond_dist, CondDist)
-        # assert isinstance(in_axes, tuple), "in_axes must be tuple"
-        if isinstance(in_axes, list):
-            in_axes = tuple(in_axes)
-        if axis_size is None:
-            assert any(
-                axis is not None for axis in in_axes
-            ), "if axis_size=None, at least one axis must be mapped"
-        else:
-            assert isinstance(axis_size, int), "axis_size must be None or int"
+            my_l = LogProb(node.cond_dist)(node, *node.parents)
+            if l is None:
+                l = my_l
+            else:
+                l += my_l
 
-        self.base_cond_dist = base_cond_dist
-        self.in_axes = in_axes
-        self.axis_size = axis_size
-        super().__init__("VMapDist")
-
-    def get_shape(self, *parents_shapes):
-        remaining_shapes, axis_size = get_sliced_shapes(
-            parents_shapes, self.in_axes, self.axis_size
-        )
-        dummy_shape = self.base_cond_dist.get_shape(*remaining_shapes)
-        return (axis_size,) + dummy_shape
-
-    @property
-    def is_random(self):
-        return self.base_cond_dist.is_random
-
-    def __repr__(self):
-        return "VMapDist(base_cond_dist=" + repr(self.base_cond_dist) + ")"
-
-    def __str__(self):
-        # return "vmap(" + str(self.axis_size) + ', ' + str(self.in_axes) + ', '  + str(self.base_cond_dist) + ')'
-        new_in_axes = jax.tree_util.tree_map(
-            lambda x: blank if x is None else x,
-            self.in_axes,
-            is_leaf=util.is_leaf_with_none,
-        )
-        return (
-            "vmap("
-            + str(self.axis_size)
-            + ", "
-            + str(list(new_in_axes))
-            + ", \n"
-            + str(self.base_cond_dist)
-            + ")"
-        )
-
-    def __eq__(self, other):
-        if isinstance(other, VMapDist):
-            return (
-                self.base_cond_dist == other.base_cond_dist
-                and self.in_axes == other.in_axes
-                and self.axis_size == other.axis_size
-            )
-        return False
-
-    def __hash__(self):
-        return hash((self.base_cond_dist, self.in_axes, self.axis_size))
-
+        #evaluated[node] = None
+    return l
 
 ################################################################################
 # Full-blown VMap
@@ -896,133 +275,10 @@ class vmap:  # not a RV!
         return output
 
 
-################################################################################
-# For convenience, gather all cond_dists
-################################################################################
-
-all_cond_dists = [
-    normal_scale,
-    normal_prec,
-    bernoulli,
-    binomial,
-    uniform,
-    beta,
-    exponential,
-    beta_binomial,
-    multi_normal_cov,
-    categorical,
-    dirichlet,
-    multinomial,
-    add,
-    sub,
-    mul,
-    div,
-    pow,
-    abs,
-    exp,
-    matmul,
-]
-
-all_cond_dist_classes = [Sum, Index, CondProb, Mixture, VMapDist]
-
-
-################################################################################
-# RVs are very simple: Just remember parents and cond_dist and shape
-################################################################################
-
-
-def makerv(a):
-    if isinstance(a, RV):
-        return a
-    else:
-        cond_dist = Constant(a)
-        return RV(cond_dist)
-
-
-class RV(dag.Node):
-    _frozen = False
-    __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
-
-    def __init__(self, cond_dist, *parents):
-        super().__init__(*parents)
-        parents_shapes = tuple(p.shape for p in parents)
-        self._shape = cond_dist.get_shape(*parents_shapes)
-        self.cond_dist = cond_dist
-        self._frozen = True
-
-    def __add__(self, b):
-        return vec_add(self, b)
-
-    __radd__ = __add__
-
-    def __sub__(self, b):
-        return vec_sub(self, b)
-
-    def __rsub__(self, b):
-        return vec_sub(b, self)
-
-    def __mul__(self, b):
-        return vec_mul(self, b)
-
-    __rmul__ = __mul__
-
-    def __truediv__(self, b):
-        return vec_div(self, b)
-
-    def __rtruediv__(self, b):
-        return vec_div(b, self)
-
-    def __pow__(self, b):
-        return vec_pow(self, b)
-
-    def __rpow__(self, a):
-        return vec_pow(a, self)
-
-    def __matmul__(self, a):
-        return matmul(self, a)
-
-    def __rmatmul__(self, a):
-        return matmul(a, self)
-
-    def __getitem__(self, idx):
-        if self.ndim == 0:
-            raise Exception("can't index scalar RV")
-        elif isinstance(idx, tuple) and len(idx) > self.ndim:
-            raise Exception("RV indexed with more dimensions than exist")
-        return index(self, idx)
-
-    @property
-    def shape(self):
-        return self._shape
-
-    @property
-    def ndim(self):
-        return len(self._shape)
-
-    def __repr__(self):
-        ret = "RV(" + repr(self.cond_dist)
-        if self.parents:
-            ret += ", parents=[" + util.comma_separated(self.parents, repr, False) + "]"
-        ret += ")"
-        return ret
-
-    def __str__(self):
-        ret = str(self.cond_dist)
-        if self.parents:
-            ret += util.comma_separated(self.parents, str)
-        return ret
-
-    def __setattr__(self, key, value):
-        if self._frozen:
-            raise Exception("RVs are immutable after init.")
-        else:
-            self.__dict__[key] = value
-
-
 class AbstractCondDist(CondDist):
     def __init__(self, shape):
         self.shape = shape
-        super().__init__(name="abstract")
+        super().__init__(name="abstract", random=False)
 
     def get_shape(self):
         return self.shape
@@ -1056,6 +312,11 @@ class plate:
         else:
             in_axes = self.in_axes
         return vmap(f, in_axes, axis_size=self.size)(*self.args)
+
+
+################################################################################
+# printing stuff
+################################################################################
 
 
 def print_upstream(*vars):

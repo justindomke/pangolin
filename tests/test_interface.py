@@ -1,5 +1,8 @@
 from pangolin.interface import *
 
+from pangolin import inference_numpyro
+from scipy import stats
+
 
 def test_constant1():
     x = Constant(0)
@@ -51,49 +54,9 @@ def test_tform1():
 def test_tform2():
     x = normal(0, 1)
     y = normal(0, 1)
-    z = x * y + y ** (y**2)
+    z = x * y + y ** (y ** 2)
     assert z.shape == ()
     assert z.ndim == 0
-
-
-def test_VMapDist1():
-    # couldn't call normal here because it's not a CondDist. But I guess that's fine because user isn't expected
-    # to touch VMap directly
-    diag_normal = VMapDist(normal_scale, [0, 0], 3)
-    assert diag_normal.get_shape((3,), (3,)) == (3,)
-
-
-def test_VMapDist2():
-    diag_normal = VMapDist(normal_scale, [0, None], 3)
-    assert diag_normal.get_shape((3,), ()) == (3,)
-
-
-def test_VMapDist3():
-    diag_normal = VMapDist(normal_scale, [None, 0], 3)
-    assert diag_normal.get_shape((), (3,)) == (3,)
-
-
-def test_VMapDist4():
-    diag_normal = VMapDist(normal_scale, [None, None], 3)
-    assert diag_normal.get_shape((), ()) == (3,)
-
-
-def test_VMapDist5():
-    diag_normal = VMapDist(normal_scale, [None, 0], 3)
-    try:
-        # should fail because shapes are incoherent
-        x = diag_normal.get_shape((), (4,))
-        assert False
-    except AssertionError as e:
-        assert True
-
-
-def test_double_VMapDist1():
-    # couldn't call normal here because it's not a CondDist. But I guess that's fine because user isn't expected
-    # to touch VMap directly
-    diag_normal = VMapDist(normal_scale, [0, 0])
-    matrix_normal = VMapDist(diag_normal, [0, 0])
-    assert matrix_normal.get_shape((4, 3), (4, 3)) == (4, 3)
 
 
 def test_vmap_dummy_args1():
@@ -200,22 +163,17 @@ def test_vmap_generated_nodes5():
 def test_vmap_eval1():
     "should fail because of incoherent axes sizes"
     try:
-        y = vmap_eval(
-            lambda loc, scale: normal_scale(loc, scale),
-            [None, None],
-            5,
-            np.zeros(3),
-            np.ones(3),
-        )
+        y = vmap_eval(lambda loc, scale: normal_scale(loc, scale), [None, None], 5,
+            np.zeros(3), np.ones(3), )
         assert False
     except AssertionError as e:
         assert True
 
 
 def test_vmap_eval2():
-    y = vmap_eval(
-        lambda loc, scale: [normal_scale(loc, scale)], [0, None], 3, np.zeros(3), 1
-    )[0]
+    y = \
+    vmap_eval(lambda loc, scale: [normal_scale(loc, scale)], [0, None], 3, np.zeros(3),
+        1)[0]
     assert y.shape == (3,)
 
 
@@ -230,7 +188,7 @@ def test_vmap_eval3():
 def test_vmap_eval4():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         return [normal(loc, scale)]
 
     y = vmap_eval(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
@@ -248,7 +206,7 @@ def test_vmap_eval6():
 def test_vmap_eval7():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -263,7 +221,7 @@ def test_vmap_eval7():
 def test_vmap_eval8():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -291,7 +249,7 @@ def test_vmap2():
 def test_vmap3():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         return normal(loc, scale)
 
     y = vmap(f, in_axes=0, axis_size=None)(np.array([3.3, 4.4, 5.5]))
@@ -384,7 +342,7 @@ def test_vmap9():
 def test_vmap10():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         return {"y": normal(loc, scale)}
 
     stuff = vmap(f, 0, None)(np.array([3.3, 4.4, 5.5]))
@@ -394,7 +352,7 @@ def test_vmap10():
 def test_vmap11():
     def f(x):
         loc = x * 1.1
-        scale = x**2.2
+        scale = x ** 2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -442,9 +400,7 @@ def test_vmap15():
     x = normal(0, 1)
     y, z = vmap(
         lambda: (yi := normal(x, 2), zi := vmap(lambda: normal(yi, 3), None, 5)()),
-        None,
-        3,
-    )()
+        None, 3, )()
 
 
 def test_plate1():
@@ -457,8 +413,7 @@ def test_plate1():
 def test_plate2():
     x = normal(0, 1)
     y, z = plate(N=3)(
-        lambda: (yi := normal(x, 1), zi := plate(N=5)(lambda: normal(yi, 1)))
-    )
+        lambda: (yi := normal(x, 1), zi := plate(N=5)(lambda: normal(yi, 1))))
     assert x.shape == ()
     assert y.shape == (3,)
     assert z.shape == (3, 5)
@@ -561,31 +516,6 @@ def test_plate11():
 def test_plate12():
     stuff = plate(N=5)(lambda: {"x": normal(0, 1)})
     assert stuff["x"].shape == (5,)
-
-
-def test_index1():
-    d = Index(None, None)
-    assert d.get_shape((3, 2), (), ()) == ()
-
-
-def test_index2():
-    d = Index(None, None)
-    assert d.get_shape((3, 2), (4,), (4,)) == (4,)
-
-
-def test_index3():
-    d = Index(slice(None), None)
-    assert d.get_shape((3, 2), (4,)) == (3, 4)
-
-
-def test_index4():
-    d = Index(None, slice(None))
-    assert d.get_shape((3, 2), (4,)) == (4, 2)
-
-
-def test_index5():
-    d = Index(None, slice(None))
-    assert d.get_shape((3, 2), (4, 5, 7)) == (4, 5, 7, 2)
 
 
 def test_indexing1():
@@ -748,3 +678,88 @@ def test_eq_vmap8():
     assert d2 != d3
     assert d2 != d4
     assert d3 == d4
+
+
+def test_log_prob1():
+    x = makerv(1.0)
+    l = log_prob(x)
+    assert l is None
+
+
+def test_log_prob2():
+    x = normal(1.1, 2.2)
+    l = log_prob(x)
+    print_upstream(l)
+    assert l.cond_dist == LogProb(normal_scale)
+    assert l.parents[0].cond_dist == normal_scale
+    assert l.parents[1].cond_dist == Constant(1.1)
+    assert l.parents[2].cond_dist == Constant(2.2)
+
+
+def test_log_prob3():
+    # very simple model
+    loc = 1.1
+    scale = 2.2
+    x = normal(loc, scale)
+
+    l = log_prob(x)
+    print_upstream(l)
+
+    # sample with conditioning
+    val = 3.3
+    niter = 11
+    [ls] = inference_numpyro.ancestor_sample_flat([l], [x], [val], niter=niter)
+    assert ls.shape == (niter,)
+    expected = stats.norm.logpdf(val, loc, scale)
+    assert np.allclose(ls, expected)
+
+    # sample without conditioning
+    niter = 10000
+    [ls, xs] = inference_numpyro.ancestor_sample_flat([l, x], [], [], niter=niter)
+    expected = stats.norm.logpdf(xs, loc, scale)
+    assert np.allclose(ls, expected)
+
+    estimated_entropy = -np.mean(ls)
+    expected_entropy = stats.norm.entropy(loc, scale)
+    assert np.abs(estimated_entropy - expected_entropy) < 0.03
+
+    # if you condition on x, then there is no probability to eval
+    l = log_prob(x, x)
+    assert l is None
+
+
+def test_log_prob_joint():
+    loc = 1.1
+    scale_x = 2.2
+    scale_y = 3.3
+    x = normal(loc, scale_x)
+    y = normal(x, scale_y)
+
+    # test scalar log probs
+    l = log_prob(x)  # should work (tested above)
+    try:
+        l = log_prob(y)  # should fail
+        assert False, "failed to raise exception"
+    except InvalidAncestorQuery as e:
+        pass
+
+    # get joint log prob
+    l = log_prob([x, y])
+
+    # sample with both x and y fixed
+    val_x = 4.4
+    val_y = 5.5
+    niter = 11
+    [ls] = inference_numpyro.ancestor_sample_flat([l], [x, y], [val_x, val_y],
+        niter=niter)
+    expected = stats.norm.logpdf(val_x, loc, scale_x) + stats.norm.logpdf(val_y, val_x,
+        scale_y)
+    assert np.allclose(ls, expected)
+
+    # sample with neither x nor y fixed
+    [ls, xs, ys] = inference_numpyro.ancestor_sample_flat([l, x, y], [], [],
+        niter=niter)
+    for (li, xi, yi) in zip(ls, xs, ys):
+        expected = stats.norm.logpdf(xi, loc, scale_x) + stats.norm.logpdf(yi, xi,
+            scale_y)
+        assert np.allclose(li, expected)

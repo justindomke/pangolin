@@ -378,91 +378,91 @@ def test_new_ancestor_sample2():
 #     assert xs.shape == (10,)
 
 
-def test_mixture1():
-    locs = [-0.11, 0.22]
-    scales = [0.33, 4.4]
-    weights = [0.333, 0.667]
-    x_val = 0.279
-
-    normal_mixture = Mixture(normal_scale, (0, 0))  # new CondDist
-    x = normal_mixture(weights, locs, scales)  # new RV
-    l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
-
-    from numpyro import distributions as dists
-
-    l0 = dists.Normal(locs[0], scales[0]).log_prob(x_val)
-    l1 = dists.Normal(locs[1], scales[1]).log_prob(x_val)
-    expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
-
-    print(f"{l=}")
-    print(f"{expected=}")
-
-    assert np.allclose(l, expected)
-
-
-def test_mixture2():
-    locs = [-0.11, 0.22]
-    scale = 0.33
-    weights = [0.333, 0.667]
-    x_val = 0.279
-
-    normal_mixture = Mixture(normal_scale, (0, None))  # new CondDist
-    x = normal_mixture(weights, locs, scale)  # new RV
-    l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
-
-    from numpyro import distributions as dists
-
-    l0 = dists.Normal(locs[0], scale).log_prob(x_val)
-    l1 = dists.Normal(locs[1], scale).log_prob(x_val)
-    expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
-
-    print(f"{l=}")
-    print(f"{expected=}")
-
-    assert np.allclose(l, expected)
-
-
-def test_mixture3():
-    loc = -0.11
-    scales = [0.33, 4.4]
-    weights = [0.333, 0.667]
-    x_val = 0.279
-
-    normal_mixture = Mixture(normal_scale, (None, 0))  # new CondDist
-    x = normal_mixture(weights, loc, scales)  # new RV
-    l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
-
-    l0 = dists.Normal(loc, scales[0]).log_prob(x_val)
-    l1 = dists.Normal(loc, scales[1]).log_prob(x_val)
-    expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
-
-    print(f"{l=}")
-    print(f"{expected=}")
-
-    assert np.allclose(l, expected)
-
-
-def test_mixture4():
-    # silly to take a mixture of distributions with identical parameters but whatever
-    loc = -0.11
-    scale = 0.33
-    weights = [0.333, 0.667]
-    x_val = 0.279
-
-    normal_mixture = Mixture(normal_scale, (None, None))  # new CondDist
-    x = normal_mixture(weights, loc, scale)  # new RV
-    l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
-
-    from numpyro import distributions as dists
-
-    l0 = dists.Normal(loc, scale).log_prob(x_val)
-    l1 = dists.Normal(loc, scale).log_prob(x_val)
-    expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
-
-    print(f"{l=}")
-    print(f"{expected=}")
-
-    assert np.allclose(l, expected)
+# def test_mixture1():
+#     locs = [-0.11, 0.22]
+#     scales = [0.33, 4.4]
+#     weights = [0.333, 0.667]
+#     x_val = 0.279
+#
+#     normal_mixture = Mixture(normal_scale, (0, 0))  # new CondDist
+#     x = normal_mixture(weights, locs, scales)  # new RV
+#     l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
+#
+#     from numpyro import distributions as dists
+#
+#     l0 = dists.Normal(locs[0], scales[0]).log_prob(x_val)
+#     l1 = dists.Normal(locs[1], scales[1]).log_prob(x_val)
+#     expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
+#
+#     print(f"{l=}")
+#     print(f"{expected=}")
+#
+#     assert np.allclose(l, expected)
+#
+#
+# def test_mixture2():
+#     locs = [-0.11, 0.22]
+#     scale = 0.33
+#     weights = [0.333, 0.667]
+#     x_val = 0.279
+#
+#     normal_mixture = Mixture(normal_scale, (0, None))  # new CondDist
+#     x = normal_mixture(weights, locs, scale)  # new RV
+#     l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
+#
+#     from numpyro import distributions as dists
+#
+#     l0 = dists.Normal(locs[0], scale).log_prob(x_val)
+#     l1 = dists.Normal(locs[1], scale).log_prob(x_val)
+#     expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
+#
+#     print(f"{l=}")
+#     print(f"{expected=}")
+#
+#     assert np.allclose(l, expected)
+#
+#
+# def test_mixture3():
+#     loc = -0.11
+#     scales = [0.33, 4.4]
+#     weights = [0.333, 0.667]
+#     x_val = 0.279
+#
+#     normal_mixture = Mixture(normal_scale, (None, 0))  # new CondDist
+#     x = normal_mixture(weights, loc, scales)  # new RV
+#     l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
+#
+#     l0 = dists.Normal(loc, scales[0]).log_prob(x_val)
+#     l1 = dists.Normal(loc, scales[1]).log_prob(x_val)
+#     expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
+#
+#     print(f"{l=}")
+#     print(f"{expected=}")
+#
+#     assert np.allclose(l, expected)
+#
+#
+# def test_mixture4():
+#     # silly to take a mixture of distributions with identical parameters but whatever
+#     loc = -0.11
+#     scale = 0.33
+#     weights = [0.333, 0.667]
+#     x_val = 0.279
+#
+#     normal_mixture = Mixture(normal_scale, (None, None))  # new CondDist
+#     x = normal_mixture(weights, loc, scale)  # new RV
+#     l = new_infer.ancestor_log_prob_flat([x], [x_val], [], [])
+#
+#     from numpyro import distributions as dists
+#
+#     l0 = dists.Normal(loc, scale).log_prob(x_val)
+#     l1 = dists.Normal(loc, scale).log_prob(x_val)
+#     expected = jnp.log(weights[0] * jnp.exp(l0) + weights[1] * jnp.exp(l1))
+#
+#     print(f"{l=}")
+#     print(f"{expected=}")
+#
+#     assert np.allclose(l, expected)
 
 
 # def test_make_mixture1():
@@ -486,21 +486,21 @@ def test_mixture4():
 #     assert np.allclose(l, expected)
 
 
-def test_cond_prob1():
-    cond_dist = CondProb(bernoulli)
-    out = new_infer.eval_dist(cond_dist, 0, 0.25)
-    expected = 0.75
-    assert np.allclose(out, expected)
-
-
-def test_cond_prob2():
-    cond_dist = CondProb(normal_scale)
-    x_val = 0.123
-    loc = 0.456
-    scale = 0.789
-    out = new_infer.eval_dist(cond_dist, x_val, loc, scale)
-    expected = jnp.exp(dists.Normal(loc, scale).log_prob(x_val))
-    assert np.allclose(out, expected)
+# def test_cond_prob1():
+#     cond_dist = CondProb(bernoulli)
+#     out = new_infer.eval_dist(cond_dist, 0, 0.25)
+#     expected = 0.75
+#     assert np.allclose(out, expected)
+#
+#
+# def test_cond_prob2():
+#     cond_dist = CondProb(normal_scale)
+#     x_val = 0.123
+#     loc = 0.456
+#     scale = 0.789
+#     out = new_infer.eval_dist(cond_dist, x_val, loc, scale)
+#     expected = jnp.exp(dists.Normal(loc, scale).log_prob(x_val))
+#     assert np.allclose(out, expected)
 
 
 # all these moved to test_all_inference

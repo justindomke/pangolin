@@ -145,7 +145,7 @@ def test_ancestor_ops_flat1():
     x = interface.normal(0, 1)
     y = interface.normal(x, 1)
 
-    x_val, y_val = inf.ancestor_sample_flat(key, [x, y], [], [])
+    x_val, y_val = inf.ancestor_sample_flat_key(key, [x, y], [], [])
 
     assert x_val.shape == ()
     assert y_val.shape == ()

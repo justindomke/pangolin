@@ -168,8 +168,8 @@ class_gencode_fns = {
     interface.Index: gencode_index,
     # interface.Sum: gencode_unsupported(),
     interface.Sum: gencode_sum,
-    interface.CondProb: gencode_unsupported(),
-    interface.Mixture: gencode_unsupported(),
+    #interface.CondProb: gencode_unsupported(),
+    #interface.Mixture: gencode_unsupported(),
 }
 
 

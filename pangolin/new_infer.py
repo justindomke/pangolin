@@ -31,9 +31,9 @@ def ancestor_log_prob_flat(vars, vals, given_vars, given_vals):
     given_vals = assimilate_vals(given_vars, given_vals)
 
     for var in vars:
-        assert var.cond_dist.is_random, "all vars must be random"
+        assert var.cond_dist.random, "all vars must be random"
     for var in given_vars:
-        assert var.cond_dist.is_random, "all given vars must be random"
+        assert var.cond_dist.random, "all given vars must be random"
 
     upstream_vars = dag.upstream_nodes(vars, block_condition=lambda node: (node in given_vars) and (node not in vars))
 
@@ -46,7 +46,7 @@ def ancestor_log_prob_flat(vars, vals, given_vars, given_vals):
             assert p in computed_vals, "bug: all parents should already be computed"
         parent_vals = [computed_vals[p] for p in node.parents]
 
-        if node.cond_dist.is_random:
+        if node.cond_dist.random:
             assert node in vars, "user error: random node in tree not included"
             assert node in input_vals, "bug"
 
@@ -78,7 +78,7 @@ def ancestor_sample_flat(key, vars, given_vars, given_vals):
             assert p in computed_vals, "bug: all parents should already be computed"
         parent_vals = [computed_vals[p] for p in node.parents]
 
-        if node.cond_dist.is_random:
+        if node.cond_dist.random:
             key, subkey = jax.random.split(key)
             val = sample_dist(node.cond_dist, subkey, *parent_vals)
         else:
@@ -105,7 +105,7 @@ def variables_to_sample(requested_vars, given_vars):
     while queue:
         # print(f"{queue=}")
         node = queue.pop()
-        if node.cond_dist.is_random and node in has_obs_descendent:
+        if node.cond_dist.random and node in has_obs_descendent:
             vars.append(node)
         processed_vars.append(node)
 
@@ -187,7 +187,7 @@ def sample(vars, given_vars=None, given_vals=None, niter=1000):
 ################################################################################
 
 def log_prob_dist(cond_dist, observed_val, *parent_vals):
-    assert cond_dist.is_random
+    assert cond_dist.random
     if cond_dist in log_prob_funs:
         fn = log_prob_funs[cond_dist]
     else:
@@ -196,7 +196,7 @@ def log_prob_dist(cond_dist, observed_val, *parent_vals):
 
 
 def eval_dist(cond_dist, *parent_vals):
-    assert not cond_dist.is_random
+    assert not cond_dist.random
     if cond_dist in eval_funs:
         fn = eval_funs[cond_dist]
     else:
@@ -205,7 +205,7 @@ def eval_dist(cond_dist, *parent_vals):
 
 
 def sample_dist(cond_dist, rng_key, *parent_vals):
-    assert cond_dist.is_random
+    assert cond_dist.random
     if cond_dist in sample_funs:
         fn = sample_funs[cond_dist]
     elif type(cond_dist) in sample_funs:
@@ -349,55 +349,55 @@ def sample_vmap_dist(cond_dist, rng_key, *parent_vals):
 sample_funs[interface.VMapDist] = sample_vmap_dist
 
 
-def log_prob_mixture(cond_dist, observed_val, *parent_vals):
-    assert isinstance(cond_dist, interface.Mixture)
+# def log_prob_mixture(cond_dist, observed_val, *parent_vals):
+#     assert isinstance(cond_dist, interface.Mixture)
+#
+#     my_log_prob = functools.partial(log_prob_dist, cond_dist.component_cond_dist)
+#
+#     weight, *parent_vals = parent_vals
+#
+#     #in_axes = (None,) + (0,) * len(parent_vals)
+#     in_axes = (None,) + cond_dist.in_axes
+#
+#     assert len(weight.shape) == 1
+#     axis_size = weight.shape[0]
+#
+#     logps = jax.vmap(my_log_prob, in_axes=in_axes, axis_size=axis_size)(observed_val, *parent_vals)
+#
+#     return jnp.log(jnp.sum(jnp.exp(logps + jnp.log(weight))))
+#
+# log_prob_funs[interface.Mixture] = log_prob_mixture
+#
+#
+# def sample_mixture(cond_dist, key, *parent_vals):
+#     assert isinstance(cond_dist, interface.Mixture)
+#
+#     my_sample = functools.partial(sample_dist, cond_dist.component_cond_dist)
+#
+#     weight, *parent_vals = parent_vals
+#
+#     in_axes = (0,) + cond_dist.in_axes
+#     assert len(weight.shape) == 1
+#     axis_size = weight.shape[0]
+#
+#     key, subkey = jax.random.split(key)
+#     subkeys = jax.random.split(subkey,axis_size)
+#     vals = jax.vmap(my_sample, in_axes=in_axes, axis_size=axis_size)(subkeys, *parent_vals)
+#
+#     key, subkey = jax.random.split(key)
+#     r = jax.random.uniform(subkey) # uniform random sample
+#     i = jnp.sum(jnp.cumsum(weight) < r) # integer class
+#     I = jax.nn.one_hot(i, num_classes=weight.shape[0]) # one-hot vector
+#     return jnp.tensordot(I,vals,axes=[0,0]) # inner-product with samples
+#
+# sample_funs[interface.Mixture] = sample_mixture
 
-    my_log_prob = functools.partial(log_prob_dist, cond_dist.component_cond_dist)
-
-    weight, *parent_vals = parent_vals
-
-    #in_axes = (None,) + (0,) * len(parent_vals)
-    in_axes = (None,) + cond_dist.in_axes
-
-    assert len(weight.shape) == 1
-    axis_size = weight.shape[0]
-
-    logps = jax.vmap(my_log_prob, in_axes=in_axes, axis_size=axis_size)(observed_val, *parent_vals)
-
-    return jnp.log(jnp.sum(jnp.exp(logps + jnp.log(weight))))
-
-log_prob_funs[interface.Mixture] = log_prob_mixture
-
-
-def sample_mixture(cond_dist, key, *parent_vals):
-    assert isinstance(cond_dist, interface.Mixture)
-
-    my_sample = functools.partial(sample_dist, cond_dist.component_cond_dist)
-
-    weight, *parent_vals = parent_vals
-
-    in_axes = (0,) + cond_dist.in_axes
-    assert len(weight.shape) == 1
-    axis_size = weight.shape[0]
-
-    key, subkey = jax.random.split(key)
-    subkeys = jax.random.split(subkey,axis_size)
-    vals = jax.vmap(my_sample, in_axes=in_axes, axis_size=axis_size)(subkeys, *parent_vals)
-
-    key, subkey = jax.random.split(key)
-    r = jax.random.uniform(subkey) # uniform random sample
-    i = jnp.sum(jnp.cumsum(weight) < r) # integer class
-    I = jax.nn.one_hot(i, num_classes=weight.shape[0]) # one-hot vector
-    return jnp.tensordot(I,vals,axes=[0,0]) # inner-product with samples
-
-sample_funs[interface.Mixture] = sample_mixture
-
-def eval_cond_prob(cond_dist, *parent_vals):
-    assert isinstance(cond_dist, interface.CondProb)
-    observed_val, *parent_vals = parent_vals
-    return jnp.exp(log_prob_dist(cond_dist.base_cond_dist, observed_val, *parent_vals))
-
-eval_funs[interface.CondProb] = eval_cond_prob
+# def eval_cond_prob(cond_dist, *parent_vals):
+#     assert isinstance(cond_dist, interface.CondProb)
+#     observed_val, *parent_vals = parent_vals
+#     return jnp.exp(log_prob_dist(cond_dist.base_cond_dist, observed_val, *parent_vals))
+#
+# eval_funs[interface.CondProb] = eval_cond_prob
 
 # ################################################################################
 # # Functions to transform a DAG
