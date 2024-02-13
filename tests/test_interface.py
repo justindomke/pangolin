@@ -763,3 +763,10 @@ def test_log_prob_joint():
         expected = stats.norm.logpdf(xi, loc, scale_x) + stats.norm.logpdf(yi, xi,
             scale_y)
         assert np.allclose(li, expected)
+
+def test_log_prob_branching():
+    x = normal(0,1)
+    y = [normal(x,1) for i in range(10)]
+    l = log_prob(y,x)
+
+    [ls] = inference_numpyro.ancestor_sample_flat([l],[x])
