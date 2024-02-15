@@ -32,8 +32,6 @@ class Calculate:
         self.inference = inference
         self.options = options  # options for that engine
 
-    # def ancestor_sample(self, vars, given_vars=None, given_vals=None, reduce_fn=None):
-
     def flatten_args(self, vars, given_vars=None, given_vals=None):
         given_vals = util.assimilate_vals(given_vars, given_vals)
 
@@ -53,7 +51,8 @@ class Calculate:
         given_vars=None,
         given_vals=None,
         reduce_fn=None,
-        mode = None,
+        mode='auto',
+        **vargs,
     ):
         """
         Draw samples!
@@ -84,22 +83,22 @@ class Calculate:
             vars, given_vars, given_vals
         )
 
-        if mode is None:
+        if mode is "auto":
             try:
                 flat_samps = self.inference.ancestor_sample_flat(
-                    flat_vars, flat_given_vars, flat_given_vals, **self.options
+                    flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
                 )
             except InvalidAncestorQuery:
                 flat_samps = self.inference.sample_flat(
-                    flat_vars, flat_given_vars, flat_given_vals, **self.options
+                    flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
                 )
         elif mode == 'mcmc':
             flat_samps = self.inference.sample_flat(
-                flat_vars, flat_given_vars, flat_given_vals, **self.options
+                flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
             )
         elif mode == 'ancestor':
             flat_samps = self.inference.ancestor_sample_flat(
-                flat_vars, flat_given_vars, flat_given_vals, **self.options
+                flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
             )
         else:
             raise Exception(f"mode must be None or 'mcmc' or 'ancestor' (was {mode})")

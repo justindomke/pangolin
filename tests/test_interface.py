@@ -1,7 +1,9 @@
 from pangolin.interface import *
 
-from pangolin import inference_numpyro
+from pangolin import inference_numpyro, calculate
 from scipy import stats
+
+calc = calculate.Calculate("numpyro")
 
 
 def test_constant1():
@@ -708,14 +710,14 @@ def test_log_prob3():
     # sample with conditioning
     val = 3.3
     niter = 11
-    [ls] = inference_numpyro.ancestor_sample_flat([l], [x], [val], niter=niter)
+    ls = calc.sample(l, x, val, niter=niter)
     assert ls.shape == (niter,)
     expected = stats.norm.logpdf(val, loc, scale)
     assert np.allclose(ls, expected)
 
     # sample without conditioning
     niter = 10000
-    [ls, xs] = inference_numpyro.ancestor_sample_flat([l, x], [], [], niter=niter)
+    ls, xs = calc.sample([l, x], niter=niter)
     expected = stats.norm.logpdf(xs, loc, scale)
     assert np.allclose(ls, expected)
 
@@ -750,23 +752,43 @@ def test_log_prob_joint():
     val_x = 4.4
     val_y = 5.5
     niter = 11
-    [ls] = inference_numpyro.ancestor_sample_flat([l], [x, y], [val_x, val_y],
-        niter=niter)
+    ls = calc.sample(l, [x, y], [val_x, val_y], niter=niter)
     expected = stats.norm.logpdf(val_x, loc, scale_x) + stats.norm.logpdf(val_y, val_x,
         scale_y)
     assert np.allclose(ls, expected)
 
     # sample with neither x nor y fixed
-    [ls, xs, ys] = inference_numpyro.ancestor_sample_flat([l, x, y], [], [],
-        niter=niter)
-    for (li, xi, yi) in zip(ls, xs, ys):
+    [ls, xs, ys] = calc.sample([l, x, y], niter=niter)
+    for li, xi, yi in zip(ls, xs, ys):
         expected = stats.norm.logpdf(xi, loc, scale_x) + stats.norm.logpdf(yi, xi,
             scale_y)
         assert np.allclose(li, expected)
 
-def test_log_prob_branching():
-    x = normal(0,1)
-    y = [normal(x,1) for i in range(10)]
-    l = log_prob(y,x)
 
-    [ls] = inference_numpyro.ancestor_sample_flat([l],[x])
+def test_log_prob_branching():
+    loc = 1.1
+    scale = 2.2
+    val_x = 3.3
+    val_y = [4.4] * 10
+    niter = 10
+
+    x = normal(loc, scale)
+    y = [normal(x, scale) for i in range(10)]
+    l = log_prob(y, x)
+
+    ls = calc.sample(l, (x, y), (val_x, val_y), niter=niter)
+    assert ls.shape == (niter,)
+
+    expected = 10 * stats.norm.logpdf(val_y[0], val_x, scale)
+
+    assert np.allclose(ls, expected)
+
+
+def test_vmap_log_prob():
+    niter = 1000
+    l = vmap(lambda: log_prob(normal(1.1, 2.2)), None, axis_size=5)()
+    print_upstream(l)
+    ls = calc.sample(l, niter=niter)
+    assert ls.shape == (niter, 5)
+
+    assert np.abs(-np.mean(ls) - stats.norm.entropy(1.1, 2.2)) < .03

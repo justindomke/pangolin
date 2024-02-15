@@ -71,7 +71,6 @@ class Constant(CondDist):
         `numpy.array`.
         """
         self.value = np.array(value)
-        print(f"{self.value=}")
         """The actual stored data, stored as an immutable numpy array"""
         if np == numpy:
             self.value.flags.writeable = False
