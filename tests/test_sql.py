@@ -413,6 +413,7 @@ def test_parent_hash():
     # alternate version without so many names
     query = """
         select
+            var_id,
             hex(group_concat(par_id) || dist_id) 
         from (
             select
@@ -429,5 +430,38 @@ def test_parent_hash():
         """
     df = sql.query_df(vars, query)
     print(df)
-    sig = df.iloc[:,0]
+    var_id = df.iloc[:,0]
+    assert len(np.unique(var_id)) == 2+2+2+3+4+5
+    sig = df.iloc[:,1]
     assert len(np.unique(sig)) == 6
+
+def test_group_by_parents():
+    a = makerv(0)
+    b = makerv(1)
+    c = normal(a,b)
+    d = normal(a,b)
+    e = normal(b,a)
+    f = normal(b,a)
+    g = normal(c,d)
+    h = normal(e,f)
+
+    rez = sql.group_by_dist_and_parents([c])
+    assert rez == frozenset({frozenset({c})})
+
+    rez = sql.group_by_dist_and_parents([c,d])
+    assert rez == frozenset({frozenset({c,d})})
+
+    rez = sql.group_by_dist_and_parents([c,d,e,f])
+    assert rez == frozenset({
+        frozenset({c,d}),
+        frozenset({e,f})
+    })
+
+    rez = sql.group_by_dist_and_parents([c,d,e,f,g,h])
+    assert rez == frozenset({
+        frozenset({c,d}),
+        frozenset({e,f}),
+        frozenset({g}),
+        frozenset({h})
+    })
+
