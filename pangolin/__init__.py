@@ -12,9 +12,9 @@ Output: `0.48653358`
 """
 
 from .interface import *
-
 from . import calculate, inference_numpyro
 from . import *
+from . import transforms
 
 Calculate = calculate.Calculate
 

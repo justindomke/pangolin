@@ -32,26 +32,13 @@ class Calculate:
         self.inference = inference
         self.options = options  # options for that engine
 
-    def flatten_args(self, vars, given_vars=None, given_vals=None):
-        given_vals = util.assimilate_vals(given_vars, given_vals)
-
-        flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
-        flat_given_vars, given_vars_treedef = jax.tree_util.tree_flatten(given_vars)
-        flat_given_vals, given_vals_treedef = jax.tree_util.tree_flatten(given_vals)
-        assert given_vars_treedef == given_vals_treedef
-
-        def unflatten(flat_samps):
-            return jax.tree_util.tree_unflatten(vars_treedef, flat_samps)
-
-        return flat_vars, flat_given_vars, flat_given_vals, unflatten
-
     def sample(
         self,
         vars,
         given_vars=None,
         given_vals=None,
         reduce_fn=None,
-        mode='auto',
+        mode="auto",
         **vargs,
     ):
         """
@@ -79,7 +66,7 @@ class Calculate:
         ```
         """
 
-        flat_vars, flat_given_vars, flat_given_vals, unflatten = self.flatten_args(
+        flat_vars, flat_given_vars, flat_given_vals, unflatten = util.flatten_args(
             vars, given_vars, given_vals
         )
 
@@ -92,11 +79,11 @@ class Calculate:
                 flat_samps = self.inference.sample_flat(
                     flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
                 )
-        elif mode == 'mcmc':
+        elif mode == "mcmc":
             flat_samps = self.inference.sample_flat(
                 flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
             )
-        elif mode == 'ancestor':
+        elif mode == "ancestor":
             flat_samps = self.inference.ancestor_sample_flat(
                 flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options
             )

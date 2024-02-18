@@ -164,6 +164,25 @@ def assimilate_vals(vars, vals):
     return new_vals
 
 
+################################################################################
+# flatten pytree argument triplets
+################################################################################
+
+
+def flatten_args(vars, given_vars=None, given_vals=None):
+    given_vals = assimilate_vals(given_vars, given_vals)
+
+    flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
+    flat_given_vars, given_vars_treedef = jax.tree_util.tree_flatten(given_vars)
+    flat_given_vals, given_vals_treedef = jax.tree_util.tree_flatten(given_vals)
+    assert given_vars_treedef == given_vals_treedef
+
+    def unflatten_vars(flat_samps):
+        return jax.tree_util.tree_unflatten(vars_treedef, flat_samps)
+
+    return flat_vars, flat_given_vars, flat_given_vals, unflatten_vars
+
+
 def nth_index(lst, item, n):
     # https://stackoverflow.com/questions/22267241/how-to-find-the-index-of-the-nth-time-an-item-appears-in-a-list
     return [i for i, n in enumerate(lst) if n == item][n]
