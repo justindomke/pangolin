@@ -223,7 +223,8 @@ def vmap_eval(f, in_axes, axis_size, *args):
         ]
 
         # slight optimization: don't vmap constant nodes (could disable)
-        if isinstance(dummy_node.cond_dist, Constant):
+        if isinstance(dummy_node.cond_dist, Constant) and not dummy_node in \
+                                                              dummy_outputs:
             assert my_in_axes == []
             real_node = dummy_node
             dummy_to_real[dummy_node] = real_node
@@ -233,6 +234,7 @@ def vmap_eval(f, in_axes, axis_size, *args):
                 and not dummy_node.cond_dist.random
                 and not dummy_node in dummy_outputs
         ):
+            print("WE HERE")
             assert not isinstance(dummy_node, AbstractRV)
             real_node = RV(dummy_node.cond_dist, *parents)
             dummy_to_real[dummy_node] = real_node
