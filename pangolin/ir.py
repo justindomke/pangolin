@@ -11,7 +11,7 @@ import numpy
 from . import dag, util
 import jax.tree_util
 
-np = numpy # by default use regular numpy but users can, e.g., set ir.np = jax.numpy
+np = numpy  # by default use regular numpy but users can, e.g., set ir.np = jax.numpy
 
 
 class CondDist(ABC):
@@ -100,7 +100,7 @@ class Constant(CondDist):
     def __str__(self):
         # return str(self.value).replace("\n", "").replace("  ", " ")
         return (
-            np.array2string(self.value, precision=3)
+            np.array_str(self.value, precision=3)
             .replace("\n", "")
             .replace("  ", " ")
         )
@@ -258,7 +258,7 @@ class Sum(CondDist):
         if self.axis is None:
             return ()
         else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
+            return x_shape[: self.axis] + x_shape[self.axis + 1:]
 
     def __repr__(self):
         return f"Sum(axis={self.axis})"
@@ -298,7 +298,7 @@ class Index(CondDist):
         if num_advanced <= 1:
             return False
         first_advanced = self.slices.index(None)
-        slice_probe = self.slices[first_advanced : first_advanced + num_advanced]
+        slice_probe = self.slices[first_advanced: first_advanced + num_advanced]
         if all(s is None for s in slice_probe):
             return False  # in place
         else:
@@ -311,7 +311,7 @@ class Index(CondDist):
         for idx_shape1 in indices_shapes:
             for idx_shape2 in indices_shapes:
                 assert (
-                    idx_shape1 == idx_shape2
+                        idx_shape1 == idx_shape2
                 ), "all indices must have same shape (no broadcasting yet)"
 
         output_shape = ()
@@ -379,6 +379,7 @@ def index(var, indices):
             slices.append(None)
     return Index(*slices)(var, *parents)
 
+
 ################################################################################
 # Low-level LogProb dist: Wrap a random cond_dist to get a non-random one
 ################################################################################
@@ -430,7 +431,7 @@ def split_shape(shape, i):
         new_shape = shape
         new_axis_size = None
     else:
-        lo, mid, hi = (shape[:i], shape[i], shape[i + 1 :])
+        lo, mid, hi = (shape[:i], shape[i], shape[i + 1:])
         new_shape = lo + hi
         new_axis_size = shape[i]
     return new_shape, new_axis_size
@@ -485,21 +486,21 @@ class VMapDist(CondDist):
             is_leaf=util.is_leaf_with_none,
         )
         return (
-            "vmap("
-            + str(self.axis_size)
-            + ", "
-            + str(list(new_in_axes))
-            + ", \n"
-            + str(self.base_cond_dist)
-            + ")"
+                "vmap("
+                + str(self.axis_size)
+                + ", "
+                + str(list(new_in_axes))
+                + ", \n"
+                + str(self.base_cond_dist)
+                + ")"
         )
 
     def __eq__(self, other):
         if isinstance(other, VMapDist):
             return (
-                self.base_cond_dist == other.base_cond_dist
-                and self.in_axes == other.in_axes
-                and self.axis_size == other.axis_size
+                    self.base_cond_dist == other.base_cond_dist
+                    and self.in_axes == other.in_axes
+                    and self.axis_size == other.axis_size
             )
         return False
 
@@ -556,7 +557,7 @@ def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
             else:
                 if vec_shape:
                     assert (
-                        p.shape == vec_shape
+                            p.shape == vec_shape
                     ), "can only vectorize scalars + arrays of same shape"
                 else:
                     vec_shape = p.shape
