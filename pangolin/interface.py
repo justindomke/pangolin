@@ -130,8 +130,9 @@ def log_prob(vars, given_vars=None):
             else:
                 l += my_l
 
-        #evaluated[node] = None
+        # evaluated[node] = None
     return l
+
 
 ################################################################################
 # Full-blown VMap
@@ -227,6 +228,15 @@ def vmap_eval(f, in_axes, axis_size, *args):
             real_node = dummy_node
             dummy_to_real[dummy_node] = real_node
             dummy_mapped_axis[dummy_node] = None
+        elif (
+                all(axis is None for axis in my_in_axes)
+                and not dummy_node.cond_dist.random
+                and not dummy_node in dummy_outputs
+        ):
+            assert not isinstance(dummy_node, AbstractRV)
+            real_node = RV(dummy_node.cond_dist, *parents)
+            dummy_to_real[dummy_node] = real_node
+            dummy_mapped_axis[dummy_node] = None
         else:
             cond_dist = VMapDist(
                 dummy_node.cond_dist, in_axes=my_in_axes, axis_size=axis_size
@@ -255,7 +265,7 @@ class vmap:  # not a RV!
             if i is None:
                 return AbstractRV(x.shape)
             else:
-                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
+                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
                 return AbstractRV(lo + hi)
 
         dummy_args = util.tree_map_recurse_at_leaf(
