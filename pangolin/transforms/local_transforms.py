@@ -31,6 +31,59 @@ def check_observed_descendents(nodes, observed_nodes):
 
 
 ################################################################################
+# utility to turn a regenerator into a vmapped version
+################################################################################
+
+
+def vmap_regenerator(base_regenerator):
+    def new_regenerator(vars, parents_of_vars, *, pars_included, has_observed_descendent):
+        def check_vmap_dist(var):
+            if not isinstance(var.cond_dist, VMapDist):
+                raise InapplicableTransform(f"dist not vmapped {var.cond_dist}")
+
+        tree_map(check_vmap_dist, vars)
+
+        # all vars that point TO EACH OTHER must map over axis 0 only
+        def check_axes(var, included):
+            for in_axis, in_included in zip(var.cond_dist.in_axes, included):
+                if in_axis != 0 and in_included:
+                    raise InapplicableTransform(
+                        "regenerated parent not mapped over axis 0"
+                    )
+
+        tree_map(check_axes, vars, pars_included)
+
+        vars_in_axes = tree_map(lambda node: 0, vars)
+        parents_in_axes = tree_map(lambda node: node.cond_dist.in_axes, vars)
+        in_axes = vars_in_axes, parents_in_axes
+
+        flat_vars, _ = tree_util.tree_flatten(vars)
+        axis_sizes = tuple(
+            var.cond_dist.axis_size
+            for var in flat_vars
+            if var.cond_dist.axis_size is not None
+        )
+
+        if len(axis_sizes) > 0:
+            assert all(axis_size == axis_sizes[0] for axis_size in axis_sizes)
+            axis_size = axis_sizes[0]
+        else:
+            axis_size = None
+
+        def myfun(vars, info_vars):
+            return base_regenerator(
+                vars,
+                info_vars,
+                pars_included=pars_included,
+                has_observed_descendent=has_observed_descendent,
+            )
+
+        return interface.vmap(myfun, in_axes, axis_size)(vars, parents_of_vars)
+
+    return new_regenerator
+
+
+################################################################################
 # The transform class
 ################################################################################
 
@@ -44,7 +97,7 @@ class LocalTransform:
         self.extractor = extractor
         self.regenerator = regenerator
 
-    def apply_to_node(self, node, observed_vars):
+    def apply_to_node_novmap(self, node, observed_vars):
         # extract variables
         nodes = self.extractor(node)
         parents = tree_map(lambda x: x.parents, nodes)
@@ -59,6 +112,39 @@ class LocalTransform:
             pars_included=pars_included,
             has_observed_descendent=has_observed_descendent,
         )
+
+        flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes)
+        assert tree1 == tree2
+
+        replacements = dict(tuple(zip(flat_nodes, flat_new_nodes)))
+        return replacements
+
+    def apply_to_node(self, node, observed_vars):
+        # extract variables
+        nodes = self.extractor(node)
+        parents = tree_map(lambda x: x.parents, nodes)
+
+        flat_nodes, tree1 = tree_util.tree_flatten(nodes)
+        pars_included = tree_map(lambda x: x in flat_nodes, parents)
+        has_observed_descendent = check_observed_descendents(nodes, observed_vars)
+        try:
+            new_nodes = self.regenerator(
+                nodes,
+                parents,
+                pars_included=pars_included,
+                has_observed_descendent=has_observed_descendent,
+            )
+        except InapplicableTransform as e:
+            # if transform didn't work, try applying vmapped regenerator instead
+            if isinstance(node.cond_dist, VMapDist):
+                new_nodes = vmap_regenerator(self.regenerator)(
+                    nodes,
+                    parents,
+                    pars_included=pars_included,
+                    has_observed_descendent=has_observed_descendent,
+                )
+            else:
+                raise e
 
         flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes)
         assert tree1 == tree2

@@ -14,19 +14,15 @@ from pangolin.transforms import (
 
 from pytest import mark
 
-vmapped_normal_normal = vmap_local_transform(normal_normal)
-vmapped_constant_op = vmap_local_transform(constant_op)
 
-
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
-def test_vmap_everything(vmapped_tform):
+def test_vmap_everything():
     a = makerv([1.1, 2.2])
     b = makerv([3.3, 4.4])
     c = makerv([5.5, 6.6])
     z = vmap(normal_scale, 0)(a, b)
     x = vmap(normal_scale, 0)(z, c)
 
-    replacements = vmapped_tform.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -38,15 +34,14 @@ def test_vmap_everything(vmapped_tform):
     assert new_x in dag.upstream_nodes(new_z)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
-def test_vmap_only_inside(vmapped_tform):
+def test_vmap_only_inside():
     a = makerv(1.1)
     b = makerv(2.2)
     c = makerv(3.3)
     z = vmap(normal_scale, None, axis_size=2)(a, b)
     x = vmap(normal_scale, (0, None))(z, c)
 
-    replacements = vmapped_tform.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x])
     new_x = replacements[x]
     new_z = replacements[z]
 
@@ -60,15 +55,14 @@ def test_vmap_only_inside(vmapped_tform):
     assert new_x in dag.upstream_nodes(new_z)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
-def test_vmap_half_inside(vmapped_tform):
+def test_vmap_half_inside():
     a = makerv(1.1)
     b = makerv([2.2, 3.3])
     c = makerv(4.4)
     z = vmap(normal_scale, (None, 0))(a, b)
     x = vmap(normal_scale, (0, None))(z, c)
 
-    replacements = vmapped_tform.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x])
     new_x = replacements[x]
     new_z = replacements[z]
 
@@ -78,13 +72,12 @@ def test_vmap_half_inside(vmapped_tform):
     assert new_z.cond_dist == VMapDist(normal_scale, (0, 0), 2)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_constant_op])
-def test_vmapped_constant(vmapped_tform):
+def test_vmapped_constant():
     print("making new regenerator")
     a = vmap(lambda: makerv(2.0), None, axis_size=3)()
     b = vmap(lambda: makerv(3.0), None, axis_size=3)()
     c = vmap(lambda ai, bi: ai + bi)(a, b)
-    replacements = vmapped_tform.apply_to_node(c, [])
+    replacements = constant_op.apply_to_node(c, [])
 
     assert a not in replacements
     assert b not in replacements
