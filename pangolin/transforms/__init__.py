@@ -6,11 +6,10 @@ from .transforms import *
 from .duplicate_deterministic import duplicate_deterministic
 from .normal_normal import normal_normal as normal_normal
 from .constant_op import constant_op
-from .vmapped import vmap_local_transform
 
 from .local_transforms import LocalTransform
 
-__all__ = [duplicate_deterministic, normal_normal, constant_op, vmap_local_transform]
+__all__ = [duplicate_deterministic, normal_normal, constant_op]
 
 # TODO:
 # normal-normal

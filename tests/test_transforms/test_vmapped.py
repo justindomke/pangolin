@@ -9,10 +9,7 @@ from pangolin.transforms import (
     constant_op,
     apply_transforms,
     InapplicableTransform,
-    vmap_local_transform,
 )
-
-from pytest import mark
 
 
 def test_vmap_everything():

@@ -30,12 +30,11 @@ def check_observed_descendents(nodes, observed_nodes):
     return tree_map(lambda node: node in blocked_upstream, nodes)
 
 
-################################################################################
-# utility to turn a regenerator into a vmapped version
-################################################################################
-
-
 def vmap_regenerator(base_regenerator):
+    """
+    utility to turn a regenerator function into a vmapped version
+    """
+
     def new_regenerator(vars, parents_of_vars, *, pars_included, has_observed_descendent):
         def check_vmap_dist(var):
             if not isinstance(var.cond_dist, VMapDist):
@@ -97,30 +96,7 @@ class LocalTransform:
         self.extractor = extractor
         self.regenerator = regenerator
 
-    def apply_to_node_novmap(self, node, observed_vars):
-        # extract variables
-        nodes = self.extractor(node)
-        parents = tree_map(lambda x: x.parents, nodes)
-
-        flat_nodes, tree1 = tree_util.tree_flatten(nodes)
-        pars_included = tree_map(lambda x: x in flat_nodes, parents)
-        has_observed_descendent = check_observed_descendents(nodes, observed_vars)
-
-        new_nodes = self.regenerator(
-            nodes,
-            parents,
-            pars_included=pars_included,
-            has_observed_descendent=has_observed_descendent,
-        )
-
-        flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes)
-        assert tree1 == tree2
-
-        replacements = dict(tuple(zip(flat_nodes, flat_new_nodes)))
-        return replacements
-
     def apply_to_node(self, node, observed_vars):
-        # extract variables
         nodes = self.extractor(node)
         parents = tree_map(lambda x: x.parents, nodes)
 
