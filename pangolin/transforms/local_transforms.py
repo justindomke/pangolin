@@ -37,69 +37,7 @@ def check_observed_descendents(nodes, observed_nodes):
 
 class LocalTransform:
     """
-    A local transform is a transform created from an `extractor` and a `transformer`
-    """
-
-    def __init__(self, extractor, transformer):
-        self.extractor = extractor
-        self.transformer = transformer
-
-    def apply_to_node(self, node, observed_vars):
-        # extract variables
-        nodes = self.extractor(node)
-
-        # parents of nodes
-        nodes_parents = tuple(tuple(n.parents) for n in nodes)
-
-        # who has an observed descendent
-        has_observed_descendent = check_observed_descendents(nodes, observed_vars)
-        # which parents are included in the extracted vars
-        pars_included = tuple(tuple(p in nodes for p in n.parents) for n in nodes)
-
-        # try to get the transformation
-        cond_dists = tuple(n.cond_dist for n in nodes)
-        tform = self.transformer(
-            *cond_dists,
-            pars_included=pars_included,
-            has_observed_descendent=has_observed_descendent
-        )
-
-        # apply the transformation
-        new_nodes = tform(*nodes_parents)
-
-        assert len(new_nodes) == len(nodes)
-
-        replacements = dict(tuple(zip(nodes, new_nodes)))
-
-        replacements = {n: replacements[n] for n in replacements if n != replacements[n]}
-
-        return replacements
-
-    def __call__(self, vars, given, vals):
-        assert isinstance(vars, list)
-        for var in vars:
-            assert isinstance(var, interface.RV)
-        assert isinstance(given, list)
-        for var in given:
-            assert isinstance(var, interface.RV)
-
-        for node in dag.upstream_nodes(vars + given):
-            # print(f"trying to apply {rule} to {node}")
-            try:
-                replacements = self.apply_to_node(node, observed_vars=given)
-                new_vars, new_given = replace_with_given(
-                    vars, given, replacements.keys(), replacements.values()
-                )
-                return new_vars, new_given, vals
-            except InapplicableTransform as e:
-                # print(f"{e=}")
-                continue
-        raise InapplicableTransform("No nodes found to apply local transform")
-
-
-class LocalTransformEZ:
-    """
-    A local transform is a transform created from an `extractor` and a `transformer`
+    A local transform is a transform created from an `extractor` and a `regenerator`
     """
 
     def __init__(self, extractor, regenerator):

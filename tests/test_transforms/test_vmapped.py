@@ -6,24 +6,19 @@ import numpy as np
 from pangolin import transforms
 from pangolin.transforms import (
     normal_normal,
-    normal_normal_ez,
     constant_op,
-    constant_op_ez,
     apply_transforms,
     InapplicableTransform,
     vmap_local_transform,
-    vmap_local_transform_ez,
 )
 
 from pytest import mark
 
 vmapped_normal_normal = vmap_local_transform(normal_normal)
-vmapped_normal_normal_ez = vmap_local_transform_ez(normal_normal_ez)
 vmapped_constant_op = vmap_local_transform(constant_op)
-vmapped_constant_op_ez = vmap_local_transform_ez(constant_op_ez)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal, vmapped_normal_normal_ez])
+@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
 def test_vmap_everything(vmapped_tform):
     a = makerv([1.1, 2.2])
     b = makerv([3.3, 4.4])
@@ -43,7 +38,7 @@ def test_vmap_everything(vmapped_tform):
     assert new_x in dag.upstream_nodes(new_z)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal, vmapped_normal_normal_ez])
+@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
 def test_vmap_only_inside(vmapped_tform):
     a = makerv(1.1)
     b = makerv(2.2)
@@ -65,7 +60,7 @@ def test_vmap_only_inside(vmapped_tform):
     assert new_x in dag.upstream_nodes(new_z)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_normal_normal, vmapped_normal_normal_ez])
+@mark.parametrize("vmapped_tform", [vmapped_normal_normal])
 def test_vmap_half_inside(vmapped_tform):
     a = makerv(1.1)
     b = makerv([2.2, 3.3])
@@ -83,7 +78,7 @@ def test_vmap_half_inside(vmapped_tform):
     assert new_z.cond_dist == VMapDist(normal_scale, (0, 0), 2)
 
 
-@mark.parametrize("vmapped_tform", [vmapped_constant_op_ez, vmapped_constant_op])
+@mark.parametrize("vmapped_tform", [vmapped_constant_op])
 def test_vmapped_constant(vmapped_tform):
     print("making new regenerator")
     a = vmap(lambda: makerv(2.0), None, axis_size=3)()
