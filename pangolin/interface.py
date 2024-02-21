@@ -149,7 +149,6 @@ def vmap_dummy_args(in_axes, axis_size, *args):
         new_shape, new_axis_size = split_shape(a.shape, i)
         d = a.cond_dist
         if isinstance(d, VMapDist) and i == 0:
-            # my_dummy = AbstractRVWithDist(AbstractCondDist(new_shape), new_shape)
             my_dummy = AbstractRVWithDist(d.base_cond_dist, new_shape)
         else:
             my_dummy = AbstractRV(new_shape)
@@ -274,12 +273,27 @@ class vmap:
         # arrays?
         args = jax.tree_util.tree_map(makerv, args)
 
+        # if isinstance(d, VMapDist) and i == 0:
+        #     my_dummy = AbstractRVWithDist(d.base_cond_dist, new_shape)
+        # else:
+        #     my_dummy = AbstractRV(new_shape)
+
         def get_dummy(i, x):
             if i is None:
-                return AbstractRV(x.shape)
+                new_shape = x.shape
             else:
+                print(f"{i=}")
                 lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
-                return AbstractRV(lo + hi)
+                new_shape = lo + hi
+
+            # return AbstractRV(new_shape)
+            if isinstance(x.cond_dist, VMapDist):
+                return AbstractRVWithDist(x.cond_dist.base_cond_dist, new_shape)
+            else:
+                return AbstractRV(new_shape)
+
+        print(f"{args=}")
+        print(f"{self.in_axes=}")
 
         dummy_args = util.tree_map_recurse_at_leaf(
             get_dummy, self.in_axes, args, is_leaf=util.is_leaf_with_none
@@ -318,6 +332,7 @@ class AbstractRV(RV):
         return str(self.shape)
 
 
+# TODO: make this the only abstractRV type
 class AbstractRVWithDist(AbstractRV):
     """
     Like a RV (has a cond_dist and shape) but no parents
