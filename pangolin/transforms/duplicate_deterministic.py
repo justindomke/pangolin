@@ -6,7 +6,9 @@ from .transforms_util import bin_vars, replace_with_given
 def duplicate_deterministic(vars, given, vals):
     """
     Search for duplicate deterministic RVs with same CondDist and same parents. If
-    they exist, merge them together.
+    they exist, merge them together. (Satisfies
+    `pangolin.transforms.transforms.Transform` protocol)
+
     """
 
     all_vars = dag.upstream_nodes(vars + given)
@@ -24,6 +26,6 @@ def duplicate_deterministic(vars, given, vals):
         if len(old) > 1:
             new = [old[0]] * len(old)
             print(f"replacing {old} with {new}")
-            new_vars, new_given = replace_with_given(vars, given, old, new)
-            return new_vars, new_given, vals
+            replacements = dict(zip(old, new))
+            return replace_with_given(vars, given, vals, replacements)
     raise InapplicableTransform("no duplicate deterministic nodes")

@@ -112,9 +112,7 @@ def log_prob(vars, given_vars=None):
     if any(n in upstream_of_given and not n in flat_given_vars for n in flat_vars):
         raise InvalidAncestorQuery("evaluated node upstream of given")
 
-    nodes = dag.upstream_nodes(
-        flat_vars, block_condition=lambda p: p in flat_given_vars
-    )
+    nodes = dag.upstream_nodes(flat_vars, block_condition=lambda p: p in flat_given_vars)
 
     l = None
 
@@ -234,16 +232,15 @@ def vmap_eval(f, in_axes, axis_size, *args):
         ]
 
         # slight optimization: don't vmap constant nodes (could disable)
-        if isinstance(dummy_node.cond_dist, Constant) and not dummy_node in \
-                                                              dummy_outputs:
+        if isinstance(dummy_node.cond_dist, Constant) and not dummy_node in dummy_outputs:
             assert my_in_axes == []
             real_node = dummy_node
             dummy_to_real[dummy_node] = real_node
             dummy_mapped_axis[dummy_node] = None
         elif (
-                all(axis is None for axis in my_in_axes)
-                and not dummy_node.cond_dist.random
-                and not dummy_node in dummy_outputs
+            all(axis is None for axis in my_in_axes)
+            and not dummy_node.cond_dist.random
+            and not dummy_node in dummy_outputs
         ):
             assert not isinstance(dummy_node, AbstractRV)
             real_node = RV(dummy_node.cond_dist, *parents)
@@ -283,7 +280,7 @@ class vmap:
                 new_shape = x.shape
             else:
                 print(f"{i=}")
-                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
+                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
                 new_shape = lo + hi
 
             # return AbstractRV(new_shape)
@@ -377,6 +374,10 @@ class plate:
 def print_upstream(*vars):
     vars = jax.tree_util.tree_leaves(vars)
     nodes = dag.upstream_nodes(vars)
+
+    if vars == []:
+        print("[empty vars, nothing to print]")
+        return
 
     # get maximum # parents
     max_pars = 0

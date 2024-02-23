@@ -1,26 +1,21 @@
 from pangolin.interface import normal, normal_scale, makerv, exp
 from pangolin import dag
 from pangolin.transforms.transforms_util import replace
-import numpy as np
-
-# import pytest
-from pytest import mark
+import numpy as np  # type: ignore
 
 from pangolin import transforms
-from pangolin.transforms import normal_normal, apply_transforms, InapplicableTransform
+from pangolin.transforms.transforms import apply_transforms, InapplicableTransform
+from pangolin.transforms.normal_normal import normal_normal
 
-tforms = [normal_normal]
 
-
-@mark.parametrize("tform", tforms)
-def test_apply_to_node1(tform):
+def test_apply_to_node1():
     a = makerv(1.1)
     b = makerv(2.2)
     c = makerv(3.3)
     z = normal_scale(a, b)
     x = normal_scale(z, c)
 
-    replacements = tform.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x], [1.0])
     new_x = replacements[x]
     new_z = replacements[z]
 
@@ -30,14 +25,13 @@ def test_apply_to_node1(tform):
     assert new_x in dag.upstream_nodes(new_z)
 
     try:
-        tform.apply_to_node(x, [])
+        normal_normal.apply_to_node(x, [], [])
         assert False, "failed to raise error"
     except InapplicableTransform:
         pass
 
 
-@mark.parametrize("tform", tforms)
-def test_call1(tform):
+def test_call1():
     a = makerv(1.1)
     b = makerv(2.2)
     c = makerv(3.3)
@@ -45,12 +39,12 @@ def test_call1(tform):
     x = normal_scale(z, c)
     x_val = np.array(2.0)
 
-    [new_x], [new_x2], [new_x_val] = tform([x], [x], [x_val])
+    [new_x], [new_x2], [new_x_val] = normal_normal([x], [x], [x_val])
     assert new_x != x
     assert new_x2 == new_x
     assert new_x_val == x_val
 
-    [new_x, new_z], [new_x2], [new_x_val] = tform([x, z], [x], [x_val])
+    [new_x, new_z], [new_x2], [new_x_val] = normal_normal([x, z], [x], [x_val])
     assert new_x != x
     assert new_x2 == new_x
     assert new_x_val == x_val
@@ -64,8 +58,7 @@ def test_call1(tform):
         pass
 
 
-@mark.parametrize("tform", tforms)
-def test_apply_transforms1(tform):
+def test_apply_transforms1():
     a = makerv(1.1)
     b = makerv(2.2)
     c = makerv(3.3)
@@ -73,12 +66,14 @@ def test_apply_transforms1(tform):
     x = normal_scale(z, c)
     x_val = np.array(2.0)
 
-    new_x, [new_x2], [new_x_val] = apply_transforms([tform], x, x, x_val)
+    new_x, [new_x2], [new_x_val] = apply_transforms([normal_normal], x, x, x_val)
     assert new_x != x
     assert new_x2 == new_x
     assert new_x_val == x_val
 
-    [new_x, new_z], [new_x2], [new_x_val] = apply_transforms([tform], [x, z], x, x_val)
+    [new_x, new_z], [new_x2], [new_x_val] = apply_transforms(
+        [normal_normal], [x, z], x, x_val
+    )
     assert new_x != x
     assert new_x2 == new_x
     assert new_x_val == x_val
@@ -86,6 +81,6 @@ def test_apply_transforms1(tform):
     assert new_x in dag.upstream_nodes(new_z)
 
     # without observing x, nothing should happen
-    [new_x2, new_z2], [], [] = apply_transforms([tform], [x, z], None, None)
+    [new_x2, new_z2], [], [] = apply_transforms([normal_normal], [x, z], None, None)
     assert new_x2 == x
     assert new_z2 == z

@@ -1,15 +1,8 @@
 from pangolin.interface import normal, normal_scale, makerv, exp, Constant, vmap, VMapDist
 from pangolin import dag
-from pangolin.transforms.transforms_util import replace
-import numpy as np
-
-from pangolin import transforms
-from pangolin.transforms import (
-    normal_normal,
-    constant_op,
-    apply_transforms,
-    InapplicableTransform,
-)
+import numpy as np  # type: ignore
+from pangolin.transforms.normal_normal import normal_normal
+from pangolin.transforms.constant_op import constant_op
 
 
 def test_vmap_everything():
@@ -18,8 +11,9 @@ def test_vmap_everything():
     c = makerv([5.5, 6.6])
     z = vmap(normal_scale, 0)(a, b)
     x = vmap(normal_scale, 0)(z, c)
+    x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x], [x_val])
     new_x = replacements[x]
     new_z = replacements[z]
     # check
@@ -37,8 +31,9 @@ def test_vmap_only_inside():
     c = makerv(3.3)
     z = vmap(normal_scale, None, axis_size=2)(a, b)
     x = vmap(normal_scale, (0, None))(z, c)
+    x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x], [x_val])
     new_x = replacements[x]
     new_z = replacements[z]
 
@@ -58,8 +53,9 @@ def test_vmap_half_inside():
     c = makerv(4.4)
     z = vmap(normal_scale, (None, 0))(a, b)
     x = vmap(normal_scale, (0, None))(z, c)
+    x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x])
+    replacements = normal_normal.apply_to_node(x, [x], [x_val])
     new_x = replacements[x]
     new_z = replacements[z]
 
@@ -74,7 +70,7 @@ def test_vmapped_constant():
     a = vmap(lambda: makerv(2.0), None, axis_size=3)()
     b = vmap(lambda: makerv(3.0), None, axis_size=3)()
     c = vmap(lambda ai, bi: ai + bi)(a, b)
-    replacements = constant_op.apply_to_node(c, [])
+    replacements = constant_op.apply_to_node(c, [], [])
 
     assert a not in replacements
     assert b not in replacements

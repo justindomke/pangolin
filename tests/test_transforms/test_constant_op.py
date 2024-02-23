@@ -1,10 +1,10 @@
 from pangolin.interface import normal, normal_scale, makerv, exp, Constant
-from pangolin import dag
-from pangolin.transforms.transforms_util import replace
-import numpy as np
+from pangolin.transforms.constant_op import constant_op
 
-from pangolin import transforms
-from pangolin.transforms import constant_op, apply_transforms, InapplicableTransform
+from pangolin.transforms.transforms import (
+    apply_transforms,
+    InapplicableTransform,
+)
 
 
 def test_apply_to_node1():
@@ -12,7 +12,7 @@ def test_apply_to_node1():
     b = makerv(2.0)
     c = a + b
 
-    replacements = constant_op.apply_to_node(c, [])
+    replacements = constant_op.apply_to_node(c, [], [])
     new_c = replacements[c]
     assert new_c.cond_dist == Constant(3.25)
 

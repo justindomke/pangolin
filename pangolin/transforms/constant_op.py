@@ -9,7 +9,9 @@ def constant_op_extractor(node):
     return node
 
 
-def constant_op_regenerator(node, parents, *, has_observed_descendent, pars_included):
+def constant_op_regenerator(
+    node, parents, is_observed, has_observed_descendent, pars_included
+):
     if isinstance(node.cond_dist, interface.Constant):
         raise InapplicableTransform("node is constant")
 
@@ -27,3 +29,7 @@ def constant_op_regenerator(node, parents, *, has_observed_descendent, pars_incl
 
 
 constant_op = LocalTransform(constant_op_extractor, constant_op_regenerator)
+"""
+If deterministic functions are applied to Constant RVs, pre-compute them.
+(Satisfies `pangolin.transforms.transforms.Transform` protocol)
+"""

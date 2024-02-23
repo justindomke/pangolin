@@ -1,15 +1,18 @@
 """
-Program transformations
+Program transformations.
+
+Key concepts:
+* `pangolin.transforms.transforms.Transform` — protocol for transforms
+* `pangolin.transforms.transforms.apply_transforms` — convenience function to call a
+bunch of transforms
+
+Current transforms:
+* `pangolin.transforms.duplicate_deterministic`
+* `pangolin.transforms.normal_normal`
+* `pangolin.transforms.constant_op`
+* `pangolin.transforms.bernoulli_to_binomial`
 """
 
-from .transforms import *
-from .duplicate_deterministic import duplicate_deterministic
-from .normal_normal import normal_normal as normal_normal
-from .constant_op import constant_op
-
-from .local_transforms import LocalTransform
-
-__all__ = [duplicate_deterministic, normal_normal, constant_op]
 
 # TODO:
 # normal-normal

@@ -83,7 +83,8 @@ class Constant(CondDist):
     def __eq__(self, other):
         if isinstance(other, Constant):
             return self.value.shape == other.value.shape and np.all(
-                self.value == other.value)
+                self.value == other.value
+            )
         return False
 
     def __hash__(self):
@@ -98,8 +99,7 @@ class Constant(CondDist):
 
     def __str__(self):
         # return str(self.value).replace("\n", "").replace("  ", " ")
-        return (
-            np.array_str(self.value, precision=3).replace("\n", "").replace("  ", " "))
+        return np.array_str(self.value, precision=3).replace("\n", "").replace("  ", " ")
 
 
 class AllScalarCondDist(CondDist):
@@ -254,7 +254,7 @@ class Sum(CondDist):
         if self.axis is None:
             return ()
         else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1:]
+            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
 
     def __repr__(self):
         return f"Sum(axis={self.axis})"
@@ -294,7 +294,7 @@ class Index(CondDist):
         if num_advanced <= 1:
             return False
         first_advanced = self.slices.index(None)
-        slice_probe = self.slices[first_advanced: first_advanced + num_advanced]
+        slice_probe = self.slices[first_advanced : first_advanced + num_advanced]
         if all(s is None for s in slice_probe):
             return False  # in place
         else:
@@ -307,7 +307,8 @@ class Index(CondDist):
         for idx_shape1 in indices_shapes:
             for idx_shape2 in indices_shapes:
                 assert (
-                        idx_shape1 == idx_shape2), "all indices must have same shape (no broadcasting yet)"
+                    idx_shape1 == idx_shape2
+                ), "all indices must have same shape (no broadcasting yet)"
 
         output_shape = ()
         idx_added = False
@@ -379,6 +380,7 @@ def index(var, indices):
 # Low-level LogProb dist: Wrap a random cond_dist to get a non-random one
 ################################################################################
 
+
 class LogProb(CondDist):
     def __init__(self, base_cond_dist):
         assert base_cond_dist.random, "LogProb can only be called on random dists"
@@ -387,7 +389,8 @@ class LogProb(CondDist):
 
     def get_shape(self, val_shape, *base_parent_shapes):
         assert val_shape == self.base_cond_dist.get_shape(
-            *base_parent_shapes), "value shape unexpected"
+            *base_parent_shapes
+        ), "value shape unexpected"
         return ()
 
     def __eq__(self, other):
@@ -426,7 +429,7 @@ def split_shape(shape, i):
         new_shape = shape
         new_axis_size = None
     else:
-        lo, mid, hi = (shape[:i], shape[i], shape[i + 1:])
+        lo, mid, hi = (shape[:i], shape[i], shape[i + 1 :])
         new_shape = lo + hi
         new_axis_size = shape[i]
     return new_shape, new_axis_size
@@ -452,8 +455,9 @@ class VMapDist(CondDist):
         if isinstance(in_axes, list):
             in_axes = tuple(in_axes)
         if axis_size is None:
-            assert any(axis is not None for axis in
-                       in_axes), "if axis_size=None, at least one axis must be mapped"
+            assert any(
+                axis is not None for axis in in_axes
+            ), "if axis_size=None, at least one axis must be mapped"
         else:
             assert isinstance(axis_size, int), "axis_size must be None or int"
 
@@ -463,27 +467,42 @@ class VMapDist(CondDist):
         super().__init__(name="VMapDist", random=base_cond_dist.random)
 
     def get_shape(self, *parents_shapes):
-        remaining_shapes, axis_size = get_sliced_shapes(parents_shapes, self.in_axes,
-                                                        self.axis_size)
+        remaining_shapes, axis_size = get_sliced_shapes(
+            parents_shapes, self.in_axes, self.axis_size
+        )
         dummy_shape = self.base_cond_dist.get_shape(*remaining_shapes)
         return (axis_size,) + dummy_shape
 
     def __repr__(self):
-        return f"VMapDist({repr(self.base_cond_dist)}, {repr(self.in_axes)}, " \
-               f"{repr(self.axis_size)})"
+        return (
+            f"VMapDist({repr(self.base_cond_dist)}, {repr(self.in_axes)}, "
+            f"{repr(self.axis_size)})"
+        )
 
     def __str__(self):
         # return "vmap(" + str(self.axis_size) + ', ' + str(self.in_axes) + ', '  + str(self.base_cond_dist) + ')'
-        new_in_axes = jax.tree_util.tree_map(lambda x: blank if x is None else x,
-                                             self.in_axes,
-                                             is_leaf=util.is_leaf_with_none, )
-        return ("vmap(" + str(self.axis_size) + ", " + str(
-            list(new_in_axes)) + ", \n" + str(self.base_cond_dist) + ")")
+        new_in_axes = jax.tree_util.tree_map(
+            lambda x: blank if x is None else x,
+            self.in_axes,
+            is_leaf=util.is_leaf_with_none,
+        )
+        return (
+            "vmap("
+            + str(self.axis_size)
+            + ", "
+            + str(list(new_in_axes))
+            + ", "
+            + str(self.base_cond_dist)
+            + ")"
+        )
 
     def __eq__(self, other):
         if isinstance(other, VMapDist):
             return (
-                    self.base_cond_dist == other.base_cond_dist and self.in_axes == other.in_axes and self.axis_size == other.axis_size)
+                self.base_cond_dist == other.base_cond_dist
+                and self.in_axes == other.in_axes
+                and self.axis_size == other.axis_size
+            )
         return False
 
     def __hash__(self):
@@ -494,10 +513,28 @@ class VMapDist(CondDist):
 # For convenience, gather all cond_dists
 ################################################################################
 
-all_cond_dists = [normal_scale, normal_prec, bernoulli, binomial, uniform, beta,
-                  exponential, beta_binomial, multi_normal_cov, categorical, dirichlet,
-                  multinomial,
-                  add, sub, mul, div, pow, abs, exp, matmul, ]
+all_cond_dists = [
+    normal_scale,
+    normal_prec,
+    bernoulli,
+    binomial,
+    uniform,
+    beta,
+    exponential,
+    beta_binomial,
+    multi_normal_cov,
+    categorical,
+    dirichlet,
+    multinomial,
+    add,
+    sub,
+    mul,
+    div,
+    pow,
+    abs,
+    exp,
+    matmul,
+]
 
 all_cond_dist_classes = [Sum, Index, VMapDist]
 
@@ -506,6 +543,7 @@ all_cond_dist_classes = [Sum, Index, VMapDist]
 # for convenience, make scalar functions "auto vectorizing"
 # so you can do x + 2 when x is a vector
 ################################################################################
+
 
 def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
     def getdist(*parents):
@@ -521,7 +559,8 @@ def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
             else:
                 if vec_shape:
                     assert (
-                            p.shape == vec_shape), "can only vectorize scalars + arrays of same shape"
+                        p.shape == vec_shape
+                    ), "can only vectorize scalars + arrays of same shape"
                 else:
                     vec_shape = p.shape
                 in_axes.append(0)

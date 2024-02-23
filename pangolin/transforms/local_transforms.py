@@ -1,12 +1,8 @@
 from .. import interface
 from .. import dag
-from .transforms import InapplicableTransform
+from .transforms import InapplicableTransform, Transform
 from .transforms_util import replace_with_given
-
-CondDist = interface.CondDist
-VMapDist = interface.VMapDist
-RV = interface.RV
-
+from ..interface import CondDist, VMapDist, RV
 from jax import tree_map, tree_util
 
 
@@ -19,8 +15,10 @@ def check_observed_descendents(nodes, observed_nodes):
     # first, find all the upstream nodes if you can't go into `nodes`
     block_condition = None
 
+    flat_nodes, _ = tree_util.tree_flatten(nodes)
+
     def link_block_condition(node1, node2):
-        return node1 in nodes and node2 in nodes
+        return node1 in flat_nodes and node2 in flat_nodes
 
     blocked_upstream = dag.upstream_nodes(
         observed_nodes, block_condition, link_block_condition
@@ -35,7 +33,9 @@ def vmap_regenerator(base_regenerator):
     utility to turn a regenerator function into a vmapped version
     """
 
-    def new_regenerator(vars, parents_of_vars, *, pars_included, has_observed_descendent):
+    def new_regenerator(
+        vars, parents_of_vars, is_observed, has_observed_descendent, pars_included
+    ):
         def check_vmap_dist(var):
             if not isinstance(var.cond_dist, VMapDist):
                 raise InapplicableTransform(f"dist not vmapped {var.cond_dist}")
@@ -71,10 +71,7 @@ def vmap_regenerator(base_regenerator):
 
         def myfun(vars, info_vars):
             return base_regenerator(
-                vars,
-                info_vars,
-                pars_included=pars_included,
-                has_observed_descendent=has_observed_descendent,
+                vars, info_vars, is_observed, has_observed_descendent, pars_included
             )
 
         return interface.vmap(myfun, in_axes, axis_size)(vars, parents_of_vars)
@@ -87,44 +84,108 @@ def vmap_regenerator(base_regenerator):
 ################################################################################
 
 
+def is_rv_non_rv_pair(x):
+    return isinstance(x, tuple) and isinstance(x[0], RV) and not isinstance(x[1], RV)
+
+
+def is_leaf(x):
+    """
+    A method to find leaves in pytrees that might contain var/val pairs as well as
+    just RVs. This prevents jax.tree_util methods from recusing inside the pair.
+    """
+    return isinstance(x, RV) or is_rv_non_rv_pair(x)
+
+
 class LocalTransform:
     """
-    A local transform is a transform created from an `extractor` and a `regenerator`
+    A local transform is a transform created from an `extractor` (which extracts
+    nodes from the graph without looking at distributions) and a `regenerator` (which
+    tries to transform those nodes using distributions but without looking at the
+    graph). It is designed this way to facilitate working with `vmap`—if an extractor
+    and regenerator are created following the rules, then it will automatically work
+    even when things are vectorized.
     """
 
     def __init__(self, extractor, regenerator):
-        self.extractor = extractor
-        self.regenerator = regenerator
+        """
+        Create a LocalTransform by providing two functions that obey the rules below.
+        """
 
-    def apply_to_node(self, node, observed_vars):
+        self.extractor = extractor
+        """
+        `nodes = extractor(var)` takes a single `RV` as input (`var`) and returns a
+        pytree of `RV`s (`nodes`) that would be replaced if this transformation were to go
+        ahead.
+        * This function should *not* look at the `cond_dist` for any random
+        variables
+        * This function is free to examine the graph upstream of `var` using `.parents`
+        and return any `RV`s in the graph organized into a pytree in whatever way is
+        convenient.
+        * This function would *often* include `var` in `nodes` but this is not required.
+        * If this transformation is inapplicable based solely on the graph structure,
+        then this function should raise an `InapplicableTransformation` exception.
+        """
+        self.regenerator = regenerator
+        """
+        `new_nodes = regenerator(nodes, parents, has_observed_descendent, pars_included)`
+        takes the `RV`s returned by the extractor and returns new `RV`s that should
+        replace them.
+        * `nodes` is a pytree of `RV`s as returned by `extractor`. The function is free
+        to examine the `cond_dist` for each of these but should not examine the graph
+        structure.
+        * `parents` is a pytree of the parents, with each `RV` in `nodes` replaced by
+        a tuple of `RV`s in parents.
+        * `has_observed_descendent` is a pytree with the same structure as `nodes`
+        indicating if each has an observed descendent.
+        * `pars_included` is a pytree with the same structure as `parents` with a boolean
+        for each indicating if that parent aslo appears in `nodes`.
+        * If this transformation is inapplicable based on the `cond_dist`s present in
+        each node and/or which parents are included or have observed descendents,
+        then this function should raise an `InapplicableTransformation` exception.
+        """
+
+    def apply_to_node(self, node, given, vals):
+        """
+        Given a particular `RV` `node` and a list of observed `RV`s, try to apply the
+        transformation. If it doesn't work, and the RV is vmapped, then try vmapping
+        the regenerator and applying it that way instead.
+        """
         nodes = self.extractor(node)
         parents = tree_map(lambda x: x.parents, nodes)
 
         flat_nodes, tree1 = tree_util.tree_flatten(nodes)
+
+        def lookup_val(x):
+            if x in given:
+                return vals[given.index(x)]
+            else:
+                return None
+
+        # TODO: something going wrong with vmapping over pairs
+        # (this whole pairs thing is pretty bad...)
+
+        is_observed = tree_map(lookup_val, nodes)
+        has_observed_descendent = check_observed_descendents(nodes, given)
         pars_included = tree_map(lambda x: x in flat_nodes, parents)
-        has_observed_descendent = check_observed_descendents(nodes, observed_vars)
         try:
             new_nodes = self.regenerator(
                 nodes,
                 parents,
-                pars_included=pars_included,
-                has_observed_descendent=has_observed_descendent,
+                is_observed,
+                has_observed_descendent,
+                pars_included,
             )
         except InapplicableTransform as e:
             # if transform didn't work, try applying vmapped regenerator instead
             if isinstance(node.cond_dist, VMapDist):
                 new_nodes = vmap_regenerator(self.regenerator)(
-                    nodes,
-                    parents,
-                    pars_included=pars_included,
-                    has_observed_descendent=has_observed_descendent,
+                    nodes, parents, is_observed, has_observed_descendent, pars_included
                 )
             else:
                 raise e
 
-        flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes)
+        flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes, is_leaf)
         assert tree1 == tree2
-
         replacements = dict(tuple(zip(flat_nodes, flat_new_nodes)))
         return replacements
 
@@ -138,11 +199,15 @@ class LocalTransform:
 
         for node in dag.upstream_nodes(vars + given):
             try:
-                replacements = self.apply_to_node(node, observed_vars=given)
-                new_vars, new_given = replace_with_given(
-                    vars, given, replacements.keys(), replacements.values()
-                )
-                return new_vars, new_given, vals
+                replacements = self.apply_to_node(node, given, vals)
+
+                # TODO
+                # if a replaced node is NOT observed, then insist it has same shape
+                # and replace it in vars
+                # if a replaced node IS observed, then replace it with a CONSTANT as
+                # far as vars go but replace it with the NEW DIST and NEW VALUE as far
+                # as given/vals goes
+                return replace_with_given(vars, given, vals, replacements)
             except InapplicableTransform as e:
                 continue
         raise InapplicableTransform("No nodes found to apply local transform")
