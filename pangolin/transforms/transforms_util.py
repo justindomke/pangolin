@@ -34,10 +34,10 @@ def replace(vars, replacements):
     return [old_to_new[v] for v in vars]
 
 
-# def replace_with_given(vars, given, vals, replacements):
-#     all_vars = vars + given
-#     new_all_vars = replace(all_vars, replacements, given, vals)
-#     return new_all_vars[: len(vars)], new_all_vars[len(vars) :], vals
+def replace_with_given_old(vars, given, vals, replacements):
+    all_vars = vars + given
+    new_all_vars = replace(all_vars, replacements)
+    return new_all_vars[: len(vars)], new_all_vars[len(vars) :], vals
 
 
 def replace_with_given(vars, given, vals, replacements):

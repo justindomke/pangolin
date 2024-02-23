@@ -44,14 +44,10 @@ def test_apply_to_node1():
     # interface.print_upstream(x)
     # dag.upstream_nodes(x)
 
-    replacements = tform.apply_to_node(x, [x], [x_val])
-    keys = tuple(replacements.keys())
-    values = tuple(replacements.values())
-    [key] = keys
-    [value] = values
-    assert key == x
-    assert value[0].cond_dist == binomial
-    assert value[1] == np.array(3)
+    [new_x], [new_x2], [new_x_val] = tform.apply_to_node(x, [x], [x], [x_val])
+    assert new_x.cond_dist == Constant(x_val)
+    assert new_x2.cond_dist == binomial
+    assert new_x_val == np.array(3)
 
 
 def test_call1():

@@ -1,9 +1,10 @@
 from .. import interface
 from .. import dag
 from .transforms import InapplicableTransform, Transform
-from .transforms_util import replace_with_given
-from ..interface import CondDist, VMapDist, RV
-from jax import tree_map, tree_util
+from .transforms_util import replace_with_given, replace_with_given_old
+from ..interface import CondDist, VMapDist, RV, makerv
+from jax import tree_map, tree_util  # type: ignore
+from .. import util
 
 
 def check_observed_descendents(nodes, observed_nodes):
@@ -144,7 +145,7 @@ class LocalTransform:
         then this function should raise an `InapplicableTransformation` exception.
         """
 
-    def apply_to_node(self, node, given, vals):
+    def apply_to_node(self, node, vars, given, vals):
         """
         Given a particular `RV` `node` and a list of observed `RV`s, try to apply the
         transformation. If it doesn't work, and the RV is vmapped, then try vmapping
@@ -168,7 +169,7 @@ class LocalTransform:
         has_observed_descendent = check_observed_descendents(nodes, given)
         pars_included = tree_map(lambda x: x in flat_nodes, parents)
         try:
-            new_nodes = self.regenerator(
+            new_nodes, new_vals = self.regenerator(
                 nodes,
                 parents,
                 is_observed,
@@ -178,16 +179,49 @@ class LocalTransform:
         except InapplicableTransform as e:
             # if transform didn't work, try applying vmapped regenerator instead
             if isinstance(node.cond_dist, VMapDist):
-                new_nodes = vmap_regenerator(self.regenerator)(
+                new_nodes, new_vals = vmap_regenerator(self.regenerator)(
                     nodes, parents, is_observed, has_observed_descendent, pars_included
                 )
             else:
                 raise e
 
-        flat_new_nodes, tree2 = tree_util.tree_flatten(new_nodes, is_leaf)
-        assert tree1 == tree2
-        replacements = dict(tuple(zip(flat_nodes, flat_new_nodes)))
-        return replacements
+        for var in tree_util.tree_flatten(vars)[0]:
+            assert isinstance(var, RV)
+
+        for var in tree_util.tree_flatten(new_nodes)[0]:
+            assert isinstance(var, RV)
+
+        # now here are the rules:
+        # - If the value corresponding to a node is None, then just replace it
+        # - If the value corresponding to a node is *not* None, then
+
+        # triple = [vars, given, vals]
+
+        def process(old_node, new_node, new_val):
+            nonlocal vars, given, vals
+            if new_val is None:
+                vars, given, vals = replace_with_given_old(
+                    vars, given, vals, {old_node: new_node}
+                )
+            else:
+                # create new constant RV to represent old node
+                print(f"{given=}")
+                idx = given.index(old_node)
+                old_val = vals[idx]
+                new_constant_node = makerv(old_val)
+                vars, given, vals = replace_with_given_old(
+                    vars, given, vals, {old_node: new_constant_node}
+                )
+
+                # remove previous given value, replace it with new one
+                print(f"{given=}")
+                print(f"{idx=}")
+                given = util.replace_in_sequence(given, idx, new_node)
+                vals = util.replace_in_sequence(vals, idx, new_val)
+
+        tree_util.tree_map(process, nodes, new_nodes, new_vals)
+
+        return vars, given, vals
 
     def __call__(self, vars, given, vals):
         assert isinstance(vars, list)
@@ -199,7 +233,7 @@ class LocalTransform:
 
         for node in dag.upstream_nodes(vars + given):
             try:
-                replacements = self.apply_to_node(node, given, vals)
+                return self.apply_to_node(node, vars, given, vals)
 
                 # TODO
                 # if a replaced node is NOT observed, then insist it has same shape
@@ -207,7 +241,6 @@ class LocalTransform:
                 # if a replaced node IS observed, then replace it with a CONSTANT as
                 # far as vars go but replace it with the NEW DIST and NEW VALUE as far
                 # as given/vals goes
-                return replace_with_given(vars, given, vals, replacements)
             except InapplicableTransform as e:
                 continue
         raise InapplicableTransform("No nodes found to apply local transform")

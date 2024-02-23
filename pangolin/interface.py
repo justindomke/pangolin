@@ -425,7 +425,7 @@ def label_fn(observed_vars=(), labels=None):
         else:
             label = str(node.cond_dist)
 
-        if node.cond_dist.is_random:
+        if node.cond_dist.random:
             shape = "oval"
         else:
             shape = "plaintext"

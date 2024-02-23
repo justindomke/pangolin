@@ -206,3 +206,10 @@ def first(lst, cond, default=None):
     get first element of `lst` satisfying `cond` or if none then `default`
     """
     return next((x for x in lst if cond(x)), default)
+
+
+def replace_in_sequence(seq, i, new):
+    assert i >= 0
+    assert i < len(seq)
+    s = type(seq)
+    return seq[:i] + s([new]) + seq[i + 1 :]

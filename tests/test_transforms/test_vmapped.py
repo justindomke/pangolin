@@ -1,4 +1,13 @@
-from pangolin.interface import normal, normal_scale, makerv, exp, Constant, vmap, VMapDist
+from pangolin.interface import (
+    normal,
+    normal_scale,
+    makerv,
+    exp,
+    Constant,
+    vmap,
+    VMapDist,
+    viz_upstream,
+)
 from pangolin import dag
 import numpy as np  # type: ignore
 from pangolin.transforms.normal_normal import normal_normal
@@ -13,10 +22,9 @@ def test_vmap_everything():
     x = vmap(normal_scale, 0)(z, c)
     x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x], [x_val])
-    new_x = replacements[x]
-    new_z = replacements[z]
-    # check
+    [new_x, new_z], [new_x2], [new_x_val] = normal_normal.apply_to_node(
+        x, [x, z], [x], [x_val]
+    )
     assert new_x.cond_dist == VMapDist(normal_scale, (0, 0), 2)
     assert new_z.cond_dist == VMapDist(normal_scale, (0, 0), 2)
     assert new_x.shape == (2,)
@@ -33,18 +41,14 @@ def test_vmap_only_inside():
     x = vmap(normal_scale, (0, None))(z, c)
     x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x], [x_val])
-    new_x = replacements[x]
-    new_z = replacements[z]
-
-    # print(f"{replacements.values()=}")
-    # print_upstream(tuple(replacements.values()))
-    # viz_upstream(tuple(replacements.values())).render("graph")
-
+    [new_x, new_z], [new_x2], [new_x_val] = normal_normal.apply_to_node(
+        x, [x, z], [x], [x_val]
+    )
     assert new_x.cond_dist == VMapDist(normal_scale, (None, None), 2)
     assert new_z.cond_dist == VMapDist(normal_scale, (0, None), 2)
-
     assert new_x in dag.upstream_nodes(new_z)
+    assert new_x2 is new_x
+    assert new_x_val is x_val
 
 
 def test_vmap_half_inside():
@@ -55,14 +59,16 @@ def test_vmap_half_inside():
     x = vmap(normal_scale, (0, None))(z, c)
     x_val = np.array([4.4, 5.5])
 
-    replacements = normal_normal.apply_to_node(x, [x], [x_val])
-    new_x = replacements[x]
-    new_z = replacements[z]
+    [new_x, new_z], [new_x2], [new_x_val] = normal_normal.apply_to_node(
+        x, [x, z], [x], [x_val]
+    )
 
-    # viz_upstream(tuple(replacements.values())).render("graph")
+    viz_upstream([new_x, new_z]).render("graph")
 
     assert new_x.cond_dist == VMapDist(normal_scale, (None, 0), 2)
     assert new_z.cond_dist == VMapDist(normal_scale, (0, 0), 2)
+    assert new_x2 is new_x
+    assert new_x_val is x_val
 
 
 def test_vmapped_constant():
@@ -70,10 +76,6 @@ def test_vmapped_constant():
     a = vmap(lambda: makerv(2.0), None, axis_size=3)()
     b = vmap(lambda: makerv(3.0), None, axis_size=3)()
     c = vmap(lambda ai, bi: ai + bi)(a, b)
-    replacements = constant_op.apply_to_node(c, [], [])
-
-    assert a not in replacements
-    assert b not in replacements
-    new_c = replacements[c]
+    [new_c], [], [] = constant_op.apply_to_node(c, [c], [], [])
 
     assert new_c.cond_dist == VMapDist(Constant(5.0), (), 3)

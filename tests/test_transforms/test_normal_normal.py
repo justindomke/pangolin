@@ -15,17 +15,44 @@ def test_apply_to_node1():
     z = normal_scale(a, b)
     x = normal_scale(z, c)
 
-    replacements = normal_normal.apply_to_node(x, [x], [1.0])
-    new_x = replacements[x]
-    new_z = replacements[z]
+    [new_x], [new_x2], [new_x_val] = normal_normal.apply_to_node(x, [x], [x], [1.0])
+    # new_x = replacements[x]
+    # new_z = replacements[z]
+    # new_z = new_x2.parents[0]
+
+    assert new_x.cond_dist == normal_scale
+    # assert new_z.cond_dist == normal_scale
+    # assert new_x != new_z
+    # assert new_x in dag.upstream_nodes(new_z)
+
+    try:
+        normal_normal.apply_to_node(x, [x], [], [])
+        assert False, "failed to raise error"
+    except InapplicableTransform:
+        pass
+
+
+def test_apply_to_node2():
+    a = makerv(1.1)
+    b = makerv(2.2)
+    c = makerv(3.3)
+    z = normal_scale(a, b)
+    x = normal_scale(z, c)
+    x_val = np.array(1.0)
+
+    [new_x, new_z], [new_x2], [new_x_val] = normal_normal.apply_to_node(
+        x, [x, z], [x], [x_val]
+    )
 
     assert new_x.cond_dist == normal_scale
     assert new_z.cond_dist == normal_scale
     assert new_x != new_z
     assert new_x in dag.upstream_nodes(new_z)
+    assert new_x2 == new_x
+    assert new_x_val == x_val
 
     try:
-        normal_normal.apply_to_node(x, [], [])
+        normal_normal.apply_to_node(x, [x, z], [], [])
         assert False, "failed to raise error"
     except InapplicableTransform:
         pass

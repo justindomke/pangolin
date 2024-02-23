@@ -12,8 +12,7 @@ def test_apply_to_node1():
     b = makerv(2.0)
     c = a + b
 
-    replacements = constant_op.apply_to_node(c, [], [])
-    new_c = replacements[c]
+    [new_c], [], [] = constant_op.apply_to_node(c, [c], [], [])
     assert new_c.cond_dist == Constant(3.25)
 
 

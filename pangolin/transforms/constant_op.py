@@ -1,7 +1,6 @@
 from .. import interface
 from .transforms import InapplicableTransform
 from .local_transforms import LocalTransform
-
 from .. import inference_numpyro
 
 
@@ -25,7 +24,8 @@ def constant_op_regenerator(
 
     new_val = inference_numpyro.evaluate(node.cond_dist, *parent_vals)
     new_node = interface.makerv(new_val)
-    return new_node
+    new_val = None
+    return new_node, new_val
 
 
 constant_op = LocalTransform(constant_op_extractor, constant_op_regenerator)
