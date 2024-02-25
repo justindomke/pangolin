@@ -5,6 +5,8 @@ from .transforms_util import replace_with_given, replace_with_given_old
 from ..interface import CondDist, VMapDist, RV, makerv
 from jax import tree_map, tree_util  # type: ignore
 from .. import util
+import numpy as np
+from ..util import tree_map_with_none_as_leaf, tree_map_preserve_none
 
 
 def check_observed_descendents(nodes, observed_nodes):
@@ -75,6 +77,11 @@ def vmap_regenerator(base_regenerator):
                 vars, info_vars, is_observed, has_observed_descendent, pars_included
             )
 
+        print(f"{in_axes=}")
+        print(f"{vars=}")
+        print(f"{parents_of_vars=}")
+        print(f"{is_observed=}")
+
         return interface.vmap(myfun, in_axes, axis_size)(vars, parents_of_vars)
 
     return new_regenerator
@@ -97,6 +104,10 @@ def is_leaf(x):
     return isinstance(x, RV) or is_rv_non_rv_pair(x)
 
 
+def default_observer(observations):
+    return tree_map(lambda obs: None, observations)
+
+
 class LocalTransform:
     """
     A local transform is a transform created from an `extractor` (which extracts
@@ -107,7 +118,7 @@ class LocalTransform:
     even when things are vectorized.
     """
 
-    def __init__(self, extractor, regenerator):
+    def __init__(self, extractor, regenerator, observer=None):
         """
         Create a LocalTransform by providing two functions that obey the rules below.
         """
@@ -144,6 +155,10 @@ class LocalTransform:
         each node and/or which parents are included or have observed descendents,
         then this function should raise an `InapplicableTransformation` exception.
         """
+        if observer is None:
+            observer = default_observer
+
+        self.observer = observer
 
     def apply_to_node(self, node, vars, given, vals):
         """
@@ -156,32 +171,38 @@ class LocalTransform:
 
         flat_nodes, tree1 = tree_util.tree_flatten(nodes)
 
+        def check_obs(x):
+            return True if x in given else None
+
         def lookup_val(x):
-            if x in given:
-                return vals[given.index(x)]
-            else:
-                return None
+            return vals[given.index(x)] if x in given else None
 
-        # TODO: something going wrong with vmapping over pairs
-        # (this whole pairs thing is pretty bad...)
+        is_observed = tree_map(check_obs, nodes)
+        observations = tree_map(lookup_val, nodes)
 
-        is_observed = tree_map(lookup_val, nodes)
+        print(f"{is_observed=}")
+        print(f"{observations=}")
+
         has_observed_descendent = check_observed_descendents(nodes, given)
         pars_included = tree_map(lambda x: x in flat_nodes, parents)
+
         try:
-            new_nodes, new_vals = self.regenerator(
+            new_nodes = self.regenerator(
                 nodes,
                 parents,
                 is_observed,
                 has_observed_descendent,
                 pars_included,
             )
+            new_vals = self.observer(observations)
         except InapplicableTransform as e:
             # if transform didn't work, try applying vmapped regenerator instead
             if isinstance(node.cond_dist, VMapDist):
-                new_nodes, new_vals = vmap_regenerator(self.regenerator)(
+                new_nodes = vmap_regenerator(self.regenerator)(
                     nodes, parents, is_observed, has_observed_descendent, pars_included
                 )
+                new_vals = util.map_inside_tree(self.observer, observations)
+
             else:
                 raise e
 
@@ -195,8 +216,12 @@ class LocalTransform:
         # - If the value corresponding to a node is None, then just replace it
         # - If the value corresponding to a node is *not* None, then
 
-        # triple = [vars, given, vals]
+        # print(f"{new_nodes=}")
+        # print(f"{new_vals=}")
 
+        # TODO: eventually, for efficiency, should replace repeated calls to
+        #  replace_given_with_old with a single call to an updated
+        # repace_with_given() that can handle observations
         def process(old_node, new_node, new_val):
             nonlocal vars, given, vals
             if new_val is None:
@@ -205,7 +230,6 @@ class LocalTransform:
                 )
             else:
                 # create new constant RV to represent old node
-                print(f"{given=}")
                 idx = given.index(old_node)
                 old_val = vals[idx]
                 new_constant_node = makerv(old_val)
@@ -214,11 +238,10 @@ class LocalTransform:
                 )
 
                 # remove previous given value, replace it with new one
-                print(f"{given=}")
-                print(f"{idx=}")
                 given = util.replace_in_sequence(given, idx, new_node)
                 vals = util.replace_in_sequence(vals, idx, new_val)
 
+        # I think no need to preserve None since nodes always non-None
         tree_util.tree_map(process, nodes, new_nodes, new_vals)
 
         return vars, given, vals
@@ -234,13 +257,6 @@ class LocalTransform:
         for node in dag.upstream_nodes(vars + given):
             try:
                 return self.apply_to_node(node, vars, given, vals)
-
-                # TODO
-                # if a replaced node is NOT observed, then insist it has same shape
-                # and replace it in vars
-                # if a replaced node IS observed, then replace it with a CONSTANT as
-                # far as vars go but replace it with the NEW DIST and NEW VALUE as far
-                # as given/vals goes
             except InapplicableTransform as e:
                 continue
         raise InapplicableTransform("No nodes found to apply local transform")

@@ -180,6 +180,8 @@ def vmap_generated_nodes(f, *dummy_args):
     assert isinstance(dummy_output2, list), "vmap_eval must be called on flat functions"
     assert len(dummy_output1) == len(dummy_output2)
     for d1, d2 in zip(dummy_output1, dummy_output2):
+        if d1 is None and d2 is None:
+            continue
         assert d1.shape == d2.shape
 
     def excluded_node(node):
@@ -295,14 +297,25 @@ class vmap:
         dummy_args = util.tree_map_recurse_at_leaf(
             get_dummy, self.in_axes, args, is_leaf=util.is_leaf_with_none
         )
-
         new_in_axes = util.tree_map_recurse_at_leaf(
             lambda i, x: i, self.in_axes, dummy_args, is_leaf=util.is_leaf_with_none
         )
+
+        tree1 = jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)
+        tree2 = jax.tree_util.tree_structure(dummy_args, is_leaf=util.is_leaf_with_none)
+        tree3 = jax.tree_util.tree_structure(new_in_axes, is_leaf=util.is_leaf_with_none)
+        print(f"{tree1=}")
+        print(f"{tree2=}")
+        print(f"{tree3=}")
+        assert tree1 == tree2
+        assert tree1 == tree3
+
         flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
             new_in_axes, is_leaf=util.is_leaf_with_none
         )
-        flat_f, flatten_inputs, unflatten_output = util.flatten_fun(self.f, *dummy_args)
+        flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
+            self.f, *dummy_args, is_leaf=util.is_leaf_with_none
+        )
         flat_args = flatten_inputs(*args)
         flat_output = vmap_eval(flat_f, flat_in_axes, self.axis_size, *flat_args)
         output = unflatten_output(flat_output)

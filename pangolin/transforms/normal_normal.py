@@ -44,7 +44,7 @@ def normal_normal_regenerator(
     new_mean = a + (new_x - a) / adj
     new_std = b * (1 - 1 / adj) ** 0.5
     new_z = interface.normal_scale(new_mean, new_std)
-    return (new_x, new_z), (None, None)
+    return (new_x, new_z)
 
 
 normal_normal = LocalTransform(normal_normal_extractor, normal_normal_regenerator)

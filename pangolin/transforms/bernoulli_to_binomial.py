@@ -2,6 +2,7 @@ from .. import interface
 from .transforms import InapplicableTransform
 from .local_transforms import LocalTransform
 
+np = interface.np
 from .. import inference_numpyro
 
 
@@ -27,14 +28,18 @@ def bernoulli_to_binomial_regenerator(
 
     new_node = interface.binomial(n, p)
     print(f"{new_node=}")
-    import numpy as np
 
-    new_val = np.array(sum(is_observed))
-    return new_node, new_val
+    return new_node
+
+
+def bernoulli_to_binomial_observer(val):
+    return np.array(sum(val))
 
 
 bernoulli_to_binomial = LocalTransform(
-    bernoulli_to_binomial_extractor, bernoulli_to_binomial_regenerator
+    bernoulli_to_binomial_extractor,
+    bernoulli_to_binomial_regenerator,
+    bernoulli_to_binomial_observer,
 )
 """
 Look for vmapped bernoulli RVs with observations and convert them into binomial RVs 

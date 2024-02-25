@@ -1,4 +1,6 @@
 from jax import numpy as jnp
+import jax.tree_util
+import numpy as np
 
 
 def comma_separated(stuff, fun=None, parens=True):
@@ -56,11 +58,112 @@ def is_leaf_with_none(xi):
     return (xi is None) or not isinstance(xi, (list, tuple, dict))
 
 
+def tree_map_with_none_as_leaf(f, tree, *rest):
+    """
+    Call jax.tree_util.tree_map using a special is_leaf function that preserves None
+    """
+    return jax.tree_util.tree_map(f, tree, *rest, is_leaf=is_leaf_with_none)
+
+
+def tree_map_preserve_none(f, tree, *rest):
+    def new_f(*args):
+        if all(arg is None for arg in args):
+            return None
+        elif not any(arg is None for arg in args):
+            return f(*args)
+        else:
+            assert False, "only handle all None or zero None args"
+
+    return tree_map_with_none_as_leaf(new_f, tree, *rest)
+
+
 def tree_flatten_with_none_as_leaf(x):
     import jax.tree_util
 
     # return jax.tree_util.tree_flatten(x, lambda xi: (xi is None) or not isinstance(x,(list,tuple,dict)) )
     return jax.tree_util.tree_flatten(x, is_leaf_with_none)
+
+
+def same(x, y):
+    """
+    assert that x are either:
+    * both None
+    * equal floats
+    * equal arrays (with equal shapes)
+    """
+    if x is None:
+        return y is None
+    elif hasattr(x, "shape"):
+        return hasattr(y, "shape") and np.array_equal(x, y)
+    else:
+        return x == y
+
+
+def same_tree(x, y, is_leaf=None):
+    """
+    Check that x and y have same tree structure (including None) and that all leaves
+    are equal. Arrays are equal regardless of if they come from regular numpy or jax
+    numpy and ignore types. (e.g. numpy.array([2,3])) is considered equal to
+    jax.numpy.array([2.0,3.0]).)
+    """
+    treedef_x = jax.tree_util.tree_structure(x, is_leaf=is_leaf)
+    treedef_y = jax.tree_util.tree_structure(y, is_leaf=is_leaf)
+    if treedef_x != treedef_y:
+        return False
+    leaves_x = jax.tree_util.tree_leaves(x, is_leaf=is_leaf)
+    leaves_y = jax.tree_util.tree_leaves(y, is_leaf=is_leaf)
+    return all(same(xi, yi) for xi, yi in zip(leaves_x, leaves_y))
+
+
+def map_inside_tree(f, tree):
+    """
+    Map a function over the leading axis for all leaf nodes inside a tree. If a None
+    value is encountered at any input, it is presented to each function unchanged. If a
+    None appears as an output, it is presented as an output unchanged.
+
+    Examples
+    -------
+    >>> def f(t):
+    ...     a, (b, c) = t
+    ...     return (a + b, a * b), c
+    >>> tree = np.array([1, 2]), (np.array([3, 4]), np.array([5, 6]))
+    >>> map_inside_tree(f, tree)
+    ((array([4, 6]), array([3, 8])), array([5, 6]))
+
+    >>> def f(t):
+    ...     a, (b, c) = t
+    ...     return (a + b, c), None
+    ... tree = np.array([1, 2]), (np.array([3, 4]), None)
+    ... map_inside_tree(f, tree)
+    (np.array([4, 6]), None), None
+    """
+    axis_size = tree_map_preserve_none(
+        lambda n: n.shape[0],
+        tree,
+    )
+    axis_sizes = jax.tree_util.tree_leaves(axis_size)
+    if len(axis_sizes) == 0:
+        # there are no inputs, so input to base observer is same
+        rez = f(tree)
+        if jax.tree_util.tree_leaves(rez):
+            assert False, "size unclear for new value with no observations"
+        return rez
+    else:
+        axis_size = axis_sizes[0]
+        assert all(size == axis_size for size in axis_sizes)
+        rez = []
+        for i in range(axis_size):
+            my_tree = tree_map_preserve_none(
+                lambda n: n[i],
+                tree,
+            )
+            my_rez = f(my_tree)
+            rez.append(my_rez)
+        rez = tree_map_preserve_none(
+            lambda *r: np.stack(r),
+            *rez,
+        )
+        return rez
 
 
 # import jax.tree_util
@@ -92,9 +195,6 @@ def is_shape_tuple(a):
     return True
 
 
-import jax.tree_util
-
-
 def tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=None):
     def mini_eval(leaf, *remaining_subtrees):
         return jax.tree_map(lambda *leaves: f(leaf, *leaves), *remaining_subtrees)
@@ -102,12 +202,12 @@ def tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=None):
     return jax.tree_util.tree_map(mini_eval, tree, *remaining_trees, is_leaf=is_leaf)
 
 
-def flatten_fun(f, *args):
+def flatten_fun(f, *args, is_leaf=None):
     "get a new function that takes a single input (which is a list)"
 
     out = f(*args)
-    args_treedef = jax.tree_util.tree_structure(args)
-    out_treedef = jax.tree_util.tree_structure(out)
+    args_treedef = jax.tree_util.tree_structure(args, is_leaf=is_leaf)
+    out_treedef = jax.tree_util.tree_structure(out, is_leaf=is_leaf)
 
     # print(f"{out=}")
     # print(f"{args_treedef=}")
@@ -116,12 +216,12 @@ def flatten_fun(f, *args):
     def flat_f(*flat_args):
         args = jax.tree_util.tree_unflatten(args_treedef, flat_args)
         out = f(*args)
-        flat_out, out_treedef2 = jax.tree_util.tree_flatten(out)
+        flat_out, out_treedef2 = jax.tree_util.tree_flatten(out, is_leaf=is_leaf)
         assert out_treedef2 == out_treedef
         return flat_out
 
     def flatten_input(*args):
-        flat_args, treedef = jax.tree_util.tree_flatten(args)
+        flat_args, treedef = jax.tree_util.tree_flatten(args, is_leaf=is_leaf)
         # print(f"{args_treedef=}")
         # print(f"{treedef=}")
         assert treedef == args_treedef, "args don't match original"

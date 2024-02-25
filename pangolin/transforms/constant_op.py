@@ -24,8 +24,7 @@ def constant_op_regenerator(
 
     new_val = inference_numpyro.evaluate(node.cond_dist, *parent_vals)
     new_node = interface.makerv(new_val)
-    new_val = None
-    return new_node, new_val
+    return new_node
 
 
 constant_op = LocalTransform(constant_op_extractor, constant_op_regenerator)
