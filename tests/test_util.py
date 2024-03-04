@@ -156,3 +156,12 @@ def test_map_inside_tree2():
     rez = util.map_inside_tree(f, tree)
     expected = (np.array([4, 6]), None), None
     assert util.same_tree(rez, expected)
+
+
+def test_more_specific_class1():
+    assert util.most_specific_class(1, 2) == int
+    assert util.most_specific_class(True, 2) == bool
+    assert util.most_specific_class(3, True) == bool
+    assert util.most_specific_class(3, True, 12) == bool
+    assert util.most_specific_class(12) == int
+    assert util.most_specific_class(True) == bool

@@ -318,3 +318,16 @@ def replace_in_sequence(seq, i, new):
     assert i < len(seq)
     s = type(seq)
     return seq[:i] + s([new]) + seq[i + 1 :]
+
+
+def most_specific_class(*x):
+    """
+    If either x or y is a subclass of the other, return the most specific class.
+    If neither is a subclass, raise a ValueError.
+    """
+    t = tuple(type(xi) for xi in x)
+    for ti in t:
+        if all(issubclass(ti, tj) for tj in t):
+            return ti
+    else:
+        raise ValueError(f"no argument is a subclass of all: {t}")

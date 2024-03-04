@@ -560,3 +560,56 @@ viz_upstream = viz  # TODO: delete after changing calls
 #         graph = viz_samples(vars, precision=precision)
 #         IPython.display.display_png(graph)
 #         time.sleep(wait)
+
+
+class Loop:
+    def __init__(self, length=None):
+        self.length = length
+
+
+class LoopRV(RV):
+    inherit_from = True
+
+    def __init__(self, cond_dist=None, *parents, vmap_var=None, loop_dim=None, loop=None):
+        if vmap_var is not None:
+            assert len(parents) == 0
+            assert isinstance(loop_dim, int)
+            assert isinstance(loop, Loop)
+            assert cond_dist is None
+            # TODO: save base_var class when possible for transforms
+
+            self.vmap_var = vmap_var
+            self.loop_dim = loop_dim
+            self.loop = loop
+
+            shape = vmap_var.shape[:loop_dim] + vmap_var.shape[loop_dim + 1 :]
+
+            cond_dist = AbstractCondDist(shape)
+
+            super().__init__(cond_dist)
+        else:
+            loop_pars = tuple(p for p in parents if isinstance(p, LoopRV))
+            assert any(loop_pars), "must have at least 1 looped parent"
+
+            loop = loop_pars[0].loop
+            for p in loop_pars:
+                assert p.loop == loop, "parents must share same loop"
+
+            in_axes = [p.loop_dim if isinstance(p, LoopRV) else None for p in parents]
+
+            lengths = tuple(p.loop.length for p in loop_pars if p.loop.length is not None)
+            if lengths:
+                for l in lengths:
+                    assert l == lengths[0]
+                axis_size = lengths
+            else:
+                axis_size = None
+
+            vmap_dist = VMapDist(cond_dist, in_axes, axis_size)
+            vmap_pars = [p.vmap_var if isinstance(p, LoopRV) else p for p in parents]
+            self.vmap_var = RV(vmap_dist, *vmap_pars)
+            self.loop_dim = 0
+            self.loop = loop
+
+            # after doing all that, normal call
+            super().__init__(cond_dist, *parents)

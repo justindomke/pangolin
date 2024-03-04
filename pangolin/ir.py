@@ -50,8 +50,21 @@ class CondDist(ABC):
 
     def __call__(self, *parents):
         """when you call a conditional distribution you get a RV"""
-        parents = (makerv(p) for p in parents)
+        parents = tuple(makerv(p) for p in parents)
+
+        # hack: call special RV class if has "inherit_from" field
+        for p in parents:
+            if hasattr(type(p), "inherit_from"):
+                return type(p)(self, *parents)
+
         return RV(self, *parents)
+
+        # cls = util.most_specific_class(*parents)
+        # return cls(self, *parents)
+        # if any(isinstance(p, LoopRV) for p in parents):
+        #     return LoopRV(self, *parents)
+        # else:
+        #     return RV(self, *parents)
 
     def __repr__(self):
         return self.name
