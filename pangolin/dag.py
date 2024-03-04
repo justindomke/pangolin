@@ -16,96 +16,71 @@ class Node:
         self.parents = parents
 
 
-# def dfs(node, upstream, block_condition):
-#     # if node in upstream:
-#     if is_in(node, upstream):
-#         return
-#
-#     if (block_condition is not None) and block_condition(node):
-#         return
-#
-#     if isinstance(node, Node):
-#         for p in node.parents:
-#             dfs(p, upstream,block_condition)
-#
-#     # upstream.add(node)
-#     upstream[node] = None  # use dict as ordered set
-#
-#
-# def upstream_nodes(nodes, block_condition=None):
-#     # something wrong with this assert
-#     # if any([b in nodes for b in blockers]):
-#     #     raise Exception("same node can't be provided as start and blocker")
-#
-#     # transform into a list if needed
-#     if isinstance(nodes, Node):
-#         return upstream_nodes([nodes], block_condition)
-#
-#     #assert util.all_unique(nodes), "all inputs must be unique"
-#
-#     # upstream = set()
-#     upstream = {}
-#     for node in nodes:
-#         dfs(node, upstream, block_condition)
-#
-#     assert len(upstream.keys()) == len(upstream) # no duplicates added
-#     return upstream.keys()
-
-# def dfs(node, upstream, block_condition):
-#     if node in upstream:
-#         return
-#
-#     if block_condition and block_condition(node):
-#         return
-#
-#     #visited.add(node)
-#     for p in node.parents:
-#         dfs(p, upstream, block_condition)
-#     upstream.append(node)
-#
-# def upstream_nodes(nodes, block_condition=None):
-#     import jax.tree_util
-#     nodes_flat, nodes_treedef = jax.tree_util.tree_flatten(nodes)
-#
-#     #visited = {} # set of all nodes visited by DFS (not necessarily in order)
-#     upstream = [] # set of upstream nodes *in order*
-#
-#     for node in nodes_flat:
-#         dfs(node, upstream, block_condition)
-#
-#     return upstream
-
-
-def upstream_nodes(nodes, block_condition=None, link_block_condition=None):
+def upstream_nodes_flat(nodes_flat, node_block, edge_block, upstream):
     """
-    Given some set of nodes, stored in an arbitrary pytree, get all nodes that are
-    upstream (in the form of a flat list)
+    Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
+    `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
+
+    Parameters
+    ----------
+    nodes_flat: Sequence[Node]
+        starting nodes
+    node_block: Callable
+        should DFS be blocked from visting a node?
+    edge_block: Callable
+        should DFS be blocked from following a link
+    upstream: List
+        list of nodes, destructively updated
+
+    Returns
+    -------
+    upstream: list[Node]
+        list of all nodes found, with a partial order so that parents always come
+        before children
     """
-
-    nodes_flat, nodes_treedef = jax.tree_util.tree_flatten(nodes)
-    if block_condition is None:
-        block_condition = lambda x: False
-    if link_block_condition is None:
-        link_block_condition = lambda x, y: False
-
-    return upstream_nodes_flat(nodes_flat, block_condition, link_block_condition, [])
-
-
-def upstream_nodes_flat(nodes_flat, node_block, link_block, upstream):
     # someday should have dual set / list for faster checking
     for node in nodes_flat:
-        # print(f"{node.cond_dist=}")
         if node in upstream or node_block(node):
             continue
         for p in node.parents:
-            if not link_block(node, p):
-                upstream_nodes_flat([p], node_block, link_block, upstream)
+            if not edge_block(node, p) and not node_block(p):
+                upstream_nodes_flat([p], node_block, edge_block, upstream)
         upstream.append(node)
 
     return upstream
 
 
-def upstream_with_descendent(requested_nodes, given_nodes):
+def upstream_nodes(nodes, block_condition=None, edge_block=None):
+    """
+    Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
+    `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
+
+    Parameters
+    ----------
+    nodes_flat: pytree[Node]
+        starting nodes
+    node_block: Callable
+        should DFS be blocked from visting a node? If None, then all nodes allowed.
+    edge_block: Callable
+        should DFS be blocked from following an edge? If None, then all edges allowed.
+
+    Returns
+    -------
+    upstream: list[Node]
+        list of all nodes found, with a partial order so that parents always come
+        before children
+    """
+
+    nodes_flat, _ = jax.tree_util.tree_flatten(nodes)
+    if block_condition is None:
+        block_condition = lambda x: False
+    if edge_block is None:
+        edge_block = lambda x, y: False
+
+    return upstream_nodes_flat(nodes_flat, block_condition, edge_block, [])
+
+
+def upstream_with_descendent_old(requested_nodes, given_nodes):
     """
     First, find all nodes that are upstream (inclusive) of `requested_nodes`
     Then, find all the nodes that are *downstream* (inclusive) of that set
@@ -137,6 +112,18 @@ def upstream_with_descendent(requested_nodes, given_nodes):
             if unseen(c) and c in has_descendent:
                 queue.append(c)
     return nodes
+
+
+def upstream_with_descendent(requested_nodes, given_nodes):
+    """
+    First, find all nodes that are upstream (inclusive) of `requested_nodes`
+    Then, find all the nodes that are *downstream* (inclusive) of that set
+    that have a descendant in `given_nodes`
+    """
+
+    all_nodes = upstream_nodes(requested_nodes + given_nodes)
+    has_descendent = upstream_nodes(given_nodes)
+    return [n for n in all_nodes if n in has_descendent]
 
 
 def get_children(nodes, block_condition=None):
