@@ -1,0 +1,7 @@
+jax
+jaxlib
+numpy
+scipy
+pandas
+numpyro
+cmdstanpy
