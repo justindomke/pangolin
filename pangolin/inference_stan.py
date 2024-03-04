@@ -132,8 +132,8 @@ class_gencode_fns = {
     interface.VMapDist: gencode_vmapdist_factory(gencode),
     interface.Index: gencode_index,
     interface.Sum: gencode_sum,
-    #interface.CondProb: gencode_unsupported(),
-    #interface.Mixture: gencode_unsupported(),
+    # interface.CondProb: gencode_unsupported(),
+    # interface.Mixture: gencode_unsupported(),
 }
 
 
@@ -325,6 +325,8 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
 
     code = data_code + parameters_code + transformed_parameters_code + model_code
 
+    print(code)
+
     monitor_vars = [ids[var] for var in requested_vars]
 
     return code, monitor_vars, evidence
@@ -352,12 +354,10 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
         assert var.shape == val.shape
 
     # this variable splitting business is a bit of a mess (although seemingly correct)
-    random_vars = inference.upstream_with_descendent(requested_vars, given_vars)
-    latent_vars = [node for node in random_vars if node not in given_vars]
+    # random_vars = inference.upstream_with_descendent(requested_vars, given_vars)
+    # latent_vars = [node for node in random_vars if node not in given_vars]
 
-    code, monitor_vars, evidence = stan_code_flat(
-        requested_vars, given_vars, given_vals
-    )
+    code, monitor_vars, evidence = stan_code_flat(requested_vars, given_vars, given_vals)
 
     # print("CODE")
     # print(code)
