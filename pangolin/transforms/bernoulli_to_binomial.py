@@ -19,7 +19,7 @@ def bernoulli_to_binomial_regenerator(
         raise InapplicableTransform("node in_axes not None")
     if node.cond_dist.base_cond_dist != interface.bernoulli:
         raise InapplicableTransform("base dist not bernoulli")
-    if is_observed is None:
+    if not is_observed:
         raise InapplicableTransform("not observed")
 
     n = interface.makerv(node.cond_dist.axis_size)
