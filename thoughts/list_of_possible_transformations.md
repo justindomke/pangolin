@@ -136,3 +136,28 @@ m = inverse_logit(a)
 ```
 
 If the user never makes explicit use of `m` then it will just be ignored.
+
+Similarly,
+
+```python
+Sigma = L @ L.T
+z = multi_normal(loc, Sigma)
+```
+
+should be translated into
+
+```python
+z = multi_normal_cholesky(loc, L)
+```
+
+## Getting rid of vmaps
+
+Sometimes, vmap can create things that could be represented without vmap. For example:
+
+```python
+>>> x = vmap(lambda: makerv(1), None, axis_size=3)()
+RV(VMapDist(Constant(1), (), 3))
+```
+
+This is a confusing case. We could promote it to a single constant, but might
+lose some efficiency 

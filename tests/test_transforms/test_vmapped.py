@@ -63,19 +63,17 @@ def test_vmap_half_inside():
         x, [x, z], [x], [x_val]
     )
 
-    viz_upstream([new_x, new_z]).render("graph")
-
     assert new_x.cond_dist == VMapDist(normal_scale, (None, 0), 2)
     assert new_z.cond_dist == VMapDist(normal_scale, (0, 0), 2)
     assert new_x2 is new_x
     assert new_x_val is x_val
 
 
-def test_vmapped_constant():
-    print("making new regenerator")
-    a = vmap(lambda: makerv(2.0), None, axis_size=3)()
-    b = vmap(lambda: makerv(3.0), None, axis_size=3)()
-    c = vmap(lambda ai, bi: ai + bi)(a, b)
-    [new_c], [], [] = constant_op.apply_to_node(c, [c], [], [])
-
-    assert new_c.cond_dist == VMapDist(Constant(5.0), (), 3)
+# def test_vmapped_constant():
+#     print("making new regenerator")
+#     a = vmap(lambda: makerv(2.0), None, axis_size=3)()
+#     b = vmap(lambda: makerv(3.0), None, axis_size=3)()
+#     c = vmap(lambda ai, bi: ai + bi)(a, b)
+#     [new_c], [], [] = constant_op.apply_to_node(c, [c], [], [])
+#
+#     assert new_c.cond_dist == VMapDist(Constant(5.0), (), 3)

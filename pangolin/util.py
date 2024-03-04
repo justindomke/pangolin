@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
+from typing import Sequence
 
 
 def comma_separated(stuff, fun=None, parens=True):
@@ -166,15 +167,19 @@ def map_inside_tree(f, tree):
         return rez
 
 
-# import jax.tree_util
-# jax.tree_util.tree_flatten({'a':1,'b':2,'c':None})
-#
-# import util
-# a, treedef = util.tree_flatten_with_none_as_leaf({'a':1,'b':2,'c':None})
-# print(a)
-# print(treedef)
-#
-# jax.tree_util.tree_unflatten(treedef,a)
+def assert_all_leaves_instance_of(tree, type, is_leaf=None):
+    for node in jax.tree_util.tree_flatten(tree, is_leaf)[0]:
+        assert isinstance(node, type)
+
+
+def assert_all_leaves_instance_of_with_none(tree, type):
+    assert_all_leaves_instance_of(tree, type, is_leaf_with_none)
+
+
+def assert_is_sequence_of(seq, type):
+    assert isinstance(seq, Sequence)
+    for x in seq:
+        assert isinstance(x, type)
 
 
 def num2str(id):

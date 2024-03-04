@@ -1,4 +1,10 @@
-from pangolin.dag import Node, upstream_nodes, get_children, has_second_path
+from pangolin.dag import (
+    Node,
+    upstream_nodes,
+    get_children,
+    has_second_path,
+    upstream_with_descendent,
+)
 
 
 def same(l1, l2):
@@ -74,9 +80,9 @@ def test_upstream_blockers():
     b = Node(a)
     c = Node(b)
     d = Node(c)
-    assert upstream_nodes([d], lambda n: n in [a]) == [b, c, d]
-    assert upstream_nodes([d], lambda n: n in [b]) == [c, d]
-    assert upstream_nodes([d], lambda n: n in [c]) == [d]
+    assert upstream_nodes(d, lambda n: n in [a]) == [b, c, d]
+    assert upstream_nodes(d, lambda n: n in [b]) == [c, d]
+    assert upstream_nodes(d, lambda n: n in [c]) == [d]
 
 
 def test_collider_blockers2():
@@ -84,10 +90,10 @@ def test_collider_blockers2():
     b = Node(a)
     c = Node(a)
     d = Node(b, c)
-    assert upstream_nodes([d]) == [a, b, c, d]
-    assert upstream_nodes([d], lambda n: n in [b]) == [a, c, d]
-    assert upstream_nodes([d], lambda n: n in [c]) == [a, b, d]
-    assert upstream_nodes([d], lambda n: n in [b, c]) == [d]
+    assert upstream_nodes(d) == [a, b, c, d]
+    assert upstream_nodes(d, lambda n: n in [b]) == [a, c, d]
+    assert upstream_nodes(d, lambda n: n in [c]) == [a, b, d]
+    assert upstream_nodes(d, lambda n: n in [b, c]) == [d]
 
 
 def test_children1():
@@ -101,20 +107,30 @@ def test_children1():
     assert set(children[c]) == {d}
     assert set(children[d]) == set()
 
+
 def test_has_second_path():
     a = Node()
     b = Node(a)
-    assert not has_second_path(b,0)
+    assert not has_second_path(b, 0)
 
     a = Node()
-    b = Node(a,a)
+    b = Node(a, a)
     assert has_second_path(b, 0)
     assert has_second_path(b, 1)
 
     a = Node()
     b = Node(a)
-    c = Node(a,b)
+    c = Node(a, b)
     assert has_second_path(c, 0)
     assert not has_second_path(c, 1)
 
 
+def test_upstream_with_descendents1():
+    a = Node()
+    b = Node(a)
+    c = Node(a)
+    d = Node(b, c)
+    assert upstream_with_descendent([a], []) == []
+    assert upstream_with_descendent([a], [d]) == [a, c, b, d]
+    # assert upstream_with_descendent([b], []) == [a, b]
+    # assert upstream_with_descendent([b], [c]) == [a]

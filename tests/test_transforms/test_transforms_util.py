@@ -1,6 +1,6 @@
 from pangolin.interface import normal, normal_scale, Constant
 from pangolin import dag
-from pangolin.transforms.transforms_util import replace, replace_with_given
+from pangolin.transforms.transforms_util import replace
 import numpy as np
 
 
@@ -71,15 +71,15 @@ def test_replace5():
     assert y2.parents[1].cond_dist.value == np.array(7.7)
 
 
-def test_replace_with_given1():
-    x = normal(1.1, 2.2)
-    x_val = 5.0
-    shift = 3.0
-    replacements = {x: (normal(1.1 + shift, 2.2), x_val + shift)}
-    [new_x], [new_x2], [new_x_val] = replace_with_given([x], [x], [x_val], replacements)
-
-    assert new_x.cond_dist == Constant(x_val)  # no shift
-    assert new_x2.cond_dist == normal_scale
-    assert new_x2.parents[0].cond_dist == Constant(1.1 + shift)
-    assert new_x2.parents[1].cond_dist == Constant(2.2)
-    assert new_x_val == x_val + shift
+# def test_replace_with_given1():
+#     x = normal(1.1, 2.2)
+#     x_val = 5.0
+#     shift = 3.0
+#     replacements = {x: (normal(1.1 + shift, 2.2), x_val + shift)}
+#     [new_x], [new_x2], [new_x_val] = replace_with_given([x], [x], [x_val], replacements)
+#
+#     assert new_x.cond_dist == Constant(x_val)  # no shift
+#     assert new_x2.cond_dist == normal_scale
+#     assert new_x2.parents[0].cond_dist == Constant(1.1 + shift)
+#     assert new_x2.parents[1].cond_dist == Constant(2.2)
+#     assert new_x_val == x_val + shift

@@ -88,7 +88,7 @@ def test_dirichlet_multinomial(inference):
 
 
 def test_deterministic_sample1(inference):
-    x = normal(0, 1)
+    x = normal(0.0, 1.0)
     y = x**2
     (xs, ys) = inference.sample_flat([x, y], [], [], niter=100)
     assert xs.shape == (100,)

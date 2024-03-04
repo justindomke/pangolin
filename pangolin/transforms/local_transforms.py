@@ -1,12 +1,13 @@
 from .. import interface
 from .. import dag
 from .transforms import InapplicableTransform, Transform
-from .transforms_util import replace_with_given, replace_with_given_old
+from .transforms_util import replace_with_given_old, replace_with_given
 from ..interface import CondDist, VMapDist, RV, makerv
 from jax import tree_map, tree_util  # type: ignore
 from .. import util
 import numpy as np
 from ..util import tree_map_with_none_as_leaf, tree_map_preserve_none
+from typing import Sequence
 
 
 def check_observed_descendents(nodes, observed_nodes):
@@ -166,93 +167,42 @@ class LocalTransform:
         transformation. If it doesn't work, and the RV is vmapped, then try vmapping
         the regenerator and applying it that way instead.
         """
+        # TODO: better testing of inputs, things returned from the local transform
+
         nodes = self.extractor(node)
         parents = tree_map(lambda x: x.parents, nodes)
-
-        flat_nodes, tree1 = tree_util.tree_flatten(nodes)
-
-        def check_obs(x):
-            return True if x in given else None
 
         def lookup_val(x):
             return vals[given.index(x)] if x in given else None
 
-        is_observed = tree_map(check_obs, nodes)
+        is_observed = tree_map(lambda x: x in given, nodes)
         observations = tree_map(lookup_val, nodes)
-
-        print(f"{is_observed=}")
-        print(f"{observations=}")
-
         has_observed_descendent = check_observed_descendents(nodes, given)
+        flat_nodes, tree1 = tree_util.tree_flatten(nodes)
         pars_included = tree_map(lambda x: x in flat_nodes, parents)
 
+        inputs = [nodes, parents, is_observed, has_observed_descendent, pars_included]
+
         try:
-            new_nodes = self.regenerator(
-                nodes,
-                parents,
-                is_observed,
-                has_observed_descendent,
-                pars_included,
-            )
+            new_nodes = self.regenerator(*inputs)
             new_vals = self.observer(observations)
         except InapplicableTransform as e:
-            # if transform didn't work, try applying vmapped regenerator instead
+            # if failed, try vmapping
             if isinstance(node.cond_dist, VMapDist):
-                new_nodes = vmap_regenerator(self.regenerator)(
-                    nodes, parents, is_observed, has_observed_descendent, pars_included
-                )
+                new_nodes = vmap_regenerator(self.regenerator)(*inputs)
                 new_vals = util.map_inside_tree(self.observer, observations)
-
             else:
                 raise e
 
-        for var in tree_util.tree_flatten(vars)[0]:
-            assert isinstance(var, RV)
-
-        for var in tree_util.tree_flatten(new_nodes)[0]:
-            assert isinstance(var, RV)
-
-        # now here are the rules:
-        # - If the value corresponding to a node is None, then just replace it
-        # - If the value corresponding to a node is *not* None, then
-
-        # print(f"{new_nodes=}")
-        # print(f"{new_vals=}")
-
-        # TODO: eventually, for efficiency, should replace repeated calls to
-        #  replace_given_with_old with a single call to an updated
-        # repace_with_given() that can handle observations
-        def process(old_node, new_node, new_val):
-            nonlocal vars, given, vals
-            if new_val is None:
-                vars, given, vals = replace_with_given_old(
-                    vars, given, vals, {old_node: new_node}
-                )
-            else:
-                # create new constant RV to represent old node
-                idx = given.index(old_node)
-                old_val = vals[idx]
-                new_constant_node = makerv(old_val)
-                vars, given, vals = replace_with_given_old(
-                    vars, given, vals, {old_node: new_constant_node}
-                )
-
-                # remove previous given value, replace it with new one
-                given = util.replace_in_sequence(given, idx, new_node)
-                vals = util.replace_in_sequence(vals, idx, new_val)
-
-        # I think no need to preserve None since nodes always non-None
-        tree_util.tree_map(process, nodes, new_nodes, new_vals)
+        vars, given, vals = replace_with_given(
+            vars, given, vals, nodes, new_nodes, new_vals
+        )
 
         return vars, given, vals
 
     def __call__(self, vars, given, vals):
-        assert isinstance(vars, list)
-        for var in vars:
-            assert isinstance(var, interface.RV)
-        assert isinstance(given, list)
-        for var in given:
-            assert isinstance(var, interface.RV)
+        util.assert_is_sequence_of(vars, interface.RV)
+        util.assert_is_sequence_of(given, interface.RV)
 
         for node in dag.upstream_nodes(vars + given):
             try:

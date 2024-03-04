@@ -29,7 +29,7 @@ def test_regenerator():
     x = vmap(bernoulli, None, axis_size=10)(0.2)
     parents = x.parents
     x_val = np.array([1] * 3 + [0] * 7)
-    is_observed = x_val
+    is_observed = True
     has_observed_descendent = False
     pars_included = (False,)
 

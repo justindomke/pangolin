@@ -3,6 +3,12 @@ from pangolin import *
 import numpy as np
 
 
+def test_simple():
+    x = normal(3, 5)
+    y = normal(x, 1) ** 2
+    [zs] = inference_stan.sample_flat([y], [], [], niter=1000)
+
+
 def test_reference1():
     r0 = inference_stan.Reference("sup", (5, 3))
     r1 = r0.index(0, "i")
@@ -145,8 +151,8 @@ def test_reference4():
 #     var_expected = α_post * β_post / (α_post + β_post) ** 2 / (α_post + β_post + 1)
 #     assert np.abs(np.mean(zs) - mean_expected) < 0.03
 #     assert np.abs(np.var(zs) - var_expected) < 0.03
-
-
+#
+#
 # def test_indexing2():
 #     x = np.random.randn(10)
 #     y = makerv(x)[2:8]
