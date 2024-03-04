@@ -1,6 +1,6 @@
 from .. import dag
 from .transforms import InapplicableTransform
-from .transforms_util import bin_vars, replace_with_given
+from .transforms_util import bin_vars, replace_with_given_old
 
 
 def duplicate_deterministic(vars, given, vals):
@@ -27,5 +27,5 @@ def duplicate_deterministic(vars, given, vals):
             new = [old[0]] * len(old)
             print(f"replacing {old} with {new}")
             replacements = dict(zip(old, new))
-            return replace_with_given(vars, given, vals, replacements)
+            return replace_with_given_old(vars, given, vals, replacements)
     raise InapplicableTransform("no duplicate deterministic nodes")
