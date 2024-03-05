@@ -563,53 +563,150 @@ viz_upstream = viz  # TODO: delete after changing calls
 
 
 class Loop:
+    id = 0
+    is_loop = True  # this is horrible
+
     def __init__(self, length=None):
         self.length = length
+        self.id = Loop.id
+        Loop.id += 1
+
+    def __lt__(self, other):
+        return self.id < other.id
+
+    @classmethod
+    def get_loop_rv(cls, var, *idx):
+        loop_dims = []
+        loops = []
+        for n, i in enumerate(idx):
+            if i == slice(None, None, None):
+                continue
+            elif isinstance(i, Loop):
+                loops.append(i)
+                loop_dims.append(n)
+            else:
+                raise Exception("all idx must be full slice or Loop")
+        return LoopRV(None, vmap_var=var, loop_dims=loop_dims, loops=loops)
+
+
+def make_loop_rv(var, *idx):
+    """
+    given a loop_rv and some indices, get a non-loop rv
+    """
+    assert isinstance(var, LoopRV)
+    assert var.loops == sorted(var.loops), "loop indices must be sorted"
+    idx_loops = [l for l in idx if isinstance(l, Loop)]
+    assert idx_loops == sorted(idx_loops), "idx loops must be sorted"
+    return var.vmap_var
+
+
+class VMapRV(RV):
+    def __init__(self):
+        # do not call super!
+        pass
+
+    def __setitem__(self, idx, value):
+        assert isinstance(value, LoopRV)
+        vmap_rv = make_loop_rv(value, *idx)
+        super().__init__(vmap_rv.cond_dist, *vmap_rv.parents)
+
+
+def fakeloop(length=None):
+    return [Loop(length=length)]
 
 
 class LoopRV(RV):
+    """
+    A LoopRV pretends to be a normal RV with a "sliced" shape
+    it also has reference to vmap_var, which is a corresponding non-sliced RV
+    """
+
     inherit_from = True
 
-    def __init__(self, cond_dist=None, *parents, vmap_var=None, loop_dim=None, loop=None):
+    def __str__(self):
+        return "Loop" + super().__str__()
+
+    def __repr__(self):
+        return "Loop" + super().__repr__()
+
+    def __init__(
+        self,
+        cond_dist=None,
+        *parents,
+        vmap_var=None,
+        loops=None,
+        loop_dims=None,
+    ):
         if vmap_var is not None:
             assert len(parents) == 0
-            assert isinstance(loop_dim, int)
-            assert isinstance(loop, Loop)
             assert cond_dist is None
             # TODO: save base_var class when possible for transforms
 
             self.vmap_var = vmap_var
-            self.loop_dim = loop_dim
-            self.loop = loop
+            self.loop_dims = loop_dims
+            self.loops = loops
 
-            shape = vmap_var.shape[:loop_dim] + vmap_var.shape[loop_dim + 1 :]
+            for loop, loop_dim in zip(loops, loop_dims):
+                if loop.length:
+                    assert vmap_var.shape[loop_dim] == loop.length
+
+            shape = []
+            for i in range(vmap_var.ndim):
+                if i not in self.loop_dims:
+                    shape.append(vmap_var.shape[i])
+            shape = tuple(shape)
 
             cond_dist = AbstractCondDist(shape)
 
             super().__init__(cond_dist)
         else:
+            assert vmap_var is None
+            assert loops is None
+            assert loop_dims is None
+
             loop_pars = tuple(p for p in parents if isinstance(p, LoopRV))
             assert any(loop_pars), "must have at least 1 looped parent"
 
-            loop = loop_pars[0].loop
-            for p in loop_pars:
-                assert p.loop == loop, "parents must share same loop"
+            print(f"{loop_pars=}")
 
-            in_axes = [p.loop_dim if isinstance(p, LoopRV) else None for p in parents]
+            loops = sorted(set(l for p in loop_pars for l in p.loops))
+            print(f"{loops=}")
 
-            lengths = tuple(p.loop.length for p in loop_pars if p.loop.length is not None)
-            if lengths:
-                for l in lengths:
-                    assert l == lengths[0]
-                axis_size = lengths
-            else:
-                axis_size = None
+            # assert at least 1 loop
 
-            vmap_dist = VMapDist(cond_dist, in_axes, axis_size)
+            vmap_dist = cond_dist
+            loop_dims = list(range(len(loops)))
+            # take loops in reverse order
+            for loop in reversed(loops):
+                in_axes = []
+
+                axis_size = loop.length
+
+                for p in parents:
+                    if isinstance(p, LoopRV) and loop in p.loops:
+                        loop_num = p.loops.index(loop)
+                        loop_dim = p.loop_dims[loop_num]
+                        num_lower_loops = len(
+                            tuple(
+                                l
+                                for (l, i) in zip(p.loops, p.loop_dims)
+                                if l < loop and i < loop_dim
+                            )
+                        )
+                        loop_axis = p.loop_dims[loop_num - num_lower_loops]
+                        in_axes.append(loop_axis)
+
+                        if axis_size:
+                            assert p.shape[loop_dim] == axis_size
+                    else:
+                        in_axes.append(None)
+
+                vmap_dist = VMapDist(vmap_dist, in_axes, axis_size)
+
             vmap_pars = [p.vmap_var if isinstance(p, LoopRV) else p for p in parents]
             self.vmap_var = RV(vmap_dist, *vmap_pars)
-            self.loop_dim = 0
-            self.loop = loop
+            self.loops = loops
+            self.loop_dims = loop_dims
 
             # after doing all that, normal call
             super().__init__(cond_dist, *parents)

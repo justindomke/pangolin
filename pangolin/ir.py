@@ -631,6 +631,12 @@ class RV(dag.Node):
         return len(self._shape)
 
     def __getitem__(self, idx):
+        if hasattr(type(idx), "is_loop"):
+            return type(idx).get_loop_rv(self, idx)
+        for i in idx:  # this is pretty gross
+            if hasattr(type(i), "is_loop"):
+                return type(i).get_loop_rv(self, *idx)
+
         if self.ndim == 0:
             raise Exception("can't index scalar RV")
         elif isinstance(idx, tuple) and len(idx) > self.ndim:
