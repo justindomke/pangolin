@@ -113,7 +113,7 @@ def query_nodes(vars, query, db=None):
 
     # convert columns to nodes
     stuff = []
-    for column_name, ids in df.iteritems():
+    for column_name, ids in df.items():
         print(f"{column_name=} {ids=}")
         if ids[0] >= 0:
             my_stuff = tuple(db.id_to_var[id] for id in ids)
@@ -182,8 +182,9 @@ def group_by_dist_and_parents(vars):
     var_id = df.iloc[:, 0]
     sig = df.iloc[:, 1]
 
-    valid_sigs = [s for s in np.unique(sig) if s != '']
+    valid_sigs = [s for s in np.unique(sig) if s != ""]
 
     return frozenset(
-            frozenset(db.id_to_var[id] for id, s in zip(var_id, sig) if s == my_sig)
-        for my_sig in valid_sigs)
+        frozenset(db.id_to_var[id] for id, s in zip(var_id, sig) if s == my_sig)
+        for my_sig in valid_sigs
+    )
