@@ -2,6 +2,7 @@ from pangolin import inference, interface
 
 normal = interface.normal
 
+
 def test_upstream_with_descendent1():
     # TODO: variables to sample should become upstream_with_descendent
     z = normal(0, 1)
@@ -58,7 +59,7 @@ def test_upstream_with_descendent7():
 
 def test_upstream_with_descendent8():
     x = normal(0, 1)
-    y = x ** 2
+    y = x**2
     z = normal(y, 1)
 
     vars = inference.upstream_with_descendent([x], [z])
@@ -67,8 +68,8 @@ def test_upstream_with_descendent8():
 
 def test_upstream_with_descendent9():
     x = normal(0, 1)
-    y = x ** 2
-    z = y ** 2
+    y = x**2
+    z = y**2
 
     vars = inference.upstream_with_descendent([x], [z])
     assert set(vars) == {x}

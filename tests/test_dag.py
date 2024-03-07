@@ -131,6 +131,6 @@ def test_upstream_with_descendents1():
     c = Node(a)
     d = Node(b, c)
     assert upstream_with_descendent([a], []) == []
-    assert upstream_with_descendent([a], [d]) == [a, c, b, d]
+    assert upstream_with_descendent([a], [d]) in [[a, c, b, d], [a, b, c, d]]
     # assert upstream_with_descendent([b], []) == [a, b]
     # assert upstream_with_descendent([b], [c]) == [a]

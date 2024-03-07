@@ -9,7 +9,6 @@ from typing import Sequence
 
 from .interface import InvalidAncestorQuery
 
-
 ################################################################################
 # First major primitive — evaluate conditional log probs on groups of nodes
 ################################################################################

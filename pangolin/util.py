@@ -331,3 +331,7 @@ def most_specific_class(*x):
             return ti
     else:
         raise ValueError(f"no argument is a subclass of all: {t}")
+
+
+def remove_indices(sequence, indices):
+    return type(sequence)(x for (n, x) in enumerate(sequence) if n not in indices)
