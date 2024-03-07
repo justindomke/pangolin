@@ -8,20 +8,16 @@ from pangolin.interface import (
     vmap,
     VMapDist,
     viz_upstream,
-    # Loop,
-    # LoopRV,
     print_upstream,
     add,
-    # VMapRV,
-    # fakeloop,
-    # FakeLoop,
 )
-from pangolin import dag
 import numpy as np  # type: ignore
-from pangolin.transforms.normal_normal import normal_normal
-from pangolin.transforms.constant_op import constant_op
-from pangolin.ir import Loop, SlicedRV, make_sliced_rv
+from pangolin.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VMapRV
 from pangolin import *
+
+###############################################################################
+# Test the Loop context manager
+###############################################################################
 
 
 def test_context_manager1():
@@ -76,9 +72,72 @@ def test_context_manager5():
     assert Loop.loops == []
 
 
+###############################################################################
+# test slice_existing_rv
+###############################################################################
+
+
+def test_slice_existing1():
+    x = makerv([1, 2, 3])
+    loop = Loop()
+    x_loop = slice_existing_rv(x, [loop], [loop])
+
+    assert x_loop.shape == ()
+    assert x_loop.full_rv == x
+    assert x_loop.parents == ()
+    assert x_loop.loops == (loop,)
+    assert x_loop.loop_axes == (0,)
+
+
+def test_slice_existing2():
+    x = makerv([[1, 2, 3], [4, 5, 6]])
+    loop1 = Loop()
+    loop2 = Loop()
+    x_loop = slice_existing_rv(x, [loop1, loop2], [loop1, loop2])
+
+    assert x_loop.shape == ()
+    assert x_loop.full_rv == x
+    assert x_loop.parents == ()
+    assert x_loop.loops == (loop1, loop2)
+    assert x_loop.loop_axes == (0, 1)
+
+
+def test_slice_existing3():
+    x = makerv([[1, 2, 3], [4, 5, 6]])
+    loop1 = Loop()
+    loop2 = Loop()
+    x_loop = slice_existing_rv(x, [slice(None), loop2], [loop1, loop2])
+
+    assert x_loop.shape == (2,)
+    assert x_loop.full_rv == x
+    assert x_loop.parents == ()
+    assert x_loop.loops == (loop2,)
+    assert x_loop.loop_axes == (1,)
+
+
+def test_slice_existing4():
+    x = makerv([[1, 2, 3], [4, 5, 6]])
+    loop1 = Loop()
+    loop2 = Loop()
+    x_loop = slice_existing_rv(x, [loop1, slice(None)], [loop1, loop2])
+
+    assert x_loop.shape == (3,)
+    assert x_loop.full_rv == x
+    assert x_loop.parents == ()
+    assert x_loop.loops == (loop1,)
+    assert x_loop.loop_axes == (0,)
+
+
+###############################################################################
+# test make_sliced_rv
+###############################################################################
+
+
 def test_make_sliced_rv_no_loops():
     loop = Loop(3)
-    x_slice = make_sliced_rv(normal_scale, 0, 1, all_loops=[loop])
+    loc = makerv(0)
+    scale = makerv(1)
+    x_slice = make_sliced_rv(normal_scale, loc, scale, all_loops=[loop])
     assert isinstance(x_slice, SlicedRV)
     assert x_slice.shape == ()
     assert x_slice.full_rv.shape == (3,)
@@ -131,6 +190,74 @@ def test_no_in_axes_double_loop():
     assert x.loop_axes == (0, 1)
 
 
+###############################################################################
+# you can index an RV in a Loop context to implicitly call make_sliced_rv
+###############################################################################
+
+
+def test_index_syntax1():
+    x = makerv(np.random.randn(3, 4, 5))
+    with Loop() as loop:
+        x_loop = x[loop, :, :]
+    assert x_loop.shape == (4, 5)
+    assert x_loop.loop_axes == (0,)
+    assert x_loop.loops == (loop,)
+
+
+def test_index_syntax2():
+    x = makerv(np.random.randn(3, 4, 5))
+    # loop1 = Loop()
+    # loop2 = Loop()
+    with Loop() as loop1:
+        with Loop() as loop2:
+            x_loop = x[loop1, :, loop2]
+    assert x_loop.shape == (4,)
+    assert x_loop.loop_axes == (0, 2)
+    assert x_loop.loops == (loop1, loop2)
+
+
+def test_index_syntax3():
+    x = makerv(np.random.randn(3, 4, 5))
+
+    with Loop() as loop1:
+        with Loop() as loop2:
+            x_loop = x[loop2, :, loop1]
+    assert x_loop.shape == (4,)
+    assert x_loop.loops == (loop1, loop2)
+    assert x_loop.loop_axes == (2, 0)
+
+
+def test_index_syntax4():
+    x = makerv(np.random.randn(3, 4, 1))
+    y = makerv(np.random.randn(3, 1, 5))
+    with Loop() as i:
+        x_loop = x[i, :, :]
+        y_loop = y[i, :, :]
+        z_loop = x_loop @ y_loop
+    assert x_loop.shape == (4, 1)
+    assert y_loop.shape == (1, 5)
+    z = z_loop.full_rv
+    assert z.shape == (3, 4, 5)
+
+
+def test_index_syntax5():
+    x = makerv(np.random.randn(3, 4, 5))
+    y = makerv(np.random.randn(5, 6, 3))
+    with Loop() as i:
+        x_loop = x[i, :, :]
+        y_loop = y[:, :, i]
+        z_loop = x_loop @ y_loop
+    assert x_loop.shape == (4, 5)
+    assert y_loop.shape == (5, 6)
+    z = z_loop.full_rv
+    assert z.shape == (3, 4, 6)
+
+
+###############################################################################
+# test implicitly creating new sliced RVs
+###############################################################################
+
+
 def test_tracing():
     loc = makerv(0)
     scale = makerv(1)
@@ -162,12 +289,24 @@ def test_tracing_outside_var():
     assert y.full_rv.parents == (x.full_rv, z)
 
 
+###############################################################################
+# test vmapRVs and assignment
+###############################################################################
+
+
 def test_assignment():
     loc = makerv(0)
     scale = makerv(1)
     x = VMapRV()
     with Loop(3) as i:
         x[i] = normal(loc, scale)
+    print_upstream(x)
+
+
+def test_assignment_casting():
+    x = VMapRV()
+    with Loop(3) as i:
+        x[i] = normal(0, 1)
     print_upstream(x)
 
 
@@ -182,55 +321,13 @@ def test_2d_assignment():
             y[i, j] = normal(loc, scale)
 
 
-def test_slice_existing1():
-    x = makerv([1, 2, 3])
-    loop = Loop()
-    x_loop = slice_existing_rv(x, [loop])
-
-    assert x_loop.shape == ()
-    assert x_loop.full_rv == x
-    assert x_loop.parents == ()
-    assert x_loop.loops == (loop,)
-    assert x_loop.loop_axes == (0,)
-
-
-def test_slice_existing2():
-    x = makerv([[1, 2, 3], [4, 5, 6]])
-    loop1 = Loop()
-    loop2 = Loop()
-    x_loop = slice_existing_rv(x, [loop1, loop2])
-
-    assert x_loop.shape == ()
-    assert x_loop.full_rv == x
-    assert x_loop.parents == ()
-    assert x_loop.loops == (loop1, loop2)
-    assert x_loop.loop_axes == (0, 1)
-
-
-def test_slice_existing3():
-    x = makerv([[1, 2, 3], [4, 5, 6]])
-    loop1 = Loop()
-    loop2 = Loop()
-    x_loop = slice_existing_rv(x, [slice(None), loop2])
-
-    assert x_loop.shape == (2,)
-    assert x_loop.full_rv == x
-    assert x_loop.parents == ()
-    assert x_loop.loops == (loop2,)
-    assert x_loop.loop_axes == (1,)
-
-
-def test_slice_existing4():
-    x = makerv([[1, 2, 3], [4, 5, 6]])
-    loop1 = Loop()
-    loop2 = Loop()
-    x_loop = slice_existing_rv(x, [loop1, slice(None)])
-
-    assert x_loop.shape == (3,)
-    assert x_loop.full_rv == x
-    assert x_loop.parents == ()
-    assert x_loop.loops == (loop1,)
-    assert x_loop.loop_axes == (0,)
+def test_2d_assignment_casting():
+    x = VMapRV()
+    y = VMapRV()
+    with Loop(3) as i:
+        x[i] = normal(0, 1)
+        with Loop(5) as j:
+            y[i, j] = normal(0, 1)
 
 
 def test_rhs_slicing1():
@@ -246,14 +343,86 @@ def test_loops_with_full_slicing1():
     x = VMapRV()
     scale = makerv(1)  # TODO: CURRENTLY NECESSARY!
     with Loop() as i:
-        # x[i] = normal_scale(z[i], scale)
-        zi = z[i]
-        xi = normal_scale(zi, scale)
+        xi = normal_scale(z[i], scale)
         assert xi.loops == (i,)
         assert xi.loop_axes == (0,)
         x[i] = xi
+    assert x.shape == (3,)
 
-    print_upstream(x)
+
+def test_loops_with_full_slicing2():
+    z = makerv([1, 2, 3])
+    x = VMapRV()
+    with Loop(3) as i:
+        # x[i] = normal_scale(z[i], scale)
+        zi = z[i]
+        xi = normal_scale(zi, 1)
+        assert xi.loops == (i,)
+        assert xi.loop_axes == (0,)
+        x[i] = xi
+    assert x.shape == (3,)
+
+
+def test_loops_with_full_slicing3():
+    z = makerv([1, 2, 3])
+    x = VMapRV()
+    with Loop() as i:
+        # x[i] = normal_scale(z[i], scale)
+        zi = z[i]
+        xi = normal_scale(zi, 1)
+        assert xi.loops == (i,)
+        assert xi.loop_axes == (0,)
+        x[i] = xi
+    assert x.shape == (3,)
+
+
+###############################################################################
+# older, possibly redundant assignment syntax tests
+###############################################################################
+
+
+def test_assign_syntax1():
+    x = makerv(np.random.randn(2, 3))
+    y = VMapRV()
+    with Loop() as i:
+        y[i] = x[i, :]
+    assert y.shape == x.shape
+
+
+def test_assign_syntax2():
+    x = makerv(np.random.randn(2))
+    y = makerv(np.random.randn(3))
+    z = VMapRV()
+    with Loop() as i:
+        with Loop() as j:
+            z[i, j] = x[i] * y[j]
+    print(f"{z=}")
+    print_upstream(z)
+    assert z.shape == (2, 3)
+
+
+def test_assign_syntax3():
+    "What if there's no loop var on right?"
+    z = VMapRV()
+    with Loop(3) as i:
+        z[i] = normal(0, 1)
+    assert z.shape == (3,)
+
+
+def test_full_syntax1():
+    x = VMapRV()
+    y = VMapRV()
+    with Loop(3) as i:
+        x[i] = normal(0, 1)
+        with Loop(4) as j:
+            y[i, j] = normal(x[i], 1)
+    assert x.shape == (3,)
+    assert y.shape == (3, 4)
+
+
+###############################################################################
+# test full functionality
+###############################################################################
 
 
 def test_double_loops1():
@@ -265,7 +434,7 @@ def test_double_loops1():
             zij = z[i, j]
             xij = normal_scale(zij, zij)
             x[i, j] = xij
-    print_upstream(x)
+    assert x.shape == (3, 2)
 
 
 def test_double_loops2():
@@ -275,12 +444,7 @@ def test_double_loops2():
     z = VMapRV()
     with Loop(3) as i:
         with Loop(2) as j:
-            # xi = x[i]
-            # yj = y[j]
-            # zij = xi + yj
-            # z[i, j] = zij
             z[i, j] = x[i] + y[j]
-    print_upstream(z)
 
     z_samp = sample(z)[0]
     expected = x.cond_dist.value[:, None] + y.cond_dist.value[None, :]
@@ -294,17 +458,11 @@ def test_double_loops3():
     z = VMapRV()
     with Loop(3) as i:
         with Loop(2) as j:
-            # xi = x[i]
-            # yij = y[i, j]
-            # zij = xi + yij
-            # z[i, j] = zij
             z[i, j] = x[i] + y[i, j]
 
     z_samp = sample(z)[0]
     expected = x.cond_dist.value[:, None] + y.cond_dist.value
     assert np.allclose(z_samp, expected)
-
-    print_upstream(z)
 
 
 def test_double_loops4():
@@ -316,17 +474,11 @@ def test_double_loops4():
     with Loop(3) as i:
         z[i] = x[i] + x[i]
         with Loop(2) as j:
-            # xi = x[i]
-            # yij = y[i, j]
-            # zij = xi + yij
-            # z[i, j] = zij
             u[i, j] = z[i] + y[i, j]
 
     u_samp = sample(u)[0]
     expected = 2 * x.cond_dist.value[:, None] + y.cond_dist.value
     assert np.allclose(u_samp, expected)
-
-    print_upstream(z)
 
 
 def test_double_loops5():
@@ -342,7 +494,6 @@ def test_double_loops5():
         z[i] = normal_scale(loc[i], scale_z[i])
         with Loop(2) as j:
             x[i, j] = normal_scale(z[i], scale_x[i, j])
-    print_upstream(x)
 
 
 def test_double_loops6():
@@ -358,7 +509,6 @@ def test_double_loops6():
         z[i] = normal_scale(loc[i], scale_z[i])
         with Loop() as j:
             x[i, j] = normal_scale(z[i], scale_x[i, j])
-    print_upstream(x)
 
 
 # def test_shapes():
@@ -545,103 +695,6 @@ def test_double_loops6():
 #     assert z.shape == (5, 3)
 #
 #
-
-
-def test_index_syntax1():
-    x = makerv(np.random.randn(3, 4, 5))
-    with Loop() as loop:
-        x_loop = x[loop, :, :]
-    assert x_loop.shape == (4, 5)
-    assert x_loop.loop_axes == (0,)
-    assert x_loop.loops == (loop,)
-
-
-def test_index_syntax2():
-    x = makerv(np.random.randn(3, 4, 5))
-    # loop1 = Loop()
-    # loop2 = Loop()
-    with Loop() as loop1:
-        with Loop() as loop2:
-            x_loop = x[loop1, :, loop2]
-    assert x_loop.shape == (4,)
-    assert x_loop.loop_axes == (0, 2)
-    assert x_loop.loops == (loop1, loop2)
-
-
-def test_index_syntax3():
-    x = makerv(np.random.randn(3, 4, 5))
-
-    with Loop() as loop1:
-        with Loop() as loop2:
-            x_loop = x[loop2, :, loop1]
-    assert x_loop.shape == (4,)
-    assert x_loop.loops == (loop1, loop2)
-    assert x_loop.loop_axes == (2, 0)
-
-
-def test_index_syntax4():
-    x = makerv(np.random.randn(3, 4, 1))
-    y = makerv(np.random.randn(3, 1, 5))
-    with Loop() as i:
-        x_loop = x[i, :, :]
-        y_loop = y[i, :, :]
-        z_loop = x_loop @ y_loop
-    assert x_loop.shape == (4, 1)
-    assert y_loop.shape == (1, 5)
-    z = z_loop.full_rv
-    assert z.shape == (3, 4, 5)
-
-
-def test_index_syntax5():
-    x = makerv(np.random.randn(3, 4, 5))
-    y = makerv(np.random.randn(5, 6, 3))
-    with Loop() as i:
-        x_loop = x[i, :, :]
-        y_loop = y[:, :, i]
-        z_loop = x_loop @ y_loop
-    assert x_loop.shape == (4, 5)
-    assert y_loop.shape == (5, 6)
-    z = z_loop.full_rv
-    assert z.shape == (3, 4, 6)
-
-
-def test_assign_syntax1():
-    x = makerv(np.random.randn(2, 3))
-    y = VMapRV()
-    with Loop() as i:
-        y[i] = x[i, :]
-    assert y.shape == x.shape
-
-
-def test_assign_syntax2():
-    x = makerv(np.random.randn(2))
-    y = makerv(np.random.randn(3))
-    z = VMapRV()
-    with Loop() as i:
-        with Loop() as j:
-            z[i, j] = x[i] * y[j]
-    print(f"{z=}")
-    print_upstream(z)
-    assert z.shape == (2, 3)
-
-
-def test_assign_syntax3():
-    "What if there's no loop var on right?"
-    z = VMapRV()
-    with Loop(3) as i:
-        z[i] = normal(0, 1)
-    assert z.shape == (3,)
-
-
-def test_full_syntax1():
-    x = VMapRV()
-    y = VMapRV()
-    with Loop(3) as i:
-        x[i] = normal(0, 1)
-        with Loop(4) as j:
-            y[i, j] = normal(x[i], 1)
-    assert x.shape == (3,)
-    assert y.shape == (3, 4)
 
 
 # def test_generating():

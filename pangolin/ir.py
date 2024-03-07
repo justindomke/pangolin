@@ -13,7 +13,6 @@ import jax.tree_util
 from collections import defaultdict
 
 np = numpy  # by default use regular numpy but users can, e.g., set ir.np = jax.numpy
-from typing import Sequence
 
 
 class CondDist(ABC):
@@ -54,20 +53,7 @@ class CondDist(ABC):
         """when you call a conditional distribution you get a RV"""
         parents = tuple(makerv(p) for p in parents)
 
-        # # hack: call special RV class if has "inherit_from" field
-        # for p in parents:
-        #     if hasattr(type(p), "inherit_from"):
-        #         return type(p)(self, *parents)
-
-        # return RV(self, *parents)
         return make_sliced_rv(self, *parents, all_loops=Loop.loops)
-
-        # cls = util.most_specific_class(*parents)
-        # return cls(self, *parents)
-        # if any(isinstance(p, LoopRV) for p in parents):
-        #     return LoopRV(self, *parents)
-        # else:
-        #     return RV(self, *parents)
 
     def __repr__(self):
         return self.name
@@ -637,13 +623,13 @@ class RV(dag.Node):
     def __getitem__(self, idx):
         # TODO: special cases for Loops
         if isinstance(idx, Loop):
-            return slice_existing_rv(self, [idx])
+            return slice_existing_rv(self, [idx], Loop.loops)
         elif isinstance(idx, tuple) and any(isinstance(p, Loop) for p in idx):
             for p in idx:
                 assert isinstance(p, Loop) or p == slice(
                     None
                 ), "can only mix Loop with full slice"
-            return slice_existing_rv(self, idx)
+            return slice_existing_rv(self, idx, Loop.loops)
 
         if self.ndim == 0:
             raise Exception("can't index scalar RV")
@@ -705,35 +691,6 @@ class RV(dag.Node):
         return matmul(a, self)
 
 
-class Loop:
-    loops = []
-    id = 0
-
-    def __init__(self, length=None):
-        self.length = length
-        self.id = Loop.id
-        Loop.id += 1
-
-    def __lt__(self, other):
-        return self.id < other.id
-
-    def __enter__(self, length=None):
-        Loop.loops.append(self)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        assert Loop.loops.pop() is self
-
-
-class HideLoops:
-    def __enter__(self):
-        self.old_loops = Loop.loops
-        Loop.loops = []
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        Loop.loops = self.old_loops
-
-
 class AbstractCondDist(CondDist):
     def __init__(self, shape):
         self.shape = shape
@@ -743,160 +700,5 @@ class AbstractCondDist(CondDist):
         return self.shape
 
 
-def slice_existing_rv(full_rv, idx):
-    assert isinstance(idx, Sequence)
-    assert len(idx) == len(full_rv.shape)
-    shape = full_rv.shape
-    loops = sorted(loop for loop in idx if isinstance(loop, Loop))
-
-    loop_axes = [-1] * len(loops)
-    # loop_axes = []
-    # loops = []
-    my_shape = []
-    for n, (s, i) in enumerate(zip(shape, idx)):
-        if isinstance(i, Loop):
-            # loops.append(i)
-            # loop_axes.append(n)
-            assert loop_axes[loops.index(i)] == -1
-            loop_axes[loops.index(i)] = n
-        else:
-            my_shape.append(s)
-
-    # assert None not in loop_axes
-    assert all(i >= 0 for i in loop_axes)
-
-    my_shape = tuple(my_shape)
-
-    cond_dist = AbstractCondDist(my_shape)
-    parents = []
-
-    return SlicedRV(
-        cond_dist,
-        *parents,
-        full_rv=full_rv,
-        loops=loops,
-        loop_axes=loop_axes,
-    )
-
-
-def loop2axis(var, loop, all_loops):
-    assert isinstance(loop, Loop)
-
-    if not isinstance(var, SlicedRV):
-        return None
-    elif loop not in var.loops:
-        return None
-    else:
-        assert isinstance(loop, Loop)
-        assert loop in var.loops
-
-        where_loop = var.loops.index(loop)
-        original_axis = var.loop_axes[where_loop]
-        # return original_axis
-        assert original_axis is not None
-
-        future_loops = all_loops[: all_loops.index(loop)]
-
-        print(f"{future_loops=}")
-
-        axes_to_come = 0
-        for future_loop in future_loops:
-            if future_loop in var.loops:
-                where_future_loop = var.loops.index(future_loop)
-                future_axis = var.loop_axes[where_future_loop]
-                assert isinstance(future_axis, int)
-                print(f"{future_axis=} {original_axis=}")
-                if future_axis < original_axis:
-                    axes_to_come += 1
-            # else:
-            #    axes_to_come += 1
-
-        correct_axis = original_axis - axes_to_come
-        print(f"{original_axis=} {axes_to_come=} {correct_axis}")
-        return correct_axis
-
-
-def make_sliced_rv(cond_dist, *parents, all_loops):
-    parents = tuple(makerv(p) for p in parents)
-
-    # TODO:
-    # - special case to avoid vmap when not cond_dist.random
-
-    if all_loops == []:
-        return RV(cond_dist, *parents)  # if no loops on stack, just give regular RV
-    else:
-        vmap_cond_dist = cond_dist
-        # all_loops = tuple(reversed(Loop.loops))
-        for loop in reversed(all_loops):
-            # print(f"{loop=}")
-            # TODO: infer axis_size when possible
-            axis_size = loop.length
-            in_axes = tuple(loop2axis(p, loop, all_loops) for p in parents)
-            vmap_cond_dist = VMapDist(vmap_cond_dist, in_axes, axis_size)
-
-        loop_axes = tuple(range(len(all_loops)))
-
-        full_parents = [p.full_rv if isinstance(p, SlicedRV) else p for p in parents]
-
-        full_rv = RV(vmap_cond_dist, *full_parents)
-
-        return SlicedRV(
-            cond_dist,
-            *parents,
-            full_rv=full_rv,
-            loops=all_loops,
-            loop_axes=loop_axes,
-        )
-
-
-class SlicedRV(RV):
-    def __init__(self, cond_dist, *parents, full_rv, loops, loop_axes):
-        """
-        Represents a "slice" of an RV—pretends to be lower dimensional while keeping
-        references to a higher dimensional object.
-
-        Parameters
-        ----------
-        cond_dist: CondDist
-            the conditional distribution for the slice
-        parents: Sequence[RV]
-            the parents for the slice
-        full_rv: RV
-            the non-sliced RV that this RV corresponds to
-        loops: Sequence[Loop]
-            the Loop objects for this slice
-        loop_axes: Sequence[int]
-            what axis of full_rv each loop corresponds to. the shape for this RV
-            is the same as the shape of full_rv except with these axes deleted
-
-        """
-
-        self.full_rv = full_rv
-        self.loops = tuple(loops)
-        self.loop_axes = tuple(loop_axes)
-        # self.loop2axis = defaultdict(lambda arg: None, dict(zip(loops, loop_axes)))
-        # TODO: check loop axes work with the full_rv
-        super().__init__(cond_dist, *parents)
-        assert self.shape == util.remove_indices(full_rv.shape, loop_axes)
-
-
-class VMapRV(RV):
-    def __init__(self):
-        # do not call super!
-        pass
-
-    def __setitem__(self, idx, value):
-        if Loop.loops == []:
-            raise Exception("can't assign into VMapRV outside of Loop context")
-        elif len(Loop.loops) == 1:
-            assert Loop.loops == [idx]
-        else:
-            assert tuple(Loop.loops) == idx
-
-        # problem: this will see loops!
-        with HideLoops():
-            copy = value.full_rv[:]
-        super().__init__(copy.cond_dist, *copy.parents)
-
-
-# https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method
+# import here to avoid circular import problems
+from .loops import Loop, make_sliced_rv, slice_existing_rv
