@@ -325,7 +325,7 @@ def stan_code_flat(requested_vars, given_vars, given_vals):
 
     code = data_code + parameters_code + transformed_parameters_code + model_code
 
-    print(code)
+    # print(code)
 
     monitor_vars = [ids[var] for var in requested_vars]
 

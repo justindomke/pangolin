@@ -78,10 +78,10 @@ def vmap_regenerator(base_regenerator):
                 vars, info_vars, is_observed, has_observed_descendent, pars_included
             )
 
-        print(f"{in_axes=}")
-        print(f"{vars=}")
-        print(f"{parents_of_vars=}")
-        print(f"{is_observed=}")
+        # print(f"{in_axes=}")
+        # print(f"{vars=}")
+        # print(f"{parents_of_vars=}")
+        # print(f"{is_observed=}")
 
         return interface.vmap(myfun, in_axes, axis_size)(vars, parents_of_vars)
 

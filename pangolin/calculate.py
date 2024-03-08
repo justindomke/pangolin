@@ -38,7 +38,7 @@ class Calculate:
         given_vars=None,
         given_vals=None,
         reduce_fn=None,
-        mode="auto",
+        mode="mcmc",
         **vargs,
     ):
         """
@@ -70,7 +70,7 @@ class Calculate:
             vars, given_vars, given_vals
         )
 
-        if mode is "auto":
+        if mode == "auto":
             try:
                 flat_samps = self.inference.ancestor_sample_flat(
                     flat_vars, flat_given_vars, flat_given_vals, **vargs, **self.options

@@ -16,8 +16,8 @@ def normal_normal_regenerator(
     node, loc = targets
     node_parents, loc_parents = parents_of_targets
 
-    print(f"{is_observed=}")
-    print(f"{has_observed_descendent=}")
+    # print(f"{is_observed=}")
+    # print(f"{has_observed_descendent=}")
 
     if node.cond_dist != interface.normal_scale:
         raise InapplicableTransform(
@@ -28,7 +28,7 @@ def normal_normal_regenerator(
             f"loc not normal_scale, instead " f"{type(loc.cond_dist)}"
         )
 
-    print(f"{is_observed=}")
+    # print(f"{is_observed=}")
 
     if not has_observed_descendent[0]:
         raise InapplicableTransform("node not observed, no point in transforming")
