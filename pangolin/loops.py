@@ -151,7 +151,6 @@ def _loop2axis(var, loop, all_loops):
                     axes_to_come += 1
 
         correct_axis = original_axis - axes_to_come
-        print(f"{original_axis=} {axes_to_come=} {correct_axis}")
         return correct_axis
 
 
