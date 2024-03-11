@@ -102,8 +102,6 @@ def ancestor_sample_flat_key(key, vars, given_vars, given_vals):
     )
 
     computed_vals = util.WriteOnceDict(zip(given_vars, given_vals))
-    print(f"{upstream_vars=}")
-    print(f"{computed_vals=}")
     for node in upstream_vars:
         for p in node.parents:
             # assert p in computed_vals, "bug: all parents should already be computed"

@@ -235,8 +235,9 @@ class VMapRV(RV):
     (3,)
     """
 
-    def __init__(self):
+    def __init__(self, copy_rv=True):
         # do not call super!
+        self.copy_rv = copy_rv
         pass
 
     def __setitem__(self, idx, value):
@@ -247,10 +248,15 @@ class VMapRV(RV):
         else:
             assert tuple(Loop.loops) == idx
 
-        # problem: this will see loops!
-        with HideLoops():
-            copy = value.full_rv[:]
-        super().__init__(copy.cond_dist, *copy.parents)
+        if self.copy_rv:
+            # try to "become" the RV being copied
+            super().__init__(value.full_rv.cond_dist, *value.full_rv.parents)
+        else:
+            # explicitly index from the RV being copied
+
+            with HideLoops():  # prevent indexing from seeing loops!
+                copy = value.full_rv[:]
+            super().__init__(copy.cond_dist, *copy.parents)
 
 
 # https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method

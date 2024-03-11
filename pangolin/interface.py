@@ -281,7 +281,6 @@ class vmap:
             if i is None:
                 new_shape = x.shape
             else:
-                print(f"{i=}")
                 lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
                 new_shape = lo + hi
 
@@ -290,9 +289,6 @@ class vmap:
                 return AbstractRVWithDist(x.cond_dist.base_cond_dist, new_shape)
             else:
                 return AbstractRV(new_shape)
-
-        print(f"{args=}")
-        print(f"{self.in_axes=}")
 
         dummy_args = util.tree_map_recurse_at_leaf(
             get_dummy, self.in_axes, args, is_leaf=util.is_leaf_with_none
@@ -304,9 +300,6 @@ class vmap:
         tree1 = jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)
         tree2 = jax.tree_util.tree_structure(dummy_args, is_leaf=util.is_leaf_with_none)
         tree3 = jax.tree_util.tree_structure(new_in_axes, is_leaf=util.is_leaf_with_none)
-        print(f"{tree1=}")
-        print(f"{tree2=}")
-        print(f"{tree3=}")
         assert tree1 == tree2
         assert tree1 == tree3
 

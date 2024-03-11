@@ -1,8 +1,5 @@
 """
-The core of Pangolin: The intermediate representation that is used to represent
-probabilistic models. This representation is very simple: `CondDist` objects
-represent conditional distributions. `RV` objects represent random variables. A
-random variable just has two members: A `CondDist` and a list of parent `RV`s.
+The core of Pangolin: The intermediate representation that is used to represent probabilistic models. This representation is very simple: `CondDist` objects represent conditional distributions. `RV` objects represent random variables. A random variable just has two members: A `CondDist` and a list of parent `RV`s.
 """
 
 from abc import ABC, abstractmethod
@@ -149,10 +146,13 @@ class VecMatCondDist(CondDist):
         super().__init__(name=name, random=True)
 
     def get_shape(self, vec_shape, mat_shape):
-        assert len(vec_shape) == 1
-        assert len(mat_shape) == 2
+        assert len(vec_shape) == 1, "first parameter must be a vector"
+        assert len(mat_shape) == 2, "second parameter must be a matrix"
         N = vec_shape[0]
-        assert mat_shape == (N, N)
+        assert mat_shape == (
+            N,
+            N,
+        ), "second parameter must be matrix with size matching first parameter"
         return (N,)
 
 

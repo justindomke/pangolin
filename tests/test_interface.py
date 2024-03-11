@@ -56,7 +56,7 @@ def test_tform1():
 def test_tform2():
     x = normal(0, 1)
     y = normal(0, 1)
-    z = x * y + y ** (y ** 2)
+    z = x * y + y ** (y**2)
     assert z.shape == ()
     assert z.ndim == 0
 
@@ -165,17 +165,22 @@ def test_vmap_generated_nodes5():
 def test_vmap_eval1():
     "should fail because of incoherent axes sizes"
     try:
-        y = vmap_eval(lambda loc, scale: normal_scale(loc, scale), [None, None], 5,
-            np.zeros(3), np.ones(3), )
+        y = vmap_eval(
+            lambda loc, scale: normal_scale(loc, scale),
+            [None, None],
+            5,
+            np.zeros(3),
+            np.ones(3),
+        )
         assert False
     except AssertionError as e:
         assert True
 
 
 def test_vmap_eval2():
-    y = \
-    vmap_eval(lambda loc, scale: [normal_scale(loc, scale)], [0, None], 3, np.zeros(3),
-        1)[0]
+    y = vmap_eval(
+        lambda loc, scale: [normal_scale(loc, scale)], [0, None], 3, np.zeros(3), 1
+    )[0]
     assert y.shape == (3,)
 
 
@@ -190,7 +195,7 @@ def test_vmap_eval3():
 def test_vmap_eval4():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         return [normal(loc, scale)]
 
     y = vmap_eval(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
@@ -208,7 +213,7 @@ def test_vmap_eval6():
 def test_vmap_eval7():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -223,7 +228,7 @@ def test_vmap_eval7():
 def test_vmap_eval8():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -251,7 +256,7 @@ def test_vmap2():
 def test_vmap3():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         return normal(loc, scale)
 
     y = vmap(f, in_axes=0, axis_size=None)(np.array([3.3, 4.4, 5.5]))
@@ -344,7 +349,7 @@ def test_vmap9():
 def test_vmap10():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         return {"y": normal(loc, scale)}
 
     stuff = vmap(f, 0, None)(np.array([3.3, 4.4, 5.5]))
@@ -354,7 +359,7 @@ def test_vmap10():
 def test_vmap11():
     def f(x):
         loc = x * 1.1
-        scale = x ** 2.2
+        scale = x**2.2
         y = normal(loc, scale)
         x = normal(0, 1)
         z = normal(1, 2)
@@ -402,7 +407,9 @@ def test_vmap15():
     x = normal(0, 1)
     y, z = vmap(
         lambda: (yi := normal(x, 2), zi := vmap(lambda: normal(yi, 3), None, 5)()),
-        None, 3, )()
+        None,
+        3,
+    )()
 
 
 def test_plate1():
@@ -415,7 +422,8 @@ def test_plate1():
 def test_plate2():
     x = normal(0, 1)
     y, z = plate(N=3)(
-        lambda: (yi := normal(x, 1), zi := plate(N=5)(lambda: normal(yi, 1))))
+        lambda: (yi := normal(x, 1), zi := plate(N=5)(lambda: normal(yi, 1)))
+    )
     assert x.shape == ()
     assert y.shape == (3,)
     assert z.shape == (3, 5)
@@ -691,7 +699,6 @@ def test_log_prob1():
 def test_log_prob2():
     x = normal(1.1, 2.2)
     l = log_prob(x)
-    print_upstream(l)
     assert l.cond_dist == LogProb(normal_scale)
     assert l.parents[0].cond_dist == normal_scale
     assert l.parents[1].cond_dist == Constant(1.1)
@@ -705,7 +712,6 @@ def test_log_prob3():
     x = normal(loc, scale)
 
     l = log_prob(x)
-    print_upstream(l)
 
     # sample with conditioning
     val = 3.3
@@ -753,15 +759,17 @@ def test_log_prob_joint():
     val_y = 5.5
     niter = 11
     ls = calc.sample(l, [x, y], [val_x, val_y], niter=niter)
-    expected = stats.norm.logpdf(val_x, loc, scale_x) + stats.norm.logpdf(val_y, val_x,
-        scale_y)
+    expected = stats.norm.logpdf(val_x, loc, scale_x) + stats.norm.logpdf(
+        val_y, val_x, scale_y
+    )
     assert np.allclose(ls, expected)
 
     # sample with neither x nor y fixed
     [ls, xs, ys] = calc.sample([l, x, y], niter=niter)
     for li, xi, yi in zip(ls, xs, ys):
-        expected = stats.norm.logpdf(xi, loc, scale_x) + stats.norm.logpdf(yi, xi,
-            scale_y)
+        expected = stats.norm.logpdf(xi, loc, scale_x) + stats.norm.logpdf(
+            yi, xi, scale_y
+        )
         assert np.allclose(li, expected)
 
 
@@ -787,8 +795,7 @@ def test_log_prob_branching():
 def test_vmap_log_prob():
     niter = 1000
     l = vmap(lambda: log_prob(normal(1.1, 2.2)), None, axis_size=5)()
-    print_upstream(l)
     ls = calc.sample(l, niter=niter)
     assert ls.shape == (niter, 5)
 
-    assert np.abs(-np.mean(ls) - stats.norm.entropy(1.1, 2.2)) < .03
+    assert np.abs(-np.mean(ls) - stats.norm.entropy(1.1, 2.2)) < 0.03

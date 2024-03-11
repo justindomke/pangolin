@@ -10,20 +10,26 @@ import random
 # Cast observed variables to arrays (and check that they have corresponding shapes)
 ################################################################################
 
+
 def assimilate_vals(vars, vals):
     "convert vals to a pytree of arrays with the same shape as vars"
     new_vals = jax.tree_map(lambda var, val: jnp.array(val), vars, vals)
     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
     flat_vals, vals_treedef = jax.tree_util.tree_flatten(new_vals)
-    assert vars_treedef == vals_treedef, "vars and vals must have same structure (after conversion to arrays)"
+    assert (
+        vars_treedef == vals_treedef
+    ), "vars and vals must have same structure (after conversion to arrays)"
     for var, val in zip(flat_vars, flat_vals):
-        assert var.shape == val.shape, "vars and vals must have matching shape (after conversion to arrays)"
+        assert (
+            var.shape == val.shape
+        ), "vars and vals must have matching shape (after conversion to arrays)"
     return new_vals
 
 
 ################################################################################
 # First major primitive — evaluate conditional log probs on groups of nodes
 ################################################################################
+
 
 def ancestor_log_prob_flat(vars, vals, given_vars, given_vals):
     # convert things to arrays and make sure shapes match
@@ -35,7 +41,9 @@ def ancestor_log_prob_flat(vars, vals, given_vars, given_vals):
     for var in given_vars:
         assert var.cond_dist.random, "all given vars must be random"
 
-    upstream_vars = dag.upstream_nodes(vars, block_condition=lambda node: (node in given_vars) and (node not in vars))
+    upstream_vars = dag.upstream_nodes(
+        vars, block_condition=lambda node: (node in given_vars) and (node not in vars)
+    )
 
     input_vals = util.WriteOnceDict(zip(vars, vals))
     computed_vals = util.WriteOnceDict(zip(given_vars, given_vals))
@@ -65,12 +73,15 @@ def ancestor_log_prob_flat(vars, vals, given_vars, given_vals):
 # Second major primitive — sample groups of nodes
 ################################################################################
 
+
 def ancestor_sample_flat(key, vars, given_vars, given_vals):
     given_vals = assimilate_vals(given_vars, given_vals)
 
     # do NOT insist that vars or given_vars be random
 
-    upstream_vars = dag.upstream_nodes(vars, block_condition=lambda node: node in given_vars)
+    upstream_vars = dag.upstream_nodes(
+        vars, block_condition=lambda node: node in given_vars
+    )
 
     computed_vals = util.WriteOnceDict(zip(given_vars, given_vals))
     for node in upstream_vars:
@@ -90,6 +101,7 @@ def ancestor_sample_flat(key, vars, given_vars, given_vals):
 ################################################################################
 # Inference workhorse— do MCMC
 ################################################################################
+
 
 def variables_to_sample(requested_vars, given_vars):
     has_obs_descendent = dag.upstream_nodes(given_vars)
@@ -142,27 +154,30 @@ def sample_flat(requested_vars, given_vars=None, given_vals=None, niter=1000):
     else:
         # print(f"{random_vars=}")
 
-        potential_fn = lambda latent_vals: -ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals,
-                                                                   given_vars, given_vals)
+        potential_fn = lambda latent_vals: -ancestor_log_prob_flat(
+            latent_vars + given_vars, latent_vals + given_vals, given_vars, given_vals
+        )
 
-        all_zeros = list(map(lambda node: .01 + jnp.zeros(node.shape), latent_vars))
+        all_zeros = list(map(lambda node: 0.01 + jnp.zeros(node.shape), latent_vars))
 
         test_logp = potential_fn(all_zeros)  # test call
         if jnp.isnan(test_logp):
             raise Exception("got nan for intial parameters")
 
         nuts_kernel = NUTS(potential_fn=potential_fn)
-        #rng_key = jax.random.PRNGKey(0)
-        key = jax.random.PRNGKey(random.randint(0,10**9))
-        mcmc = MCMC(nuts_kernel, num_warmup=niter // 2, num_samples=niter, progress_bar=False)
+        # rng_key = jax.random.PRNGKey(0)
+        key = jax.random.PRNGKey(random.randint(0, 10**9))
+        mcmc = MCMC(
+            nuts_kernel, num_warmup=niter // 2, num_samples=niter, progress_bar=False
+        )
         mcmc.run(key, init_params=all_zeros)
         latent_samps = mcmc.get_samples()
 
-
-    #key = jax.random.PRNGKey(0)
-    key = jax.random.PRNGKey(random.randint(0,10**9))
-    sample_fn = lambda key, latent_vals: ancestor_sample_flat(key, requested_vars, latent_vars + given_vars,
-                                                              latent_vals + given_vals)
+    # key = jax.random.PRNGKey(0)
+    key = jax.random.PRNGKey(random.randint(0, 10**9))
+    sample_fn = lambda key, latent_vals: ancestor_sample_flat(
+        key, requested_vars, latent_vars + given_vars, latent_vals + given_vals
+    )
 
     rng_key = jax.random.split(key, niter)
     requested_samps = jax.vmap(sample_fn)(rng_key, latent_samps)
@@ -185,6 +200,7 @@ def sample(vars, given_vars=None, given_vals=None, niter=1000):
 ################################################################################
 # Function to evaluate individual nodes
 ################################################################################
+
 
 def log_prob_dist(cond_dist, observed_val, *parent_vals):
     assert cond_dist.random
@@ -211,7 +227,9 @@ def sample_dist(cond_dist, rng_key, *parent_vals):
     elif type(cond_dist) in sample_funs:
         fn = sample_funs[type(cond_dist)]
     else:
-        raise Exception(f"sample_funs[{cond_dist}] and sample_funs[{type(cond_dist)}] unknown")
+        raise Exception(
+            f"sample_funs[{cond_dist}] and sample_funs[{type(cond_dist)}] unknown"
+        )
     return fn(cond_dist, rng_key, *parent_vals)
 
 
@@ -267,7 +285,9 @@ log_prob_funs[interface.dirichlet] = get_numpyro_dist_log_prob_fun(dist.Dirichle
 log_prob_funs[interface.binomial] = get_numpyro_dist_log_prob_fun(dist.Binomial, 2)
 log_prob_funs[interface.beta] = get_numpyro_dist_log_prob_fun(dist.Beta, 2)
 log_prob_funs[interface.exponential] = get_numpyro_dist_log_prob_fun(dist.Exponential, 1)
-log_prob_funs[interface.beta_binomial] = get_numpyro_dist_log_prob_fun(dist.BetaBinomial, 3)
+log_prob_funs[interface.beta_binomial] = get_numpyro_dist_log_prob_fun(
+    dist.BetaBinomial, 3
+)
 log_prob_funs[interface.multinomial] = get_numpyro_dist_log_prob_fun(dist.Multinomial, 2)
 
 sample_funs[interface.uniform] = get_numpyro_dist_sample_fun(dist.Uniform, 2)
@@ -290,10 +310,11 @@ eval_funs[interface.add] = deterministic_evaluator(lambda a, b: a + b)
 eval_funs[interface.sub] = deterministic_evaluator(lambda a, b: a - b)
 eval_funs[interface.mul] = deterministic_evaluator(lambda a, b: a * b)
 eval_funs[interface.div] = deterministic_evaluator(lambda a, b: a / b)
-eval_funs[interface.pow] = deterministic_evaluator(lambda a, b: a ** b)
+eval_funs[interface.pow] = deterministic_evaluator(lambda a, b: a**b)
 eval_funs[interface.abs] = deterministic_evaluator(jnp.abs)
 eval_funs[interface.exp] = deterministic_evaluator(jnp.exp)
 eval_funs[interface.matmul] = deterministic_evaluator(jnp.matmul)
+
 
 def eval_sum(cond_dist, parent_val):
     return jnp.sum(parent_val, cond_dist.axis)
@@ -301,9 +322,10 @@ def eval_sum(cond_dist, parent_val):
 
 eval_funs[interface.Sum] = eval_sum
 
+
 def eval_index(cond_dist, val, *indices):
     # TODO: go through slices, extract where appropriate, etc
-    #return node[indices]
+    # return node[indices]
     stuff = []
     i = 0
     for my_slice in cond_dist.slices:
@@ -315,12 +337,15 @@ def eval_index(cond_dist, val, *indices):
     stuff = tuple(stuff)
     return val[stuff]
 
+
 eval_funs[interface.Index] = eval_index
 
 
 def eval_vmap_deterministic(cond_dist, *parent_vals):
     my_eval = functools.partial(eval_dist, cond_dist.base_cond_dist)
-    vals = jax.vmap(my_eval, in_axes=cond_dist.in_axes, axis_size=cond_dist.axis_size)(*parent_vals)
+    vals = jax.vmap(my_eval, in_axes=cond_dist.in_axes, axis_size=cond_dist.axis_size)(
+        *parent_vals
+    )
     return vals
 
 
@@ -329,8 +354,9 @@ eval_funs[interface.VMapDist] = eval_vmap_deterministic
 
 def log_prob_vmap_dist(cond_dist, observed_val, *parent_vals):
     my_log_prob = functools.partial(log_prob_dist, cond_dist.base_cond_dist)
-    logps = jax.vmap(my_log_prob, in_axes=(0,) + cond_dist.in_axes, axis_size=cond_dist.axis_size)(observed_val,
-                                                                                                   *parent_vals)
+    logps = jax.vmap(
+        my_log_prob, in_axes=(0,) + cond_dist.in_axes, axis_size=cond_dist.axis_size
+    )(observed_val, *parent_vals)
     return jnp.sum(logps)
 
 
@@ -340,8 +366,9 @@ log_prob_funs[interface.VMapDist] = log_prob_vmap_dist
 def sample_vmap_dist(cond_dist, rng_key, *parent_vals):
     my_sample = functools.partial(sample_dist, cond_dist.base_cond_dist)
     rng_keys = jax.random.split(rng_key, cond_dist.axis_size)
-    samps = jax.vmap(my_sample, in_axes=(0,) + cond_dist.in_axes, axis_size=cond_dist.axis_size)(rng_keys,
-                                                                                                 *parent_vals)
+    samps = jax.vmap(
+        my_sample, in_axes=(0,) + cond_dist.in_axes, axis_size=cond_dist.axis_size
+    )(rng_keys, *parent_vals)
     # print(f"{samps.shape=}")
     return samps
 
