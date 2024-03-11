@@ -621,6 +621,9 @@ class RV(dag.Node):
         return len(self._shape)
 
     def __getitem__(self, idx):
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+
         # convert ellipsis into slices
         num_ellipsis = sum(1 for i in idx if i is ...)
         if num_ellipsis > 1:
@@ -638,9 +641,7 @@ class RV(dag.Node):
             idx = idx_start + idx_mid + idx_end
 
         # TODO: special cases for Loops
-        if isinstance(idx, Loop):
-            return slice_existing_rv(self, [idx], Loop.loops)
-        elif isinstance(idx, tuple) and any(isinstance(p, Loop) for p in idx):
+        if any(isinstance(p, Loop) for p in idx):
             for p in idx:
                 assert isinstance(p, Loop) or p == slice(
                     None
