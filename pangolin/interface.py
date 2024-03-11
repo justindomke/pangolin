@@ -544,3 +544,25 @@ viz_upstream = viz  # TODO: delete after changing calls
 #         graph = viz_samples(vars, precision=precision)
 #         IPython.display.display_png(graph)
 #         time.sleep(wait)
+
+
+_all_objects = vars()
+
+
+def list_all_cond_dists():
+    from inspect import isclass
+
+    """Convenience function to print out all available CondDists"""
+    # print(_all_objects)
+    print("List of all CondDist OBJECTS with random=True:")
+    for name, item in _all_objects.items():
+        if isinstance(item, CondDist) and item.random:
+            print(f"  {name}")
+    print("List of all CondDist OBJECTS with random=False:")
+    for name, item in _all_objects.items():
+        if isinstance(item, CondDist) and not item.random:
+            print(f"  {name}")
+    print("List of all CondDist CLASSES:")
+    for name, item in _all_objects.items():
+        if isclass(item) and issubclass(item, CondDist):
+            print(f"  {name}")
