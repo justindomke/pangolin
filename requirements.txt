@@ -5,3 +5,4 @@ scipy
 pandas
 numpyro
 cmdstanpy
+graphviz
