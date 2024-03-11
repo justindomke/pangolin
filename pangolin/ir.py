@@ -621,6 +621,22 @@ class RV(dag.Node):
         return len(self._shape)
 
     def __getitem__(self, idx):
+        # convert ellipsis into slices
+        num_ellipsis = sum(1 for i in idx if i is ...)
+        if num_ellipsis > 1:
+            raise ValueError("an index can only have a single ellipsis ('...')")
+        if num_ellipsis == 1:
+            where = idx.index(...)
+            slices_needed = self.ndim - (len(idx) - 1)  # sub out ellipsis
+            if where > 0:
+                idx_start = idx[:where]
+            else:
+                idx_start = ()
+            idx_mid = (slice(None),) * slices_needed
+            idx_end = idx[where + 1 :]
+
+            idx = idx_start + idx_mid + idx_end
+
         # TODO: special cases for Loops
         if isinstance(idx, Loop):
             return slice_existing_rv(self, [idx], Loop.loops)
