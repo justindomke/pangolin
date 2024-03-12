@@ -92,6 +92,13 @@ def gencode_matmul(cond_dist, loopdepth, ref, *parent_refs):
         raise NotImplementedError("should be impossible...")
 
 
+def gencode_inv(cond_dist, loopdepth, ref, *parent_refs):
+    assert len(parent_refs) == 1
+    a = parent_refs[0]
+    assert a.num_empty == 2
+    return f"{ref} = to_array_2d(inverse(to_matrix({a})));\n"
+
+
 def gencode_unsupported():
     def gencode_dist(cond_dist, loopdepth, ref, *parent_refs):
         raise NotImplementedError(f"Stan does not support distribution {cond_dist}")
@@ -123,8 +130,26 @@ gencode_fns = {
     interface.div: gencode_infix_factory("/"),
     interface.pow: gencode_infix_factory("^"),
     interface.matmul: gencode_matmul,
+    interface.inv: gencode_inv,
     interface.abs: gencode_deterministic_factory("abs"),
+    interface.arccos: gencode_deterministic_factory("acos"),
+    interface.arccosh: gencode_deterministic_factory("acosh"),
+    interface.arcsin: gencode_deterministic_factory("asin"),
+    interface.arcsinh: gencode_deterministic_factory("asinh"),
+    interface.arctan: gencode_deterministic_factory("atan"),
+    interface.arctanh: gencode_deterministic_factory("atanh"),
+    interface.cos: gencode_deterministic_factory("cos"),
+    interface.cosh: gencode_deterministic_factory("cosh"),
     interface.exp: gencode_deterministic_factory("exp"),
+    interface.inv_logit: gencode_deterministic_factory("inv_logit"),
+    interface.log: gencode_deterministic_factory("log"),
+    interface.loggamma: gencode_deterministic_factory("lgamma"),
+    interface.logit: gencode_deterministic_factory("logit"),
+    interface.sin: gencode_deterministic_factory("sin"),
+    interface.sinh: gencode_deterministic_factory("sinh"),
+    interface.step: gencode_deterministic_factory("step"),
+    interface.tan: gencode_deterministic_factory("tan"),
+    interface.tanh: gencode_deterministic_factory("tanh"),
 }
 
 
@@ -223,7 +248,30 @@ def base_type(cond_dist, *parent_types):
             return StanType("int")
         else:
             return StanType("real")
-    elif cond_dist in [interface.div, interface.exp]:
+    elif cond_dist in [
+        interface.div,
+        interface.arccos,
+        interface.arccosh,
+        interface.arccos,
+        interface.arccosh,
+        interface.arcsin,
+        interface.arcsinh,
+        interface.arctan,
+        interface.arctanh,
+        interface.cos,
+        interface.cosh,
+        interface.exp,
+        interface.inv_logit,
+        interface.log,
+        interface.loggamma,
+        interface.logit,
+        interface.sin,
+        interface.sinh,
+        interface.step,
+        interface.tan,
+        interface.tanh,
+        interface.inv,
+    ]:
         return StanType("real")
     elif cond_dist in (interface.normal_scale, interface.uniform):
         return StanType("real")

@@ -6,6 +6,7 @@ from numpyro import distributions as dist
 from numpyro.infer import MCMC, NUTS
 import random
 from typing import Sequence
+from jax.scipy import special as jspecial
 
 from .interface import InvalidAncestorQuery
 
@@ -335,8 +336,24 @@ evaluation_funs = {
     interface.div: lambda a, b: a / b,
     interface.pow: lambda a, b: a**b,
     interface.abs: jnp.abs,
+    interface.arccos: jnp.arccos,
+    interface.arccosh: jnp.arccosh,
+    interface.arcsin: jnp.arcsin,
+    interface.arcsinh: jnp.arcsinh,
+    interface.arctan: jnp.arctan,
+    interface.arctanh: jnp.arctanh,
+    interface.cos: jnp.cos,
+    interface.cosh: jnp.cosh,
     interface.exp: jnp.exp,
+    interface.inv_logit: dist.transforms.SigmoidTransform(),
+    interface.log: jnp.log,
+    interface.loggamma: jspecial.gammaln,
+    interface.logit: jspecial.logit,
+    interface.sin: jnp.sin,
+    interface.sinh: jnp.sinh,
+    interface.step: lambda x: jnp.heaviside(x, 0.5),
     interface.matmul: jnp.matmul,
+    interface.inv: jnp.linalg.inv,
 }
 
 class_evaluation_funs = {

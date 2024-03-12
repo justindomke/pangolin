@@ -127,13 +127,53 @@ uniform = AllScalarCondDist(2, "uniform", True)
 beta = AllScalarCondDist(2, "beta", True)
 exponential = AllScalarCondDist(1, "exponential", True)
 beta_binomial = AllScalarCondDist(3, "beta_binomial", True)
+# basic math operators, typically triggered infix operations
 add = AllScalarCondDist(2, "add", False)
 sub = AllScalarCondDist(2, "sub", False)
 mul = AllScalarCondDist(2, "mul", False)
 div = AllScalarCondDist(2, "div", False)
 pow = AllScalarCondDist(2, "pow", False)
+# all the scalar functions included in JAGS manual
+# in general, try to use numpy / scipy names where possible
 abs = AllScalarCondDist(1, "abs", False)
+arccos = AllScalarCondDist(1, "arccos", False)
+arccosh = AllScalarCondDist(1, "arccosh", False)
+arcsin = AllScalarCondDist(1, "arcsin", False)
+arcsinh = AllScalarCondDist(1, "arcsinh", False)
+arctan = AllScalarCondDist(1, "arctan", False)
+arctanh = AllScalarCondDist(1, "arctanh", False)
+cos = AllScalarCondDist(1, "cos", False)
+cosh = AllScalarCondDist(1, "cosh", False)
 exp = AllScalarCondDist(1, "exp", False)
+inv_logit = AllScalarCondDist(1, "inv_logit", False)
+expit = inv_logit  # scipy name
+sigmoid = inv_logit  # another name
+log = AllScalarCondDist(1, "log", False)
+# TODO: do we want scipy.special.loggamma or scipy.special.gammaln? different!
+loggamma = AllScalarCondDist(1, "loggamma", False)
+logit = AllScalarCondDist(1, "logit", False)  # logit in JAGS / stan / scipy
+sin = AllScalarCondDist(1, "sin", False)
+sinh = AllScalarCondDist(1, "sinh", False)
+step = AllScalarCondDist(1, "sin", False)  # step in JAGS / stan
+tan = AllScalarCondDist(1, "tan", False)
+tanh = AllScalarCondDist(1, "tanh", False)
+# currently skipped from JAGS scalar functions
+# cloglog # g(p) = log(-log(1-p)) = log(log(1/(1-p)))
+# equals(x, y)
+# icloglog(x)
+# ifelse(x, a, b)
+# logfact(x)
+# loggamma in scipy / loggam in JAGS / lgamma in STAN
+# phi(x)
+# pow(x, z)
+# nothing in scipy / probit in JAGS
+# probit(x)
+# round(x)
+# trunc(x)
+
+
+def sqrt(x):
+    return x**0.5
 
 
 class VecMatCondDist(CondDist):
@@ -206,6 +246,29 @@ class MatMul(CondDist):
 
 
 matmul = MatMul()
+
+
+class Inverse(CondDist):
+    def __init__(self):
+        super().__init__(name="inv", random=False)
+
+    def get_shape(self, *parents):
+        assert len(parents) == 1
+        p_shape = parents[0]
+        assert len(p_shape) == 2, "inverse only applies to 2d arrays"
+        assert p_shape[0] == p_shape[1], "inverse only for square 2d arrays"
+        return p_shape
+
+
+inv = Inverse()
+
+# class SquareMatrixCondDist(CondDist):
+#
+#     def __init__(self):
+#         super().__init__(name="matmul", random=False)
+#
+#     def get_shape(self, *parents):
+#         assert len(parents)==1
 
 
 class Categorical(CondDist):

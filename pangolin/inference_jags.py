@@ -158,8 +158,26 @@ gencode_fns = {
     interface.div: gencode_infix_factory("/"),
     interface.pow: gencode_infix_factory("^"),
     interface.matmul: gencode_infix_factory("%*%"),  # TODO: only support 1 or 2d args
+    interface.inv: gencode_deterministic_factory("inverse"),
     interface.abs: gencode_deterministic_factory("abs"),
+    interface.arccos: gencode_deterministic_factory("arccos"),
+    interface.arccosh: gencode_deterministic_factory("arccosh"),
+    interface.arcsin: gencode_deterministic_factory("arcsin"),
+    interface.arcsinh: gencode_deterministic_factory("arcsinh"),
+    interface.arctan: gencode_deterministic_factory("arctan"),
+    interface.arctanh: gencode_deterministic_factory("arctanh"),
+    interface.cos: gencode_deterministic_factory("cos"),
+    interface.cosh: gencode_deterministic_factory("cosh"),
     interface.exp: gencode_deterministic_factory("exp"),
+    interface.inv_logit: gencode_deterministic_factory("ilogit"),
+    interface.log: gencode_deterministic_factory("log"),
+    interface.loggamma: gencode_deterministic_factory("loggam"),
+    interface.logit: gencode_deterministic_factory("logit"),
+    interface.sin: gencode_deterministic_factory("sin"),
+    interface.sinh: gencode_deterministic_factory("sinh"),
+    interface.step: gencode_deterministic_factory("step"),
+    interface.tan: gencode_deterministic_factory("tan"),
+    interface.tanh: gencode_deterministic_factory("tanh"),
 }
 
 
@@ -168,8 +186,8 @@ class_gencode_fns = {
     interface.Index: gencode_index,
     # interface.Sum: gencode_unsupported(),
     interface.Sum: gencode_sum,
-    #interface.CondProb: gencode_unsupported(),
-    #interface.Mixture: gencode_unsupported(),
+    # interface.CondProb: gencode_unsupported(),
+    # interface.Mixture: gencode_unsupported(),
 }
 
 
