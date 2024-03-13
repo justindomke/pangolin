@@ -99,6 +99,13 @@ def gencode_inv(cond_dist, loopdepth, ref, *parent_refs):
     return f"{ref} = to_array_2d(inverse(to_matrix({a})));\n"
 
 
+def gencode_softmax(cond_dist, loopdepth, ref, *parent_refs):
+    assert len(parent_refs) == 1
+    a = parent_refs[0]
+    assert a.num_empty == 1
+    return f"{ref} = to_array_1d(softmax(to_vector({a})));\n"
+
+
 def gencode_unsupported():
     def gencode_dist(cond_dist, loopdepth, ref, *parent_refs):
         raise NotImplementedError(f"Stan does not support distribution {cond_dist}")
@@ -150,6 +157,7 @@ gencode_fns = {
     interface.step: gencode_deterministic_factory("step"),
     interface.tan: gencode_deterministic_factory("tan"),
     interface.tanh: gencode_deterministic_factory("tanh"),
+    interface.softmax: gencode_softmax,
 }
 
 
@@ -271,6 +279,7 @@ def base_type(cond_dist, *parent_types):
         interface.tan,
         interface.tanh,
         interface.inv,
+        interface.softmax,
     ]:
         return StanType("real")
     elif cond_dist in (interface.normal_scale, interface.uniform):

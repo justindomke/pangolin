@@ -262,6 +262,20 @@ class Inverse(CondDist):
 
 inv = Inverse()
 
+
+class Softmax(CondDist):
+    def __init__(self):
+        super().__init__(name="softmax", random=False)
+
+    def get_shape(self, *parents):
+        assert len(parents) == 1
+        p_shape = parents[0]
+        assert len(p_shape) == 1, "input to softmax would be 1d"
+        return p_shape
+
+
+softmax = Softmax()
+
 # class SquareMatrixCondDist(CondDist):
 #
 #     def __init__(self):
@@ -281,6 +295,18 @@ class Categorical(CondDist):
 
 
 categorical = Categorical()
+
+
+# class CategoricalLogit(CondDist):
+#     def __init__(self):
+#         super().__init__(name="categorical_logit", random=True)
+#
+#     def get_shape(self, weights_shape):
+#         # TODO: check shape
+#         return ()
+#
+#
+# categorical_logit = Categorical()
 
 
 class Dirichlet(CondDist):

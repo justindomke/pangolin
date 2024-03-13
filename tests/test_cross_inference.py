@@ -156,6 +156,13 @@ def test_inv():
     assert_means_close([x], [], [], niter=1, atol=1e-3, rtol=1e-3)
 
 
+def test_softmax():
+    val = np.random.randn(7)
+    z = makerv(val)
+    x = softmax(z)
+    assert_means_close([x], [], [], niter=1, excluded_engines=[inference_jags])
+
+
 # def test_double_normal():
 #     z = normal(1.7, 2.9)
 #     x = normal(z, 0.1)

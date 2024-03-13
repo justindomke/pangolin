@@ -54,7 +54,14 @@ def gencode_bernoulli_logit(cond_dist, loopdepth, ref, *parent_refs):
 
 def gencode_normal_scale(cond_dist, loopdepth, ref, *parent_refs):
     assert cond_dist == interface.normal_scale
-    return f"{ref} ~ dnorm({parent_refs[0]},1/({parent_refs[1]})^2)\n"
+    return f"{ref} ~ dnorm({parent_refs[0]},1/({parent_refs[1]})^2);\n"
+
+
+# # not easy to support softmax because JAGS doesn't allow exp to be vectorized
+# def gencode_softmax(cond_dist, loopdepth, ref, *parent_refs):
+#     p_ref = parent_refs[0]
+#     N = p_ref.shape[0]
+#     return f"{ref} <- exp({p_ref}[1:{N}])/sum(exp({p_ref}[1:{N}]));\n"
 
 
 # def gencode_categorical(cond_dist, loopdepth, ref, *parent_refs):
@@ -178,6 +185,7 @@ gencode_fns = {
     interface.step: gencode_deterministic_factory("step"),
     interface.tan: gencode_deterministic_factory("tan"),
     interface.tanh: gencode_deterministic_factory("tanh"),
+    interface.softmax: gencode_unsupported(),
 }
 
 

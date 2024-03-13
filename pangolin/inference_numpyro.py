@@ -7,6 +7,7 @@ from numpyro.infer import MCMC, NUTS
 import random
 from typing import Sequence
 from jax.scipy import special as jspecial
+from jax import nn as jnn
 
 from .interface import InvalidAncestorQuery
 
@@ -354,6 +355,7 @@ evaluation_funs = {
     interface.step: lambda x: jnp.heaviside(x, 0.5),
     interface.matmul: jnp.matmul,
     interface.inv: jnp.linalg.inv,
+    interface.softmax: jnn.softmax,
 }
 
 class_evaluation_funs = {
