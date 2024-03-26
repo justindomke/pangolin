@@ -196,6 +196,7 @@ class_gencode_fns = {
     interface.Sum: gencode_sum,
     # interface.CondProb: gencode_unsupported(),
     # interface.Mixture: gencode_unsupported(),
+    interface.LogProb: gencode_unsupported(),
 }
 
 

@@ -11,7 +11,7 @@ inference_engines = [inference_jags, inference_numpyro, inference_stan]
 
 
 def assert_means_close(
-    vars, given_vars, given_vals, niter=10_000, excluded_engines=[], atol=1e-5, rtol=1e-5
+    vars, given_vars, given_vals, niter=10_000, excluded_engines=(), atol=1e-5, rtol=1e-5
 ):
     all_means = []
     for inference in list(set(inference_engines) - set(excluded_engines)):
@@ -161,6 +161,16 @@ def test_softmax():
     z = makerv(val)
     x = softmax(z)
     assert_means_close([x], [], [], niter=1, excluded_engines=[inference_jags])
+
+
+# def test_log_prob():
+#     loc = makerv(0)
+#     scale = makerv(1)
+#     x = normal(loc, scale)
+#     l = log_prob(x, [loc, scale])
+#     assert_means_close(
+#         [l], [x], [np.array(0.0)], niter=1, excluded_engines=[inference_stan]
+#     )
 
 
 # def test_double_normal():

@@ -3,7 +3,6 @@ from . import dag, util
 # import dag
 import numpy as np
 import jax
-
 from .ir import *
 
 
@@ -101,6 +100,8 @@ def log_prob(vars, given_vars=None):
     """
     Given some set of RVs, get a new RV that represents the conditional
     log-probability of those RVs. (Evaluated in simple "ancestor order")
+
+    CURRENTLY EXPERIMENTAL, HAS VERY POOR BACKEND SUPPORT, DO NOT USE
     """
 
     # if any vars are upstream of given, then can't do

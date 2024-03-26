@@ -90,7 +90,9 @@ class Constant(CondDist):
         return hash(self.value.tobytes())
 
     def __repr__(self):
-        array_str = repr(self.value)  # get base string
+        # assure regular old numpy in case jax being used
+        numpy_value = numpy.array(self.value)
+        array_str = repr(numpy_value)  # get base string
         array_str = array_str[6:-1]  # cut off "array(" and ")"
         array_str = array_str.replace("\n", "")  # remove newlines
         array_str = array_str.replace(" ", "")  # remove specs
@@ -98,7 +100,9 @@ class Constant(CondDist):
 
     def __str__(self):
         # return str(self.value).replace("\n", "").replace("  ", " ")
-        return np.array_str(self.value, precision=3).replace("\n", "").replace("  ", " ")
+        # assure regular old numpy in case jax being used
+        numpy_value = numpy.array(self.value)
+        return np.array_str(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
 
 
 class AllScalarCondDist(CondDist):
@@ -332,6 +336,18 @@ class Multinomial(CondDist):
 
 
 multinomial = Multinomial()
+
+
+class Dirichlet(CondDist):
+    def __init__(self):
+        super().__init__(name="dirichlet", random=True)
+
+    def get_shape(self, concentration_shape):
+        assert len(concentration_shape) == 1
+        return concentration_shape
+
+
+dirichlet = Dirichlet()
 
 
 class Sum(CondDist):
@@ -601,36 +617,6 @@ class VMapDist(CondDist):
 
 
 ################################################################################
-# For convenience, gather all cond_dists
-################################################################################
-
-all_cond_dists = [
-    normal_scale,
-    normal_prec,
-    bernoulli,
-    binomial,
-    uniform,
-    beta,
-    exponential,
-    beta_binomial,
-    multi_normal_cov,
-    categorical,
-    dirichlet,
-    multinomial,
-    add,
-    sub,
-    mul,
-    div,
-    pow,
-    abs,
-    exp,
-    matmul,
-]
-
-all_cond_dist_classes = [Sum, Index, VMapDist]
-
-
-################################################################################
 # for convenience, make scalar functions "auto vectorizing"
 # so you can do x + 2 when x is a vector
 ################################################################################
@@ -804,6 +790,60 @@ class AbstractCondDist(CondDist):
 
     def get_shape(self):
         return self.shape
+
+
+################################################################################
+# For convenience, gather all cond_dists
+################################################################################
+
+_all_objects = vars()
+
+
+excluded_cond_dist_classes = (
+    CondDist,
+    Constant,
+    AllScalarCondDist,
+    VecMatCondDist,
+    MatMul,
+    Inverse,
+    Softmax,
+    Categorical,
+    Dirichlet,
+    Multinomial,
+    AbstractCondDist
+    # LogProb,
+)
+
+
+def get_all_cond_dists():
+    from inspect import isclass
+
+    """Convenience function to print out all available CondDists"""
+    # print(_all_objects)
+    random_cond_dists = []
+    for name, item in _all_objects.items():
+        if isinstance(item, CondDist) and item.random:
+            random_cond_dists.append(item)
+
+    nonrandom_cond_dists = []
+    for name, item in _all_objects.items():
+        if isinstance(item, CondDist) and not item.random:
+            nonrandom_cond_dists.append(item)
+
+    cond_dist_classes = []
+    for name, item in _all_objects.items():
+        if (
+            isclass(item)
+            and issubclass(item, CondDist)
+            and not item in excluded_cond_dist_classes
+        ):
+            cond_dist_classes.append(item)
+
+    return random_cond_dists, nonrandom_cond_dists, cond_dist_classes
+
+
+random_cond_dists, nonrandom_cond_dists, all_cond_dist_classes = get_all_cond_dists()
+all_cond_dists = random_cond_dists + nonrandom_cond_dists
 
 
 # import here to avoid circular import problems
