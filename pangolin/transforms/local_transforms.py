@@ -151,7 +151,7 @@ class LocalTransform:
         * `has_observed_descendent` is a pytree with the same structure as `nodes`
         indicating if each has an observed descendent.
         * `pars_included` is a pytree with the same structure as `parents` with a boolean
-        for each indicating if that parent aslo appears in `nodes`.
+        for each indicating if that parent also appears in `nodes`.
         * If this transformation is inapplicable based on the `cond_dist`s present in
         each node and/or which parents are included or have observed descendents,
         then this function should raise an `InapplicableTransformation` exception.

@@ -40,7 +40,7 @@ def test_apply_transforms1():
     c = a + b
     x = normal_scale(c, 3.0)
 
-    [new_x, new_c], [], [] = apply_transforms([constant_op], [x, c], None, None)
+    [new_x, new_c], _, _ = apply_transforms([constant_op], [x, c], None, None)
     assert new_c.cond_dist == Constant(3.25)
     assert new_x.parents[0] == new_c
 

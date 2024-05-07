@@ -316,6 +316,24 @@ class vmap:
         return output
 
 
+def mixture(mixing_rv, fun):
+    if mixing_rv.cond_dist == bernoulli:
+        nvals = 2
+    elif mixing_rv.cond_dist == categorical:
+        nvals = mixing_rv.parents[0].shape[0]
+    else:
+        raise NotImplementedError(
+            "currently can only handle bernoulli and categorical as mixing dist"
+        )
+    vmap_rv = vmap(fun, 0)(np.arange(nvals))
+    mixing_dist = mixing_rv.cond_dist
+    num_mixing_args = len(mixing_rv.parents)
+    vmap_dist = vmap_rv.cond_dist
+    mixture_dist = Mixture(mixing_dist, num_mixing_args, vmap_dist)
+    mixture_rv = mixture_dist(*mixing_rv.parents, *vmap_rv.parents)
+    return mixture_rv
+
+
 class AbstractRV(RV):
     def __init__(self, shape):
         super().__init__(AbstractCondDist(shape))
@@ -434,13 +452,13 @@ def print_upstream(*vars):
 
     id = 0
     node_to_id = {}  # type: ignore
-    print(f"shape{' '*(max_shape-5)} | statement")
-    print(f"{'-'*max_shape} | ---------")
+    print(f"shape{' ' * (max_shape - 5)} | statement")
+    print(f"{'-' * max_shape} | ---------")
     for node in nodes:
         par_ids = [node_to_id[p] for p in node.parents]
 
         par_id_str = util.comma_separated(par_ids, util.num2str, False)
-        par_id_str = par_id_str + " " * (par_str_len - len(par_id_str))
+        # par_id_str = par_id_str + " " * (par_str_len - len(par_id_str))
 
         shape_str = str(node.shape)
         shape_str += " " * (max_shape - len(shape_str))

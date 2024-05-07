@@ -168,9 +168,7 @@ class Helper:
                 new_parent_refs = tuple(parent_refs[p] for p in perm)
             else:
                 new_parent_refs = parent_refs
-            return (
-                f"{ref} ~ {name}" + util.comma_separated(new_parent_refs, str) + ";\n"
-            )
+            return f"{ref} ~ {name}" + util.comma_separated(new_parent_refs, str) + ";\n"
             # return f"{ref} ~ {name}" + util.comma_separated(parent_refs, str) + ";\n"
 
         return gencode_dist
@@ -194,6 +192,10 @@ class Helper:
     def gencode_sum(self, cond_dist, loopdepth, ref, parent_ref):
         assert isinstance(cond_dist, interface.Sum)
         axis = cond_dist.axis
+        assert axis is not None, "Stan/JAGs only support sum along single integer axis"
+        assert isinstance(
+            axis, int
+        ), "Stan/JAGs only support sum along single integer axis"
         loop_code = ""
         end_code = ""
         for n in range(ref.ndim):
@@ -202,9 +204,7 @@ class Helper:
             else:
                 loop_index = f"l{loopdepth}"
                 open_axis = ref.nth_open_axis(0)
-                loop_code += (
-                    f"for ({loop_index} in 1:{ref.shape[open_axis]})" + "{" "\n"
-                )
+                loop_code += f"for ({loop_index} in 1:{ref.shape[open_axis]})" + "{" "\n"
                 end_code = "}\n" + end_code
                 loopdepth += 1
                 ref = ref.index(0, loop_index)
@@ -234,7 +234,21 @@ class Helper:
                 for p_ref, axis in zip(parent_refs, cond_dist.in_axes)
             ]
 
-            loop_code = f"for ({loop_index} in 1:" + str(cond_dist.axis_size) + "){\n"
+            # must update cond_dist.axis size in case cond_dist.axis_size==None
+            # this block of code is pretty new
+            if cond_dist.axis_size is None:
+                axis_size = None
+                assert len(cond_dist.in_axes) == len(parent_refs)
+                for in_axis, parent_ref in zip(cond_dist.in_axes, parent_refs):
+                    if in_axis is not None:
+                        axis_size = parent_ref.shape[in_axis]
+                        break
+                if axis_size is None:
+                    assert False, "should be impossible"
+            else:
+                axis_size = cond_dist.axis_size
+
+            loop_code = f"for ({loop_index} in 1:" + str(axis_size) + "){\n"
             middle_code = gencode(
                 cond_dist.base_cond_dist, loopdepth + 1, new_ref, *new_parent_refs
             )

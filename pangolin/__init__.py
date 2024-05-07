@@ -20,7 +20,7 @@ from . import transforms
 Calculate = calculate.Calculate
 
 # for convenience, set up inference routines
-calc = Calculate("numpyro", niter=100000)
+calc = Calculate(inference_numpyro, niter=100000)
 sample = calc.sample
 E = calc.E
 var = calc.var

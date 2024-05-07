@@ -57,6 +57,29 @@ def gencode_normal_scale(cond_dist, loopdepth, ref, *parent_refs):
     return f"{ref} ~ dnorm({parent_refs[0]},1/({parent_refs[1]})^2);\n"
 
 
+def gencode_student_t(cond_dist, loopdepth, ref, *parent_refs):
+    assert cond_dist == interface.student_t
+    return f"{ref} ~ dt({parent_refs[1]},1/({parent_refs[2]})^2,{parent_refs[0]});\n"
+
+
+def gencode_cauchy(cond_dist, loopdepth, ref, *parent_refs):
+    assert cond_dist == interface.cauchy
+    return f"{ref} ~ dt({parent_refs[0]},1/({parent_refs[1]})^2,1);\n"  # use t with 1 DOF
+
+
+def gencode_truncated(cond_dist, loopdepth, ref, *parent_refs):
+    assert isinstance(cond_dist, interface.Truncated)
+    orig = gencode(cond_dist.base_dist, loopdepth, ref, *parent_refs)[:-2]  # remove ;\n
+    orig += " T("
+    if cond_dist.lo is not None:
+        orig += str(cond_dist.lo)
+    orig += ","
+    if cond_dist.hi is not None:
+        orig += str(cond_dist.hi)
+    orig += ");\n"
+    return orig
+
+
 # # not easy to support softmax because JAGS doesn't allow exp to be vectorized
 # def gencode_softmax(cond_dist, loopdepth, ref, *parent_refs):
 #     p_ref = parent_refs[0]
@@ -150,14 +173,18 @@ gencode_fns = {
     interface.bernoulli_logit: gencode_bernoulli_logit,
     # interface.binomial: gencode_dist_factory("dbin"),
     interface.binomial: gencode_dist_factory("dbin", [1, 0]),
+    interface.cauchy: gencode_cauchy,  # use T with 1 DF
     interface.uniform: gencode_dist_factory("dunif"),
     interface.beta: gencode_dist_factory("dbeta"),
     interface.exponential: gencode_dist_factory("dexp"),
+    interface.gamma: gencode_dist_factory("dgamma"),
+    interface.poisson: gencode_dist_factory("dpois"),
     interface.dirichlet: gencode_dist_factory("ddirch"),
+    interface.student_t: gencode_student_t,
     # interface.categorical: gencode_dist_factory("dcat"),
     interface.categorical: gencode_categorical_factory("dcat"),
     interface.multinomial: gencode_dist_factory("dmulti", [1, 0]),
-    interface.multi_normal_cov: gencode_dist_factory("mnorm.vcov"),
+    interface.multi_normal_cov: gencode_dist_factory("dmnorm.vcov"),
     interface.beta_binomial: gencode_unsupported(),
     interface.mul: gencode_infix_factory("*"),
     interface.add: gencode_infix_factory("+"),
@@ -197,6 +224,8 @@ class_gencode_fns = {
     # interface.CondProb: gencode_unsupported(),
     # interface.Mixture: gencode_unsupported(),
     interface.LogProb: gencode_unsupported(),
+    interface.Mixture: gencode_unsupported(),
+    interface.Truncated: gencode_truncated,
 }
 
 
@@ -259,6 +288,7 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
 
     code += "model{\n"
     for var in included_vars:
+        # print(f"{var.cond_dist=} {[p.shape for p in var.parents]=}")
         if isinstance(var.cond_dist, interface.Constant):
             evidence[ids[var]] = var.cond_dist.value  # constant RVs
         else:

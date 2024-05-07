@@ -3,7 +3,7 @@ from pangolin.interface import *
 from pangolin import inference_numpyro, calculate
 from scipy import stats
 
-calc = calculate.Calculate("numpyro")
+calc = calculate.Calculate(inference_numpyro)
 
 
 def test_constant1():

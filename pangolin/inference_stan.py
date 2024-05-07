@@ -106,6 +106,15 @@ def gencode_softmax(cond_dist, loopdepth, ref, *parent_refs):
     return f"{ref} = to_array_1d(softmax(to_vector({a})));\n"
 
 
+def gencode_truncated(cond_dist, loopdepth, ref, *parent_refs):
+    return gencode(cond_dist.base_dist, loopdepth, ref, *parent_refs)
+
+
+def gencode_multi_normal_cov(cond_dist, loopdepth, ref, *parent_refs):
+    a, b = parent_refs
+    return f"to_vector({ref}) ~ multi_normal(to_vector({a}),to_matrix({b}));\n"
+
+
 def gencode_unsupported():
     def gencode_dist(cond_dist, loopdepth, ref, *parent_refs):
         raise NotImplementedError(f"Stan does not support distribution {cond_dist}")
@@ -120,17 +129,20 @@ gencode_fns = {
     interface.bernoulli: gencode_dist_factory("bernoulli"),
     interface.bernoulli_logit: gencode_dist_factory("bernoulli_logit"),
     interface.binomial: gencode_dist_factory("binomial"),
-    # interface.binomial: gencode_dist_factory_swapargs("dbin"),
+    interface.beta_binomial: gencode_dist_factory("beta_binomial"),
     interface.beta: gencode_dist_factory("beta"),
-    # interface.exponential: gencode_dist_factory("dexp"),
+    interface.cauchy: gencode_dist_factory("cauchy"),
+    interface.exponential: gencode_dist_factory("exponential"),
     # interface.dirichlet: gencode_dist_factory("dirichlet"),
     interface.dirichlet: gencode_dirichlet,
+    interface.gamma: gencode_dist_factory("gamma"),
     # # interface.categorical: gencode_dist_factory("dcat"),
     # interface.categorical: gencode_categorical,
     # interface.multinomial: gencode_dist_factory_swapargs("dmulti"),
     interface.multinomial: gencode_dist_factory("multinomial", [1]),  # drop num trials
-    # interface.multi_normal_cov: gencode_dist_factory("mnorm.vcov"),
+    interface.multi_normal_cov: gencode_multi_normal_cov,
     # interface.beta_binomial: gencode_unsupported(),
+    interface.student_t: gencode_dist_factory("student_t"),
     interface.mul: gencode_infix_factory("*"),
     interface.add: gencode_infix_factory("+"),
     interface.sub: gencode_infix_factory("-"),
@@ -165,6 +177,7 @@ class_gencode_fns = {
     interface.VMapDist: gencode_vmapdist_factory(gencode),
     interface.Index: gencode_index,
     interface.Sum: gencode_sum,
+    interface.Truncated: gencode_truncated,
     # interface.CondProb: gencode_unsupported(),
     # interface.Mixture: gencode_unsupported(),
 }
@@ -194,11 +207,11 @@ class StanType:
 
             s += f"{self.base_type}"
 
-            if self.lower and self.upper:
+            if self.lower is not None and self.upper is not None:
                 s += f"<lower={self.lower},upper={self.upper}>"
-            elif self.lower:
+            elif self.lower is not None:
                 s += f"<lower={self.lower}>"
-            elif self.upper:
+            elif self.upper is not None:
                 s += f"<upper={self.upper}>"
 
             return s + " " + varname + ";"
@@ -282,12 +295,24 @@ def base_type(cond_dist, *parent_types):
         interface.softmax,
     ]:
         return StanType("real")
-    elif cond_dist in (interface.normal_scale, interface.uniform):
+    elif cond_dist in (interface.uniform,):
+        # can't really put bounds here because not known in general
         return StanType("real")
+    elif cond_dist in (
+        interface.normal_scale,
+        interface.student_t,
+        interface.multi_normal_cov,
+        interface.cauchy,
+    ):
+        return StanType("real")
+    elif cond_dist in (interface.exponential, interface.gamma):
+        return StanType("real", lower=0)
     elif cond_dist in (interface.beta,):
         return StanType("real", lower=0, upper=1)
     elif cond_dist in (interface.bernoulli, interface.bernoulli_logit):
         return StanType("int", lower=0, upper=1)
+    elif cond_dist in (interface.beta_binomial,):
+        return StanType("int", lower=0)
     elif isinstance(cond_dist, interface.Constant):
         if np.issubdtype(cond_dist.value.dtype, np.floating):
             return StanType("real")
@@ -308,6 +333,16 @@ def base_type(cond_dist, *parent_types):
         return StanType("real")
     elif isinstance(cond_dist, interface.VMapDist):
         return base_type(cond_dist.base_cond_dist, *parent_types)
+    elif isinstance(cond_dist, interface.Truncated):
+        # get the regular one then add the constraints
+        t = base_type(cond_dist.base_dist, *parent_types)
+        assert t.lower is None
+        assert t.upper is None
+        if cond_dist.lo is not None:
+            t.lower = cond_dist.lo
+        if cond_dist.hi is not None:
+            t.upper = cond_dist.hi
+        return t
     else:
         raise NotImplementedError(f"type string not implemented for {cond_dist}")
 

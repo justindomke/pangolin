@@ -268,7 +268,7 @@ numpyro_dists = {
     interface.binomial: dist.Binomial,
     interface.beta: dist.Beta,
     interface.exponential: dist.Exponential,
-    interface.beta_binomial: dist.BetaBinomial,
+    interface.beta_binomial: lambda n, a, b: dist.BetaBinomial(a, b, n),
     interface.multinomial: dist.Multinomial,
     interface.multi_normal_cov: dist.MultivariateNormal,
 }
@@ -302,11 +302,15 @@ def sample_vmap(cond_dist, rng_key, *parent_vals):
 
 log_prob_funs = {}  # none for now!
 
-class_log_prob_funs = {interface.VMapDist: log_prob_vmap}
+class_log_prob_funs = {
+    interface.VMapDist: log_prob_vmap
+}  # interface.Truncated: log_prob_truncated
 
 sample_funs = {}  # none for now
 
-class_sample_funs = {interface.VMapDist: sample_vmap}
+class_sample_funs = {
+    interface.VMapDist: sample_vmap
+}  # interface.Truncated: sample_truncated
 
 
 def eval_index(cond_dist: interface.Index, val, *indices):

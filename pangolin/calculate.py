@@ -5,29 +5,35 @@ from . import inference_numpyro, inference_jags, inference_stan
 from . import dag
 from .interface import InvalidAncestorQuery
 
-engines = ["numpyro", "jags", "stan"]
+# engines = ["numpyro", "jags", "stan"]
+# engines = [inference_numpyro, inference_]
 
 
 class Calculate:
-    def __init__(self, engine, **options):
+    def __init__(self, inference, **options):
         """
         Create a `Calculate` object.
 
         Inputs:
-        * `engine`: string representing what backend to use (e.g. `numpyro` or `jags`)
+        * `engine`: string representing what backend to use (e.g. `pangolin.inference_numpyro` or `jags`)
         * `**options`: engine-specific options
         """
-        if engine not in engines:
-            raise Exception(f"engine must be in {engines}")
+        # if engine not in engines:
+        #    raise Exception(f"engine must be in {engines}")
 
-        if engine == "jags":
-            inference = inference_jags
-        elif engine == "numpyro":
-            inference = inference_numpyro
-        elif engine == "stan":
-            inference = inference_stan
-        else:
-            raise Exception(f"inference must be in {engines}")
+        # if engine == "jags":
+        #     inference = inference_jags
+        # elif engine == "numpyro":
+        #     inference = inference_numpyro
+        # elif engine == "stan":
+        #     inference = inference_stan
+        # else:
+        #     raise Exception(f"inference must be in {engines}")
+
+        if not hasattr(inference, "sample_flat"):
+            raise Exception(
+                f"inference module {inference} does not contain a sample_flat() method."
+            )
 
         self.inference = inference
         self.options = options  # options for that engine
@@ -66,9 +72,13 @@ class Calculate:
         ```
         """
 
-        flat_vars, flat_given_vars, flat_given_vals, unflatten = util.flatten_args(
-            vars, given_vars, given_vals
-        )
+        (
+            flat_vars,
+            flat_given_vars,
+            flat_given_vals,
+            unflatten,
+            unflatten_given,
+        ) = util.flatten_args(vars, given_vars, given_vals)
 
         if mode == "auto":
             try:

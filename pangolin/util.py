@@ -285,7 +285,10 @@ def flatten_args(vars, given_vars=None, given_vals=None):
     def unflatten_vars(flat_samps):
         return jax.tree_util.tree_unflatten(vars_treedef, flat_samps)
 
-    return flat_vars, flat_given_vars, flat_given_vals, unflatten_vars
+    def unflatten_given(flat_given_vars):
+        return jax.tree_util.tree_unflatten(given_vars_treedef, flat_given_vars)
+
+    return flat_vars, flat_given_vars, flat_given_vals, unflatten_vars, unflatten_given
 
 
 def nth_index(lst, item, n):

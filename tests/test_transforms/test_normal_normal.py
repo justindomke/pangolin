@@ -93,12 +93,12 @@ def test_apply_transforms1():
     x = normal_scale(z, c)
     x_val = np.array(2.0)
 
-    new_x, [new_x2], [new_x_val] = apply_transforms([normal_normal], x, x, x_val)
+    new_x, new_x2, new_x_val = apply_transforms([normal_normal], x, x, x_val)
     assert new_x != x
     assert new_x2 == new_x
     assert new_x_val == x_val
 
-    [new_x, new_z], [new_x2], [new_x_val] = apply_transforms(
+    [new_x, new_z], new_x2, new_x_val = apply_transforms(
         [normal_normal], [x, z], x, x_val
     )
     assert new_x != x
@@ -108,6 +108,8 @@ def test_apply_transforms1():
     assert new_x in dag.upstream_nodes(new_z)
 
     # without observing x, nothing should happen
-    [new_x2, new_z2], [], [] = apply_transforms([normal_normal], [x, z], None, None)
+    [new_x2, new_z2], tmp1, tmp2 = apply_transforms([normal_normal], [x, z], None, None)
     assert new_x2 == x
     assert new_z2 == z
+    assert tmp1 is None
+    assert tmp2 is None

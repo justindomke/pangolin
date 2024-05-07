@@ -122,6 +122,7 @@ class AllScalarCondDist(CondDist):
         return ()
 
 
+cauchy = AllScalarCondDist(2, "cauchy", True)
 normal_scale = AllScalarCondDist(2, "normal_scale", True)
 normal_prec = AllScalarCondDist(2, "normal_prec", True)
 bernoulli = AllScalarCondDist(1, "bernoulli", True)
@@ -130,7 +131,10 @@ binomial = AllScalarCondDist(2, "binomial", True)
 uniform = AllScalarCondDist(2, "uniform", True)
 beta = AllScalarCondDist(2, "beta", True)
 exponential = AllScalarCondDist(1, "exponential", True)
+gamma = AllScalarCondDist(2, "gamma", True)
+poisson = AllScalarCondDist(1, "poisson", True)
 beta_binomial = AllScalarCondDist(3, "beta_binomial", True)
+student_t = AllScalarCondDist(3, "student_t", True)
 # basic math operators, typically triggered infix operations
 add = AllScalarCondDist(2, "add", False)
 sub = AllScalarCondDist(2, "sub", False)
@@ -595,11 +599,11 @@ class VMapDist(CondDist):
         )
         return (
             "vmap("
-            + str(self.axis_size)
-            + ", "
-            + str(list(new_in_axes))
-            + ", "
             + str(self.base_cond_dist)
+            + ","
+            + str(list(new_in_axes))
+            + ","
+            + str(self.axis_size)
             + ")"
         )
 
@@ -614,6 +618,84 @@ class VMapDist(CondDist):
 
     def __hash__(self):
         return hash((self.base_cond_dist, self.in_axes, self.axis_size))
+
+
+################################################################################
+# mixtures
+################################################################################
+
+
+class Mixture(CondDist):
+    def __init__(self, mixing_dist, num_mixing_args, vmap_dist):
+        assert isinstance(num_mixing_args, int)
+        assert isinstance(vmap_dist, VMapDist)
+        self.mixing_dist = mixing_dist
+        self.num_mixing_args = num_mixing_args
+        self.vmap_dist = vmap_dist
+        super().__init__(name="Mixture", random=True)
+
+    def get_shape(self, *parents_shapes):
+        mixing_parents_shapes = parents_shapes[: self.num_mixing_args]
+        vmap_parents_shapes = parents_shapes[self.num_mixing_args :]
+        mix_shape, *rest_shape = self.vmap_dist.get_shape(*vmap_parents_shapes)
+        return tuple(rest_shape)
+
+        # vec_shape, *rest_shape = self.vmap_dist.get_shape(*parents_shapes)
+        # assert len(weights_shape) == 1
+        # assert weights_shape[0] == vec_shape
+        # print(f"{vec_shape=}")
+        # print(f"{rest_shape=}")
+        # return tuple(rest_shape)
+
+    def __repr__(self):
+        return f"Mixture({repr(self.mixing_dist)},{self.num_mixing_args},{repr(self.vmap_dist)}"
+
+    def __str__(self):
+        return "mixture(" + str(self.mixing_dist) + "," + str(self.vmap_dist) + ")"
+
+    def __eq__(self, other):
+        if isinstance(other, Mixture):
+            return (
+                self.mixing_dist == other.mixing_dist
+                and self.num_mixing_args == other.num_mixing_args
+                and self.vmap_dist == other.vmap_dist
+            )
+        return False
+
+    def __hash__(self):
+        return hash((self.mixing_dist, self.num_mixing_args, self.vmap_dist))
+
+
+# mixtures
+################################################################################
+
+
+class Truncated(CondDist):
+    def __init__(self, base_dist, lo=None, hi=None):
+        assert isinstance(base_dist, CondDist)
+        assert base_dist.random
+        assert lo is not None or hi is not None
+        self.lo = lo
+        self.hi = hi
+        self.base_dist = base_dist
+        super().__init__(name="Truncated", random=True)
+
+    def get_shape(self, *parents_shapes):
+        return self.base_dist.get_shape(*parents_shapes)
+
+    def __repr__(self):
+        return f"Truncated({repr(self.base_dist)})"
+
+    def __str__(self):
+        return "truncated(" + str(self.base_dist) + ")"
+
+    def __eq__(self, other):
+        if isinstance(other, Truncated):
+            return self.base_dist == other.base_dist
+        return False
+
+    def __hash__(self):
+        return hash(self.base_dist)
 
 
 ################################################################################
@@ -668,7 +750,9 @@ vec_pow = implicit_vectorized_scalar_cond_dist(pow)
 
 
 def makerv(a):
-    if isinstance(a, RV):
+    if isloop(a):
+        return makerv(np.arange(a.length))[a]
+    elif isinstance(a, RV):
         return a
     else:
         cond_dist = Constant(a)
@@ -846,5 +930,18 @@ random_cond_dists, nonrandom_cond_dists, all_cond_dist_classes = get_all_cond_di
 all_cond_dists = random_cond_dists + nonrandom_cond_dists
 
 
+################################################################################
+# convert loops into RVs
+################################################################################
+
+
 # import here to avoid circular import problems
 from .loops import Loop, make_sliced_rv, slice_existing_rv
+
+
+def isloop(x):
+    return isinstance(x, Loop)
+
+
+# def num(i: Loop):
+#    return makerv(np.arange(i.length))[i]

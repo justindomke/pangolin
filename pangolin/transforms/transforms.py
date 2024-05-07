@@ -76,7 +76,7 @@ def apply_transforms(transforms: Sequence[Transform], tree_vars, tree_given, tre
         **new_tree_given**)
     """
 
-    vars, given, vals, unflatten_vars = util.flatten_args(
+    vars, given, vals, unflatten_vars, unflatten_given = util.flatten_args(
         tree_vars, tree_given, tree_vals
     )
 
@@ -90,7 +90,7 @@ def apply_transforms(transforms: Sequence[Transform], tree_vars, tree_given, tre
             except InapplicableTransform:
                 continue
 
-    return unflatten_vars(vars), given, vals
+    return unflatten_vars(vars), unflatten_given(given), unflatten_given(vals)
 
 
 class InapplicableTransform(Exception):

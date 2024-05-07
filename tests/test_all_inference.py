@@ -4,7 +4,12 @@ Currently tests JAGS, Stan, and Numpyro
 """
 
 import pytest
-from pangolin import inference_jags, inference_numpyro, inference_stan
+from pangolin import (
+    inference_jags,
+    inference_numpyro,
+    inference_stan,
+    inference_numpyro_modelbased,
+)
 import numpy as np
 from pangolin.interface import makerv, vmap, plate
 from pangolin.interface import (
@@ -21,7 +26,12 @@ import jax
 from jax import numpy as jnp
 from pangolin import ezstan
 
-inference_engines = [inference_jags, inference_numpyro, inference_stan]
+inference_engines = [
+    inference_jags,
+    inference_numpyro,
+    inference_stan,
+    inference_numpyro_modelbased,
+]
 
 # automatically run tests on all of these
 pytestmark = pytest.mark.parametrize("inference", inference_engines)

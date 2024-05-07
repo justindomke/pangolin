@@ -34,6 +34,40 @@ class Loop:
     def __exit__(self, exc_type, exc_value, exc_tb):
         assert Loop.loops.pop() is self
 
+    def __add__(self, other):
+        return makerv(self) + other
+
+    __radd__ = __add__
+
+    def __sub__(self, b):
+        return makerv(self) - b
+
+    def __rsub__(self, b):
+        return makerv(b) - self
+
+    def __mul__(self, other):
+        return makerv(self) * other
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, b):
+        return makerv(self) / b
+
+    def __rtruediv__(self, b):
+        return makerv(b) / self
+
+    def __pow__(self, b):
+        return makerv(self) ** b
+
+    def __rpow__(self, a):
+        return makerv(a) ** self
+
+    # def __matmul__(self, a):
+    #     return matmul(self, a)
+    #
+    # def __rmatmul__(self, a):
+    #     return matmul(a, self)
+
 
 class SlicedRV(RV):
     """Represents a "slice" of a higher dimenstional RV. Has the shape of just a single slice but has a reference to the
@@ -240,12 +274,14 @@ class VMapRV(RV):
         pass
 
     def __setitem__(self, idx, value):
+        # TODO: somehow allow full slices for clarity?
+
         if Loop.loops == []:
             raise Exception("can't assign into VMapRV outside of Loop context")
         elif len(Loop.loops) == 1:
             assert Loop.loops == [idx]
         else:
-            assert tuple(Loop.loops) == idx
+            assert tuple(Loop.loops) == idx, "must assign using all loops, in order"
 
         if self.copy_rv:
             # try to "become" the RV being copied
@@ -256,6 +292,7 @@ class VMapRV(RV):
             with HideLoops():  # prevent indexing from seeing loops!
                 copy = value.full_rv[:]
             super().__init__(copy.cond_dist, *copy.parents)
+        return self
 
 
 # https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method
