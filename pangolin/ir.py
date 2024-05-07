@@ -826,8 +826,24 @@ class RV(dag.Node):
             ret += util.comma_separated(self.parents, str)
         return ret
 
-    def __setattr__(self, key, value):
-        if self._frozen:
+    def clear(self):
+        """
+        "Clear" a RV. (Delete cond_dist and parents.)
+        This should be used in code that "consumes" a random RV and creates an equivalent one
+        to make sure the user doesn't mistakenly use both, which would treat as independent
+        """
+        self.__setattr__("_frozen", False, unfreeze=True)
+        self.cond_dist = None
+        self.parents = None
+        self._frozen = True
+
+    def __setattr__(self, key, value, unfreeze=False):
+        """
+        Set attribute. Special case to freeze after init.
+        Special unfreeze attribute provided to make it possible to delete
+        (Also allowed to unfreeze for delete)
+        """
+        if self._frozen and not unfreeze:
             raise Exception("RVs are immutable after init.")
         else:
             self.__dict__[key] = value
@@ -865,6 +881,10 @@ class RV(dag.Node):
 
     def __rmatmul__(self, a):
         return matmul(a, self)
+
+    def __iter__(self):
+        for n in range(self.shape[0]):
+            yield self[n]
 
 
 class AbstractCondDist(CondDist):
