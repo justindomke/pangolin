@@ -5,6 +5,12 @@ import numpy as np
 import jax
 from .ir import *
 
+# valid unicode start characters: https://www.asmeurer.com/python-unicode-variable-names/start-characters.html
+
+Ø = None
+_ = None
+º = None
+
 
 def normal(loc, scale=None, prec=None):
     "1-d normals with multiple possible parameterizations"

@@ -837,6 +837,15 @@ class RV(dag.Node):
         self.parents = None
         self._frozen = True
 
+    def reassign(self, rv):
+        """
+        Break immutability, and in-place reassign the RV to copy another
+        """
+        self.__setattr__("_frozen", False, unfreeze=True)
+        self.cond_dist = rv.cond_dist
+        self.parents = rv.parents
+        self._frozen = True
+
     def __setattr__(self, key, value, unfreeze=False):
         """
         Set attribute. Special case to freeze after init.
