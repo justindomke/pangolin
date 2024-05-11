@@ -14,59 +14,10 @@ from pangolin.interface import (
 import numpy as np  # type: ignore
 from pangolin.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VMapRV
 from pangolin import *
-from pangolin.automap import automap, is_pointless_rv
+from pangolin.automap import automap, which_slice_kth_arg
 from pangolin.arrays import Array1D, Array, ArrayND
 
 
-def test_pointless_rv1():
-    x = makerv(np.random.randn(5))
-    y = x[:]
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv2():
-    x = makerv(np.random.randn(5, 3))
-    y = x[:, :]
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv3():
-    x = makerv(np.random.randn(5, 3))
-    y = x[:, np.arange(3)]
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv4():
-    x = makerv(np.random.randn(5, 3))
-    y = x[np.arange(5), :]
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv5():
-    x = makerv(np.random.randn(5, 3))
-    y = x[np.arange(5), :]
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv6():
-    x = makerv(np.random.randn(5))
-    y = x[[2, 0, 1]]
-    assert not is_pointless_rv(y)
-
-
-def test_pointless_rv7():
-    x = makerv(np.random.randn(3))
-    y = VMapDist(Index(None), (None, 0))(x, makerv(range(3)))
-    assert is_pointless_rv(y)
-
-
-def test_pointless_rv8():
-    x = makerv(np.random.randn(3))
-    y = vmap(lambda i: x[i])(makerv(range(3)))
-    assert is_pointless_rv(y)
-
-
-# double non-sliced indexing NEVER pointless because that triggers numpy advanced indexing
 
 
 def test1():
@@ -207,6 +158,33 @@ def test10():
     print_upstream(w)
 
 
+def test10b():
+    M = 3
+    K = 4
+    N = 5
+    V = 6
+    α = np.ones(K)
+    β = np.ones(V)
+    θ = automap([dirichlet(α) for m in range(M)])
+    φ = automap([dirichlet(β) for k in range(K)])
+    z = automap([[categorical(θm) for n in range(N)] for θm in θ])
+    w = automap([[categorical(φ[z[m][n]]) for n in range(N)] for m in range(M)])
+    print_upstream(w)
+
+
+def test10c():
+    M = 3
+    K = 4
+    N = 5
+    V = 6
+    α = np.ones(K)
+    β = np.ones(V)
+    θ = automap([dirichlet(α) for m in range(M)])
+    φ = automap([dirichlet(β) for k in range(K)])
+    z = automap([[categorical(θ[m]) for n in range(N)] for m in range(M)])
+    w = automap([[categorical(φ[z[m][n]]) for n in range(N)] for m in range(M)])
+    print_upstream(w)
+
 def test11():
     # simplest case where automap creates arrays of ints instead of vectorizing properly
     # x = automap([[normal(0, 1) for i in range(5)] for j in range(3)])
@@ -338,6 +316,79 @@ def test17():
         for i in range(3):
             for j in range(4):
                 assert xs[i][j][n] == ys[n, i, j]
+
+def test18():
+    val = np.random.randn(5,3)
+    x = makerv(val)
+    y = automap([xi for xi in x])
+    assert isinstance(y,RV)
+    print(x)
+    assert y.cond_dist == Constant(val)
+
+def test19():
+    x = makerv(np.random.randn(5, 3))
+    y = automap([x[i] for i in range(5)])
+    assert y.cond_dist == x.cond_dist
+
+
+def test20():
+    x = makerv(np.random.randn(5, 3))
+    y = automap([x[i,:] for i in range(5)])
+    assert y.cond_dist == x.cond_dist
+
+
+def test21():
+    # do a list comprehension that acts like a transpose
+
+    # first confirm how numpy does it
+    x0 = np.random.randn(5,3)
+    y0 = np.array([x0[:,j] for j in range(3)])
+    assert np.all(y0 == x0.T)
+
+    x = makerv(x0)
+    y = automap([x[:,j] for j in range(3)])
+    assert y.shape == (3,5)
+    #assert y.cond_dist == Constant(x0.T)
+
+    print_upstream(y)
+
+    # ys = sample(y)
+    # for n in range(100):
+    #     assert np.all(ys[n] == x0.T)
+
+def test_which_slice_kth_arg1():
+    d = Index(None,None,None)
+    assert which_slice_kth_arg(d, 1) == 0
+    assert which_slice_kth_arg(d, 2) == 1
+    assert which_slice_kth_arg(d, 3) == 2
+
+
+def test_which_slice_kth_arg2():
+    d = Index(slice(None),None,None)
+    assert which_slice_kth_arg(d, 1) == 1
+    assert which_slice_kth_arg(d, 2) == 2
+
+def test_which_slice_kth_arg3():
+    d = Index(None,slice(None),None)
+    assert which_slice_kth_arg(d, 1) == 0
+    assert which_slice_kth_arg(d, 2) == 2
+
+def test_which_slice_kth_arg4():
+    d = Index(None,None,slice(None))
+    assert which_slice_kth_arg(d, 1) == 0
+    assert which_slice_kth_arg(d, 2) == 1
+
+def test_which_slice_kth_arg5():
+    d = Index(slice(None),slice(None),None)
+    assert which_slice_kth_arg(d, 1) == 2
+
+def test_which_slice_kth_arg6():
+    d = Index(slice(None),None,slice(None))
+    assert which_slice_kth_arg(d, 1) == 1
+
+def test_which_slice_kth_arg7():
+    d = Index(None,slice(None),slice(None))
+    assert which_slice_kth_arg(d, 1) == 0
 
 
 # def test_arrays1():
