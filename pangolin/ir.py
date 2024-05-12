@@ -165,6 +165,8 @@ sinh = AllScalarCondDist(1, "sinh", False)
 step = AllScalarCondDist(1, "sin", False)  # step in JAGS / stan
 tan = AllScalarCondDist(1, "tan", False)
 tanh = AllScalarCondDist(1, "tanh", False)
+
+
 # currently skipped from JAGS scalar functions
 # cloglog # g(p) = log(-log(1-p)) = log(log(1/(1-p)))
 # equals(x, y)
@@ -181,7 +183,7 @@ tanh = AllScalarCondDist(1, "tanh", False)
 
 
 def sqrt(x):
-    return x**0.5
+    return x ** 0.5
 
 
 class VecMatCondDist(CondDist):
@@ -284,6 +286,7 @@ class Softmax(CondDist):
 
 softmax = Softmax()
 
+
 # class SquareMatrixCondDist(CondDist):
 #
 #     def __init__(self):
@@ -365,7 +368,7 @@ class Sum(CondDist):
         if self.axis is None:
             return ()
         else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
+            return x_shape[: self.axis] + x_shape[self.axis + 1:]
 
     def __repr__(self):
         return f"Sum(axis={self.axis})"
@@ -405,7 +408,7 @@ class Index(CondDist):
         if num_advanced <= 1:
             return False
         first_advanced = self.slices.index(None)
-        slice_probe = self.slices[first_advanced : first_advanced + num_advanced]
+        slice_probe = self.slices[first_advanced: first_advanced + num_advanced]
         if all(s is None for s in slice_probe):
             return False  # in place
         else:
@@ -418,7 +421,7 @@ class Index(CondDist):
         for idx_shape1 in indices_shapes:
             for idx_shape2 in indices_shapes:
                 assert (
-                    idx_shape1 == idx_shape2
+                        idx_shape1 == idx_shape2
                 ), "all indices must have same shape (no broadcasting yet)"
 
         output_shape = ()
@@ -473,6 +476,14 @@ def index(var, indices):
     if not isinstance(indices, tuple):
         indices = (indices,)  # TODO: this makes me nervous...
 
+    # if parent is an Index that's only indexed with a single scalar argument then combine
+    if isinstance(var.cond_dist, Index):
+        if len(var.parents) == 2:
+            if var.parents[1].shape == ():
+                if var.cond_dist.slices[0] == None:
+                    if all(s == slice(None) for s in var.cond_dist.slices[1:]):
+                        return var.parents[0][(var.parents[1],) + indices]
+
     # add extra full slices
     indices = indices + (slice(None, None, None),) * (var.ndim - len(indices))
 
@@ -484,6 +495,30 @@ def index(var, indices):
         else:
             parents.append(index)
             slices.append(None)
+
+    # if isinstance(var.cond_dist,Index):
+    #     assert len(slices) == len(var.cond_dist.slices)
+    #     new_slices = []
+    #     new_parents = []
+    #     where_parent1 = 0
+    #     where_parent2 = 0
+    #     # try to put all slices together
+    #     for s1, s2, p1, p2 in zip(slices, var.cond_dist.slices, parents, var.parents):
+    #         if s1 == slice(None) and s2 == slice(None):
+    #             new_slices.append(slice(None))
+    #         elif s1 == slice(None) and s2 is None:
+    #             new_slices.append(None)
+    #             new_parents.append(var.parents[where_parent2])
+    #             where_parent2 += 1
+    #         elif s1 is None and s2 == slice(None):
+    #             new_slices.append(None)
+    #             new_parents.append(var.parents[where_parent1])
+    #             where_parent1 += 1
+    #         else:
+    #             new_slices.append(False)
+    #     if False not in new_slices:
+    #         return Index(*new_slices)(var.parents[0],*new_parents)
+
     return Index(*slices)(var, *parents)
 
 
@@ -540,7 +575,7 @@ def split_shape(shape, i):
         new_shape = shape
         new_axis_size = None
     else:
-        lo, mid, hi = (shape[:i], shape[i], shape[i + 1 :])
+        lo, mid, hi = (shape[:i], shape[i], shape[i + 1:])
         new_shape = lo + hi
         new_axis_size = shape[i]
     return new_shape, new_axis_size
@@ -598,21 +633,21 @@ class VMapDist(CondDist):
             is_leaf=util.is_leaf_with_none,
         )
         return (
-            "vmap("
-            + str(self.base_cond_dist)
-            + ","
-            + str(list(new_in_axes))
-            + ","
-            + str(self.axis_size)
-            + ")"
+                "vmap("
+                + str(self.base_cond_dist)
+                + ","
+                + str(list(new_in_axes))
+                + ","
+                + str(self.axis_size)
+                + ")"
         )
 
     def __eq__(self, other):
         if isinstance(other, VMapDist):
             return (
-                self.base_cond_dist == other.base_cond_dist
-                and self.in_axes == other.in_axes
-                and self.axis_size == other.axis_size
+                    self.base_cond_dist == other.base_cond_dist
+                    and self.in_axes == other.in_axes
+                    and self.axis_size == other.axis_size
             )
         return False
 
@@ -636,7 +671,7 @@ class Mixture(CondDist):
 
     def get_shape(self, *parents_shapes):
         mixing_parents_shapes = parents_shapes[: self.num_mixing_args]
-        vmap_parents_shapes = parents_shapes[self.num_mixing_args :]
+        vmap_parents_shapes = parents_shapes[self.num_mixing_args:]
         mix_shape, *rest_shape = self.vmap_dist.get_shape(*vmap_parents_shapes)
         return tuple(rest_shape)
 
@@ -656,9 +691,9 @@ class Mixture(CondDist):
     def __eq__(self, other):
         if isinstance(other, Mixture):
             return (
-                self.mixing_dist == other.mixing_dist
-                and self.num_mixing_args == other.num_mixing_args
-                and self.vmap_dist == other.vmap_dist
+                    self.mixing_dist == other.mixing_dist
+                    and self.num_mixing_args == other.num_mixing_args
+                    and self.vmap_dist == other.vmap_dist
             )
         return False
 
@@ -718,7 +753,7 @@ def implicit_vectorized_scalar_cond_dist(cond_dist: AllScalarCondDist):
             else:
                 if vec_shape:
                     assert (
-                        p.shape == vec_shape
+                            p.shape == vec_shape
                     ), "can only vectorize scalars + arrays of same shape"
                 else:
                     vec_shape = p.shape
@@ -795,7 +830,7 @@ class RV(dag.Node):
             else:
                 idx_start = ()
             idx_mid = (slice(None),) * slices_needed
-            idx_end = idx[where + 1 :]
+            idx_end = idx[where + 1:]
 
             idx = idx_start + idx_mid + idx_end
 
@@ -895,6 +930,19 @@ class RV(dag.Node):
         for n in range(self.shape[0]):
             yield self[n]
 
+    # def __eq__(self, other):
+    #     if self.cond_dist.random:
+    #         return super().__eq__(other)
+    #     else:
+    #         return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
+    #             p1 == p2 for p1, p2 in zip(self.parents, other.parents))
+    #
+    # def __hash__(self):
+    #     if self.cond_dist.random:
+    #         return super().__hash__()
+    #     else:
+    #         return hash((self.cond_dist, self.parents))
+
 
 class AbstractCondDist(CondDist):
     def __init__(self, shape):
@@ -910,7 +958,6 @@ class AbstractCondDist(CondDist):
 ################################################################################
 
 _all_objects = vars()
-
 
 excluded_cond_dist_classes = (
     CondDist,
@@ -946,9 +993,9 @@ def get_all_cond_dists():
     cond_dist_classes = []
     for name, item in _all_objects.items():
         if (
-            isclass(item)
-            and issubclass(item, CondDist)
-            and not item in excluded_cond_dist_classes
+                isclass(item)
+                and issubclass(item, CondDist)
+                and not item in excluded_cond_dist_classes
         ):
             cond_dist_classes.append(item)
 
@@ -957,7 +1004,6 @@ def get_all_cond_dists():
 
 random_cond_dists, nonrandom_cond_dists, all_cond_dist_classes = get_all_cond_dists()
 all_cond_dists = random_cond_dists + nonrandom_cond_dists
-
 
 ################################################################################
 # convert loops into RVs
@@ -970,7 +1016,6 @@ from .loops import Loop, make_sliced_rv, slice_existing_rv
 
 def isloop(x):
     return isinstance(x, Loop)
-
 
 # def num(i: Loop):
 #    return makerv(np.arange(i.length))[i]

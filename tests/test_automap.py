@@ -14,7 +14,7 @@ from pangolin.interface import (
 import numpy as np  # type: ignore
 from pangolin.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VMapRV
 from pangolin import *
-from pangolin.automap import automap, which_slice_kth_arg
+from pangolin.automap import automap, which_slice_kth_arg, is_pointless_rv
 from pangolin.arrays import Array1D, Array, ArrayND
 
 
@@ -159,6 +159,8 @@ def test10():
 
 
 def test10b():
+    # TODO: to solve this one, need to do "index simplification" — if you index into an index
+    # then collapse down into a single index
     M = 3
     K = 4
     N = 5
@@ -356,6 +358,25 @@ def test21():
     # for n in range(100):
     #     assert np.all(ys[n] == x0.T)
 
+def test22():
+    x0 = np.random.randn(5, 3)
+    y0 = np.array([[x0[i,j] for j in range(3)] for i in range(5)])
+    assert np.all(y0 == x0)
+
+    x = makerv(x0)
+    y = automap([[x[i,j] for j in range(3)] for i in range(5)])
+    print_upstream(y)
+
+def test22b():
+    x0 = np.random.randn(5, 3)
+    y0 = np.array([[x0[i][j] for j in range(3)] for i in range(5)])
+    assert np.all(y0 == x0)
+
+    x = makerv(x0)
+    y = automap([[x[i][j] for j in range(3)] for i in range(5)])
+    print_upstream(y)
+
+
 def test_which_slice_kth_arg1():
     d = Index(None,None,None)
     assert which_slice_kth_arg(d, 1) == 0
@@ -389,6 +410,54 @@ def test_which_slice_kth_arg6():
 def test_which_slice_kth_arg7():
     d = Index(None,slice(None),slice(None))
     assert which_slice_kth_arg(d, 1) == 0
+
+
+def test_pointless_rv1():
+    x = makerv(np.random.randn(5))
+    y = x[:]
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv2():
+    x = makerv(np.random.randn(5, 3))
+    y = x[:, :]
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv3():
+    x = makerv(np.random.randn(5, 3))
+    y = x[:, np.arange(3)]
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv4():
+    x = makerv(np.random.randn(5, 3))
+    y = x[np.arange(5), :]
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv5():
+    x = makerv(np.random.randn(5, 3))
+    y = x[np.arange(5), :]
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv6():
+    x = makerv(np.random.randn(5))
+    y = x[[2, 0, 1]]
+    assert not is_pointless_rv(y)
+
+
+def test_pointless_rv7():
+    x = makerv(np.random.randn(3))
+    y = VMapDist(Index(None), (None, 0))(x, makerv(range(3)))
+    assert is_pointless_rv(y)
+
+
+def test_pointless_rv8():
+    x = makerv(np.random.randn(3))
+    y = vmap(lambda i: x[i])(makerv(range(3)))
+    assert is_pointless_rv(y)
 
 
 # def test_arrays1():

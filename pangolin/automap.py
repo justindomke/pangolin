@@ -5,6 +5,9 @@ from typing import Sequence, List, Self
 from . import util
 
 
+from . import inference_numpyro_modelbased
+
+
 def num_unsliced(d: Index):
     assert isinstance(d, Index)
     count = 0
@@ -99,13 +102,14 @@ def is_pointless_rv(x):
     if not all(isinstance(p.cond_dist,Constant) for p in x.parents[1:]):
         return False
 
-    y = RV(d,val,*x.parents[1:])
+    y = RV(x.cond_dist,val,*x.parents[1:])
 
-    import inference_numpyro_modelbased
+    [samp] = inference_numpyro_modelbased.ancestor_sample_flat([y])
 
-    [samps] = inference_numpyro_modelbased.ancestor_sample_flat([y])
+    print(f"{samp=}")
+    print(f"{val.cond_dist.value=}")
 
-    return np.all(samps[0] == val.value)
+    return samp.shape == x.shape and np.all(samp == val.cond_dist.value)
 
     #def ancestor_sample_flat(vars, *, niter=None):
 
@@ -121,17 +125,13 @@ def automap(x):
 
     # recurse if necessary
     if all(is_sequence(xi) for xi in x):
-        print("a")
         return automap([automap(xi) for xi in x])
 
     if all(isinstance(xi.cond_dist, Constant) for xi in x):
         # stack together constant parents (no need to reassign)
         vals = [xi.cond_dist.value for xi in x]
-        print("b")
         #return makerv(np.stack(vals))
         return makerv(np.array(vals))
-
-    print("c")
 
     dist, N, M = check_parents_compatible(x)
 
@@ -154,35 +154,39 @@ def automap(x):
 
     # I think the reason test21 fails is that this is TOO EAGER and accepts cases it SHOULDN'T ACCEPT
 
-    if isinstance(dist, Index):
-        if num_non_none(k) == 1:  # one mapped argument
-            in_axis = where_non_none(k)
-            if in_axis > 0:  # don't do this when mapping over argument itself
-                if k[in_axis] == 0:  # only map over dim 0 (redundant?)
-                    if v[in_axis].cond_dist == Constant(range(N)):
-                        where_slice = which_slice_kth_arg(dist, in_axis)
-                        if where_slice == 0:
-                            # only do this when mapping over first dim
-                            # (otherwise the vmap acts like a transpose)
-
-                            print("WE GOT A CONSTANT")
-                            print(dist)
-                            print(k)
-                            print(v)
-                            print(f"{where_slice=}")
-
-                            assert dist.slices[where_slice] is None
-                            new_slices = dist.slices[:where_slice] + (slice(None),) + dist.slices[where_slice+1:]
-                            new_v = v[:in_axis] + v[in_axis+1:]
-
-                            if all(s == slice(None) for s in new_slices) and len(new_v) == 1:
-                                # if you're slicing all dims, don't
-                                return new_v[0]
-
-                            return Index(*new_slices)(*new_v)
+    # if isinstance(dist, Index):
+    #     if num_non_none(k) == 1:  # one mapped argument
+    #         in_axis = where_non_none(k)
+    #         if in_axis > 0:  # don't do this when mapping over argument itself
+    #             if k[in_axis] == 0:  # only map over dim 0 (redundant?)
+    #                 if v[in_axis].cond_dist == Constant(range(N)):
+    #                     where_slice = which_slice_kth_arg(dist, in_axis)
+    #                     if where_slice == 0:
+    #                         # only do this when mapping over first dim
+    #                         # (otherwise the vmap acts like a transpose)
+    #
+    #                         print("WE GOT A CONSTANT")
+    #                         print(dist)
+    #                         print(k)
+    #                         print(v)
+    #                         print(f"{where_slice=}")
+    #
+    #                         assert dist.slices[where_slice] is None
+    #                         new_slices = dist.slices[:where_slice] + (slice(None),) + dist.slices[where_slice+1:]
+    #                         new_v = v[:in_axis] + v[in_axis+1:]
+    #
+    #                         if all(s == slice(None) for s in new_slices) and len(new_v) == 1:
+    #                             # if you're slicing all dims, don't
+    #                             return new_v[0]
+    #
+    #                         return Index(*new_slices)(*new_v)
 
     # create new vmapped RV
     new_rv = VMapDist(dist, k, N)(*v)
+
+    if is_pointless_rv(new_rv):
+        return new_rv.parents[0]
+
     # assign old RVs to be slices of new vmapped RV
     for n, xn in enumerate(x):
         xn.reassign(new_rv[n])
@@ -195,6 +199,9 @@ def vec_args(p):
     d0 = p0.cond_dist
     if all(pi == p0 for pi in p):
         # if all parents are the same, return the first one and don't map
+        return (p0, None)
+    if all(pi.cond_dist == p0.cond_dist and pi.parents == p0.parents for pi in p):
+        #raise Exception("new optimization!")
         return (p0, None)
     if isinstance(d0, Constant) and all(pi.cond_dist == d0 for pi in p):
         # if all parents are different but are equal constants, return the
