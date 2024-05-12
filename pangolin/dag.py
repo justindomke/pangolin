@@ -131,8 +131,13 @@ def get_children(nodes, block_condition=None):
     children = {}
     for n in all_nodes:
         children[n] = []
+    #print(f"{all_nodes=}")
+    #print(f"{children=}")
+    print(f"{[hash(n) for n in all_nodes]=}")
+    print(f"{[hash(n) for n in children]=}")
     for n in all_nodes:
         for p in n.parents:
+            print(f"{hash(n)=} {hash(p)=}")
             if n not in children[p]:
                 children[p].append(n)
     return children

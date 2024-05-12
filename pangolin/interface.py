@@ -191,8 +191,13 @@ def vmap_generated_nodes(f, *dummy_args):
             continue
         assert d1.shape == d2.shape
 
+    #def excluded_node(node):
+    #    return node in dummy_nodes1
+
+    # need to use ids instead because of new notion of RV equality
+    dummy_ids1 = [id(x) for x in dummy_nodes1]
     def excluded_node(node):
-        return node in dummy_nodes1
+        return id(node) in dummy_ids1
 
     dummy_nodes2 = dag.upstream_nodes(dummy_output2, block_condition=excluded_node)
     return tuple(dummy_nodes2), dummy_output2
@@ -349,6 +354,15 @@ class AbstractRV(RV):
 
     def __str__(self):
         return str(self.shape)
+
+    def __eq__(self,other):
+        # DON'T use RV equality
+        return dag.Node.__eq__(self,other)
+
+
+    def __hash__(self):
+        # DON'T use RV equality
+        return dag.Node.__hash__(self)
 
 
 # TODO: make this the only abstractRV type

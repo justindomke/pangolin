@@ -140,6 +140,11 @@ def test_vmap_generated_nodes5():
     # both a and b given
     f = lambda a, b: fun(a, b)
     nodes = list(vmap_generated_nodes(f, a, b)[0])
+    print("")
+    print_upstream(nodes)
+    print("")
+    print(nodes)
+    print("")
     assert len(nodes) == 3
     assert nodes[0].cond_dist == add
     assert isinstance(nodes[1].cond_dist, Constant)
@@ -799,3 +804,26 @@ def test_vmap_log_prob():
     assert ls.shape == (niter, 5)
 
     assert np.abs(-np.mean(ls) - stats.norm.entropy(1.1, 2.2)) < 0.03
+
+def test_RV_equality1():
+    assert makerv(1) == makerv(1)
+
+def test_RV_equality2():
+    assert (makerv(1)+makerv(2)) == (makerv(1)+makerv(2))
+
+def test_RV_equality3():
+    assert normal(makerv(1),makerv(2)) != normal(makerv(1),makerv(2))
+
+def test_RV_equality4():
+    loc = makerv(1)
+    scale = makerv(2)
+    assert normal(loc,scale) != normal(loc,scale)
+
+def test_RV_equality5():
+    assert exp(makerv(1)*makerv(2)) == exp(makerv(1)*makerv(2))
+
+def test_RV_equality6():
+    """
+    Test that different types are treated differently
+    """
+    assert exp(makerv(1)*makerv(2)) != exp(makerv(1)*makerv(2.0))

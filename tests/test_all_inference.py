@@ -51,9 +51,20 @@ def test_cond_normal(inference):
 
 
 def test_branched_sampling1(inference):
-    z = normal(0.0, 1.0)
+    z = normal(0.0, 1)
     x = normal(z, 1)
-    y = normal(z, 1)
+    y = normal(z, 1.0)
+
+    # print(f"{hash(z.parents[0])=}")
+    # print(f"{hash(z.parents[1])=}")
+    # print(f"{hash(z)=}")
+    # print(f"{hash(x.parents[0])=}")
+    # print(f"{hash(x.parents[1])=}")
+    # print(f"{hash(x)=}")
+    # print(f"{hash(y.parents[0])=}")
+    # print(f"{hash(y.parents[1])=}")
+    # print(f"{hash(y)=}")
+
     [ys] = inference.sample_flat([y], [x], [np.array(1.0)], niter=10)
     assert ys.shape == (10,)
 

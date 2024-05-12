@@ -81,9 +81,11 @@ class Constant(CondDist):
 
     def __eq__(self, other):
         if isinstance(other, Constant):
-            return self.value.shape == other.value.shape and np.all(
+            if self.value.shape == other.value.shape and np.all(
                 self.value == other.value
-            )
+            ) and self.value.dtype == other.value.dtype:
+                assert hash(self) == hash(other), "hashes don't match for equal Constant"
+                return True
         return False
 
     def __hash__(self):
@@ -930,18 +932,23 @@ class RV(dag.Node):
         for n in range(self.shape[0]):
             yield self[n]
 
-    # def __eq__(self, other):
-    #     if self.cond_dist.random:
-    #         return super().__eq__(other)
-    #     else:
-    #         return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
-    #             p1 == p2 for p1, p2 in zip(self.parents, other.parents))
-    #
-    # def __hash__(self):
-    #     if self.cond_dist.random:
-    #         return super().__hash__()
-    #     else:
-    #         return hash((self.cond_dist, self.parents))
+    def __eq__(self, other):
+        if self.cond_dist.random:
+            return super().__eq__(other)
+        else:
+            # print(f"{self=}")
+            # print(f"{other=}")
+            # print(f"{(self.cond_dist == other.cond_dist)=}")
+            # print(f"{(len(self.parents) == len(other.parents))=}")
+            # print(f"{tuple(p1 == p2 for p1, p2 in zip(self.parents, other.parents))=}")
+            return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
+                p1 == p2 for p1, p2 in zip(self.parents, other.parents))
+
+    def __hash__(self):
+        if self.cond_dist.random:
+            return super().__hash__()
+        else:
+            return hash((self.cond_dist, self.parents))
 
 
 class AbstractCondDist(CondDist):
