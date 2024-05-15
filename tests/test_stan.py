@@ -6,6 +6,7 @@ import numpy as np
 def test_simple():
     x = normal(3, 5)
     y = normal(x, 1) ** 2
+    print_upstream(y)
     [zs] = inference_stan.sample_flat([y], [], [], niter=1000)
 
 

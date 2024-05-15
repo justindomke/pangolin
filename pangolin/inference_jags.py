@@ -259,8 +259,8 @@ def sample_flat(requested_vars, given_vars, given_vals, *, niter):
         assert var.shape == val.shape
 
     # this variable splitting business is a bit of a mess (although seemingly correct)
-    random_vars = inference.upstream_with_descendent(requested_vars, given_vars)
-    latent_vars = [node for node in random_vars if node not in given_vars]
+    #random_vars = inference.upstream_with_descendent(requested_vars, given_vars)
+    #latent_vars = [node for node in random_vars if node not in given_vars]
 
     included_vars = dag.upstream_nodes(requested_vars + given_vars)
 

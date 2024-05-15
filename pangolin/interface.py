@@ -191,11 +191,12 @@ def vmap_generated_nodes(f, *dummy_args):
             continue
         assert d1.shape == d2.shape
 
-    #def excluded_node(node):
+    # def excluded_node(node):
     #    return node in dummy_nodes1
 
     # need to use ids instead because of new notion of RV equality
     dummy_ids1 = [id(x) for x in dummy_nodes1]
+
     def excluded_node(node):
         return id(node) in dummy_ids1
 
@@ -252,9 +253,9 @@ def vmap_eval(f, in_axes, axis_size, *args):
             dummy_to_real[dummy_node] = real_node
             dummy_mapped_axis[dummy_node] = None
         elif (
-            all(axis is None for axis in my_in_axes)
-            and not dummy_node.cond_dist.random
-            and not dummy_node in dummy_outputs
+                all(axis is None for axis in my_in_axes)
+                and not dummy_node.cond_dist.random
+                and not dummy_node in dummy_outputs
         ):
             assert not isinstance(dummy_node, AbstractRV)
             real_node = RV(dummy_node.cond_dist, *parents)
@@ -293,7 +294,7 @@ class vmap:
             if i is None:
                 new_shape = x.shape
             else:
-                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
+                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
                 new_shape = lo + hi
 
             # return AbstractRV(new_shape)
@@ -355,10 +356,9 @@ class AbstractRV(RV):
     def __str__(self):
         return str(self.shape)
 
-    def __eq__(self,other):
+    def __eq__(self, other):
         # DON'T use RV equality
-        return dag.Node.__eq__(self,other)
-
+        return dag.Node.__eq__(self, other)
 
     def __hash__(self):
         # DON'T use RV equality
@@ -475,6 +475,8 @@ def print_upstream(*vars):
     print(f"shape{' ' * (max_shape - 5)} | statement")
     print(f"{'-' * max_shape} | ---------")
     for node in nodes:
+        assert isinstance(node,RV)
+
         par_ids = [node_to_id[p] for p in node.parents]
 
         par_id_str = util.comma_separated(par_ids, util.num2str, False)
@@ -605,3 +607,5 @@ def list_all_cond_dists():
     for name, item in _all_objects.items():
         if isclass(item) and issubclass(item, CondDist):
             print(f"  {name}")
+
+

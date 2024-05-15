@@ -479,7 +479,7 @@ def index(var, indices):
         indices = (indices,)  # TODO: this makes me nervous...
 
     # if parent is an Index that's only indexed with a single scalar argument then combine
-    if isinstance(var.cond_dist, Index):
+    if hasattr(var,'cond_dist') and isinstance(var.cond_dist, Index):
         if len(var.parents) == 2:
             if var.parents[1].shape == ():
                 if var.cond_dist.slices[0] == None:

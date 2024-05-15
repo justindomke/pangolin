@@ -4,8 +4,22 @@ from .ir import RV, AbstractCondDist, VMapDist, makerv, CondDist, Index, Constan
 from typing import Sequence, List, Self
 from . import util
 
+import pangolin
 
 from . import inference_numpyro_modelbased
+
+def where_single_slice(d):
+    if not isinstance(d,Index):
+        return -1
+    count = 0
+    where_unsliced = None
+    for n, s in enumerate(d.slices):
+        if not isinstance(s, slice):
+            count += 1
+            where_unsliced = n
+    if count > 1:
+        return -1
+    return where_unsliced
 
 
 def num_unsliced(d: Index):
@@ -113,7 +127,7 @@ def is_pointless_rv(x):
 
     #def ancestor_sample_flat(vars, *, niter=None):
 
-def automap(x):
+def automap(x,check_validity):
     """
     Transform a sequence of RVs into a single VMapDist RV and transform those
     individual RVs into Indexes into that VMapDist RV.
@@ -121,106 +135,152 @@ def automap(x):
     Also, recurse onto parents where possible/necessary.
     """
 
-    assert is_sequence(x)
+    if check_validity:
+        assert is_sequence(x)
 
     # recurse if necessary
     if all(is_sequence(xi) for xi in x):
-        return automap([automap(xi) for xi in x])
+        return automap([automap(xi,check_validity) for xi in x],check_validity)
+
 
     if all(isinstance(xi.cond_dist, Constant) for xi in x):
         # stack together constant parents (no need to reassign)
         vals = [xi.cond_dist.value for xi in x]
-        #return makerv(np.stack(vals))
-        return makerv(np.array(vals))
+        tmp = makerv(np.array(vals))
+        return tmp
+
 
     dist, N, M = check_parents_compatible(x)
 
+    # # get arguments
+    # v = [None] * M
+    # k = [None] * M
+    # for m in range(M):
+    #     p = [xn.parents[m] for xn in x]
+    #     v[m], k[m] = vec_args(p,check_validity)
+
     # get arguments
-    v = [None] * M
-    k = [None] * M
+    v = []
+    k = []
     for m in range(M):
         p = [xn.parents[m] for xn in x]
-        v[m], k[m] = vec_args(p)
+        my_v, my_k = vec_args(p,check_validity)
+        v.append(my_v)
+        k.append(my_k)
 
 
-    # if you're vmapping over an Index
-    # and you're vmapping over one argument only
-    # and that argument has a cond_dist of Constant(range(N))
-    # if you're mapping over an Index
-    # then skip the vmap, and just turn that argument into a slice instead!
-
-    # if isinstance(dist,Index):
-    #     if num_non_none(k)==1: # no mapped arguments
-
-    # I think the reason test21 fails is that this is TOO EAGER and accepts cases it SHOULDN'T ACCEPT
-
-    # if isinstance(dist, Index):
-    #     if num_non_none(k) == 1:  # one mapped argument
-    #         in_axis = where_non_none(k)
-    #         if in_axis > 0:  # don't do this when mapping over argument itself
-    #             if k[in_axis] == 0:  # only map over dim 0 (redundant?)
-    #                 if v[in_axis].cond_dist == Constant(range(N)):
-    #                     where_slice = which_slice_kth_arg(dist, in_axis)
-    #                     if where_slice == 0:
-    #                         # only do this when mapping over first dim
-    #                         # (otherwise the vmap acts like a transpose)
-    #
-    #                         print("WE GOT A CONSTANT")
-    #                         print(dist)
-    #                         print(k)
-    #                         print(v)
-    #                         print(f"{where_slice=}")
-    #
-    #                         assert dist.slices[where_slice] is None
-    #                         new_slices = dist.slices[:where_slice] + (slice(None),) + dist.slices[where_slice+1:]
-    #                         new_v = v[:in_axis] + v[in_axis+1:]
-    #
-    #                         if all(s == slice(None) for s in new_slices) and len(new_v) == 1:
-    #                             # if you're slicing all dims, don't
-    #                             return new_v[0]
-    #
-    #                         return Index(*new_slices)(*new_v)
+    # equivalent list comprehensions—work but doesn't seem to be faster
+    # v,k = zip(*[vec_args([xn.parents[m] for xn in x],check_validity) for m in range(M)])
 
     # create new vmapped RV
     new_rv = VMapDist(dist, k, N)(*v)
 
     if is_pointless_rv(new_rv):
+        # print("about to return:")
+        # pangolin.print_upstream(new_rv.parents[0])
         return new_rv.parents[0]
 
     # assign old RVs to be slices of new vmapped RV
     for n, xn in enumerate(x):
         xn.reassign(new_rv[n])
 
+    # print("about to return:")
+    # pangolin.print_upstream(new_rv)
+
     return new_rv
 
 
-def vec_args(p):
+def vec_args(p,check_validity):
     p0 = p[0]
     d0 = p0.cond_dist
     if all(pi == p0 for pi in p):
         # if all parents are the same, return the first one and don't map
         return (p0, None)
-    if all(pi.cond_dist == p0.cond_dist and pi.parents == p0.parents for pi in p):
-        #raise Exception("new optimization!")
-        return (p0, None)
-    if isinstance(d0, Constant) and all(pi.cond_dist == d0 for pi in p):
-        # if all parents are different but are equal constants, return the
-        # first one and don't map
-        return (p0, None)
+    # seems wrong?
+    # if all(pi.cond_dist == p0.cond_dist and pi.parents == p0.parents for pi in p):
+    #     raise Exception("new optimization!")
+    #     return (p0, None)
+    # if isinstance(d0, Constant) and all(pi.cond_dist == d0 for pi in p):
+    #     # if all parents are different but are equal constants, return the
+    #     # first one and don't map
+    #     return (p0, None)
     try:
         # if all parents are indices into the same RV with a single shared
         # unsliced dimension and constant indices running from 0 to N
         # then map over that dimension of the RV and discard the constant indices
 
-        assert isinstance(p0.cond_dist, Index)
+        if check_validity:
+            assert isinstance(p0.cond_dist, Index)
         k = get_unsliced(p0.cond_dist)
         v = p0.parents[0]
-        for n, pn in enumerate(p):
-            assert isinstance(pn.cond_dist, Index)
-            assert get_unsliced(pn.cond_dist) == k
-            assert pn.parents[0] == v
-            assert pn.parents[1].cond_dist == Constant(n)
+        if check_validity:
+            for n, pn in enumerate(p):
+                assert isinstance(pn.cond_dist, Index)
+                assert get_unsliced(pn.cond_dist) == k
+                assert pn.parents[0] == v
+                assert pn.parents[1].cond_dist == Constant(n)
         return v, k
     except AssertionError: # if none of that worked (nodes not all same and not Index), recurse
-        p_vec = automap(p)
-        return vec_args(p_vec)
+        p_vec = automap(p,check_validity)
+        return vec_args(p_vec,check_validity)
+
+
+
+def roll(x):
+    """
+    Slimmed-down version, no error checking
+    """
+
+    # recurse if necessary
+    if all(is_sequence(xi) for xi in x):
+        return roll([roll(xi) for xi in x])
+
+    if all(isinstance(xi.cond_dist, Constant) for xi in x):
+        # stack together constant parents (no need to reassign)
+        return makerv(np.array([xi.cond_dist.value for xi in x]))
+
+    N = len(x)
+    M = len(x[0].parents)
+    dist = x[0].cond_dist
+
+    # get arguments
+    v = []
+    k = []
+    for m in range(M):
+        p = [xn.parents[m] for xn in x]
+        my_v, my_k = roll_args(p)
+        v.append(my_v)
+        k.append(my_k)
+
+
+    # create new vmapped RV
+    new_rv = VMapDist(dist, k, N)(*v)
+
+    if is_pointless_rv(new_rv):
+        # print("about to return:")
+        # pangolin.print_upstream(new_rv.parents[0])
+        return new_rv.parents[0]
+
+    # assign old RVs to be slices of new vmapped RV
+    for n, xn in enumerate(x):
+        xn.reassign(new_rv[n])
+
+    # print("about to return:")
+    # pangolin.print_upstream(new_rv)
+
+    return new_rv
+
+
+def roll_args(p):
+    p0 = p[0]
+    d0 = p0.cond_dist
+    if all(pi == p0 for pi in p):
+        # if all parents are the same, return the first one and don't map
+        return (p0, None)
+    try:
+        k = get_unsliced(p0.cond_dist)
+        v = p0.parents[0]
+        return v, k
+    except AssertionError: # if none of that worked (nodes not all same and not Index), recurse
+        p_vec = roll(p)
+        return roll_args(p_vec)

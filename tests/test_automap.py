@@ -72,9 +72,12 @@ def test5():
     print_upstream(y)
     assert y.cond_dist == VMapDist(exp, (0,), 5)
     [z] = y.parents
-    assert z.cond_dist == VMapDist(normal_scale, [None, None], 5)
+    assert z.cond_dist == VMapDist(normal_scale, (None, None), 5)
     assert z.parents[0].cond_dist == Constant(0)
     assert z.parents[1].cond_dist == Constant(1)
+
+
+#def test5a():
 
 
 def test6a():
@@ -326,6 +329,16 @@ def test18():
     assert isinstance(y,RV)
     print(x)
     assert y.cond_dist == Constant(val)
+
+def test18b():
+    val = np.random.randn(5)
+    x = makerv(val)
+    y = automap([xi for xi in x])
+    print_upstream(y)
+    assert isinstance(y,RV)
+    print(x)
+    assert y.cond_dist == Constant(val)
+
 
 def test19():
     x = makerv(np.random.randn(5, 3))
@@ -670,3 +683,14 @@ def test_arraynd11():
 #             y[i, j] = normal(0, x[j])
 #
 #     print_upstream(y)
+
+def test_simplify_constants1():
+    x = [makerv(1), makerv(2), makerv(3)]
+    y = automap(x)
+    assert y.cond_dist == Constant([1,2,3])
+
+def test_simplify_constants2():
+    x = [makerv([1,2]), makerv([3,4]), makerv([5,6])]
+    y = automap(x)
+    assert y.cond_dist == Constant([[1,2],[3,4],[5,6]])
+
