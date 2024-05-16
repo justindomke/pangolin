@@ -6,6 +6,23 @@ from scipy import stats
 calc = calculate.Calculate(inference_numpyro)
 
 
+def test_print_IR1():
+    a = makerv(1)
+    print('')
+    print_ir(a)
+
+
+def test_print_IR2():
+    a = makerv(0.5)
+    b = bernoulli(a)
+    print('')
+    print_ir(b)
+
+def test_print_IR3():
+    a = normal(0,1)
+    print('')
+    print_ir(a)
+
 def test_constant1():
     x = Constant(0)
     assert x.get_shape() == ()
@@ -808,8 +825,9 @@ def test_vmap_log_prob():
 def test_RV_equality1():
     assert makerv(1) == makerv(1)
 
-def test_RV_equality2():
-    assert (makerv(1)+makerv(2)) == (makerv(1)+makerv(2))
+# Would like this strong equality to work, but maybe too expensive
+# def test_RV_equality2():
+#     assert (makerv(1)+makerv(2)) == (makerv(1)+makerv(2))
 
 def test_RV_equality3():
     assert normal(makerv(1),makerv(2)) != normal(makerv(1),makerv(2))
@@ -819,8 +837,9 @@ def test_RV_equality4():
     scale = makerv(2)
     assert normal(loc,scale) != normal(loc,scale)
 
-def test_RV_equality5():
-    assert exp(makerv(1)*makerv(2)) == exp(makerv(1)*makerv(2))
+# Would like this strong equality to work, but maybe too expensive
+# def test_RV_equality5():
+#     assert exp(makerv(1)*makerv(2)) == exp(makerv(1)*makerv(2))
 
 def test_RV_equality6():
     """

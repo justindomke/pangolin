@@ -93,6 +93,13 @@ class Constant(CondDist):
 
     def __repr__(self):
         # assure regular old numpy in case jax being used
+        if self.value.ndim > 0 and np.max(self.value.shape) > 5:
+            ret = "Constant("
+            with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
+                ret += np.array2string(self.value)
+            ret += ')'
+            return ret
+
         numpy_value = numpy.array(self.value)
         array_str = repr(numpy_value)  # get base string
         array_str = array_str[6:-1]  # cut off "array(" and ")"
@@ -612,7 +619,7 @@ class VMapDist(CondDist):
         self.base_cond_dist = base_cond_dist
         self.in_axes = in_axes
         self.axis_size = axis_size
-        super().__init__(name="VMapDist", random=base_cond_dist.random)
+        super().__init__(name="Map", random=base_cond_dist.random)
 
     def get_shape(self, *parents_shapes):
         remaining_shapes, axis_size = get_sliced_shapes(
@@ -623,7 +630,7 @@ class VMapDist(CondDist):
 
     def __repr__(self):
         return (
-            f"VMapDist({repr(self.base_cond_dist)}, {repr(self.in_axes)}, "
+            f"Map({repr(self.base_cond_dist)},{repr(self.in_axes)},"
             f"{repr(self.axis_size)})"
         )
 
@@ -635,7 +642,7 @@ class VMapDist(CondDist):
             is_leaf=util.is_leaf_with_none,
         )
         return (
-                "vmap("
+                "map("
                 + str(self.base_cond_dist)
                 + ","
                 + str(list(new_in_axes))
@@ -800,6 +807,7 @@ def makerv(a):
 class RV(dag.Node):
     _frozen = False
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
+    _equality_dict = util.TwoDict()
 
     def __init__(self, cond_dist, *parents):
         parents_shapes = tuple(p.shape for p in parents)
@@ -874,13 +882,13 @@ class RV(dag.Node):
         self.parents = None
         self._frozen = True
 
-    def reassign(self, rv):
+    def reassign(self, cond_dist, parents):
         """
         Break immutability, and in-place reassign the RV to copy another
         """
         self.__setattr__("_frozen", False, unfreeze=True)
-        self.cond_dist = rv.cond_dist
-        self.parents = rv.parents
+        self.cond_dist = cond_dist
+        self.parents = parents
         self._frozen = True
 
     def __setattr__(self, key, value, unfreeze=False):
@@ -933,14 +941,22 @@ class RV(dag.Node):
             yield self[n]
 
     def __eq__(self, other):
-        if self.cond_dist.random:
-            return super().__eq__(other)
+        # # fast equality but detects limited cases
+        # if isinstance(self.cond_dist,Constant):
+        #     return self.cond_dist == other.cond_dist
+        # else:
+        #     return self is other
+
+        # slow equality but detects all cases
+        if self is other:
+            # if same objects then definitely equal
+            return True
+        elif self.cond_dist.random:
+            # if not same objects and random then definitely false
+            return False
         else:
-            # print(f"{self=}")
-            # print(f"{other=}")
-            # print(f"{(self.cond_dist == other.cond_dist)=}")
-            # print(f"{(len(self.parents) == len(other.parents))=}")
-            # print(f"{tuple(p1 == p2 for p1, p2 in zip(self.parents, other.parents))=}")
+            # if not random and deterministic, need to examine parents
+            # in principle this could be very expensive
             return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
                 p1 == p2 for p1, p2 in zip(self.parents, other.parents))
 

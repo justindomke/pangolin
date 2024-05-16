@@ -2,6 +2,103 @@ from pangolin import dag, util
 import numpy as np  # type: ignore
 from jax import numpy as jnp  # type: ignore
 
+def test_twoset1():
+    s = util.TwoSet()
+    s.add('a','b')
+    s.add('a','c')
+    s.add('b','c')
+    assert set(s.items) == {('a','b'),('a','c'),('b','c')}
+    s.clear_keys('a')
+    assert set(s.items) == {('b','c')}
+
+def test_twoset2():
+    s = util.TwoSet()
+    s.add('a','b')
+    s.add('a','c')
+    s.add('b','c')
+    assert set(s.items) == {('a','b'),('a','c'),('b','c')}
+    s.clear_keys('c')
+    assert set(s.items) == {('a','b')}
+
+def test_twoset3():
+    s = util.TwoSet()
+    s.add('a','b')
+    s.add('a','c')
+    s.add('b','c')
+    assert ('a','b') in s
+    assert ('b','a') in s
+    assert ('c','b') in s
+    s.clear_keys('c')
+    assert set(s.items) == {('a','b')}
+    assert ('a','b') in s
+    assert ('b','a') in s
+    assert ('b','c') not in s
+    assert ('c','b') not in s
+
+
+def test_twodict1():
+    s = util.TwoDict()
+    s['a','b'] = 1
+    s['a','c'] = 2
+    s['b','c'] = 3
+
+    assert ('a','b') in s
+    assert ('b','a') in s
+    assert ('c','b') in s
+    assert ('a','d') not in s
+    assert ('d','a') not in s
+
+    assert s['a', 'b'] == 1
+    assert s['b', 'a'] == 1
+    assert s['a', 'c'] == 2
+    assert s['c', 'a'] == 2
+    try:
+        s['b','a'] = 4
+        assert False
+    except ValueError:
+        pass
+
+    try:
+        tmp = s['a','d']
+        assert False
+    except KeyError:
+        pass
+
+    assert set(s.keys()) == {('a','b'),('a','c'),('b','c')}
+    s.clear_keys('a')
+    assert set(s.keys()) == {('b','c')}
+    assert s['b','c'] == 3
+    assert s['c', 'b'] == 3
+    try:
+        tmp = s['a','b']
+        assert False
+    except KeyError:
+        pass
+
+# def test_twoset2():
+#     s = util.TwoSet()
+#     s.add('a','b')
+#     s.add('a','c')
+#     s.add('b','c')
+#     assert set(s.items) == {('a','b'),('a','c'),('b','c')}
+#     s.clear_keys('c')
+#     assert set(s.items) == {('a','b')}
+#
+# def test_twoset3():
+#     s = util.TwoSet()
+#     s.add('a','b')
+#     s.add('a','c')
+#     s.add('b','c')
+#     assert ('a','b') in s
+#     assert ('b','a') in s
+#     assert ('c','b') in s
+#     s.clear_keys('c')
+#     assert set(s.items) == {('a','b')}
+#     assert ('a','b') in s
+#     assert ('b','a') in s
+#     assert ('b','c') not in s
+#     assert ('c','b') not in s
+
 
 def test_varnames2():
     x = dag.Node()

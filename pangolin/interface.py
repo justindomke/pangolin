@@ -552,6 +552,57 @@ def viz(vars, observed_vars=(), labels=None):
 
 viz_upstream = viz  # TODO: delete after changing calls
 
+# def retrieve_name(var):
+#     import inspect
+#     callers_local_vars = inspect.currentframe().f_back.f_locals.items()
+#     return [var_name for var_name, var_val in callers_local_vars if var_val is var][-1]
+
+def retrieve_name(var):
+    """
+    Use evil inspection tricks to try to print IR using original variable names
+    """
+    import inspect
+    frames = inspect.stack()
+    for frame_info in frames[1:]:  # Start from the caller's frame
+        frame = frame_info.frame
+        if frame.f_back is None:
+            return None
+        stuff = frame.f_back.f_locals.items()
+        for var_name, var_val in stuff:
+            if var_val is var:
+                return var_name
+    return None
+
+def print_ir(vars,name_space=6,include_shapes=False):
+    vars = jax.tree_util.tree_leaves(vars)
+    nodes = dag.upstream_nodes(vars)
+    names = {}
+    i = 0
+    for n in nodes:
+        assert isinstance(n,RV)
+        name = retrieve_name(n)
+        if name is None:
+            name = f"tmp{i}"
+            i += 1
+        names[n] = name
+        s = names[n]
+        if len(s)<name_space:
+            s += ' '*(name_space-len(s))
+        s += '= RV('
+        s += repr(n.cond_dist)
+        if len(n.parents):
+            s += ','
+        s += util.comma_separated([names[p] for p in n.parents],lambda s: ' '+str(s), parens=False)
+        s += ')'
+        if include_shapes:
+            if len(s) < 70:
+                s += ' '*(70-len(s))
+            s += f" # shape={n.shape}"
+        print(s)
+
+
+
+
 # TODO: Fix to remove new_infer
 # def viz_samples(vars, precision=2):
 #     vars = jax.tree_util.tree_leaves(vars)
