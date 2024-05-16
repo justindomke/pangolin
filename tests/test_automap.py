@@ -16,15 +16,54 @@ from pangolin.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VM
 from pangolin import *
 from pangolin.automap import automap, which_slice_kth_arg, is_pointless_rv
 from pangolin.arrays import Array
+from pangolin.calculate import Calculate
+from pangolin import inference_stan, inference_numpyro_modelbased
+
+def test_simpledogs_inference_numpyro():
+    # breaks
+    n_dogs = 2
+    n_trials = 3
+    n_shock = np.array([[1.1, 1.1, 1.1],
+                        [0.1, 0.1, 1.1]])
+    n_avoid = np.array([[0.1, 0.1, 1.1],
+                        [0.1, 1.1, 0.1]])
+    beta = automap(normal(0,100) for i in range(3))
+    y = Array((n_dogs,n_trials))
+    for j in range(n_dogs):
+        for t in range(n_trials):
+            y[j, t] = bernoulli_logit(beta[0] + beta[1] * n_avoid[j, t] + beta[2] * n_shock[j, t])
+    print_upstream(y)
+
+    calc = Calculate(inference_numpyro_modelbased,niter=100)
+    samps = calc.sample(y)
+
+def test_simpledogs_inference_stan():
+    # breaks—does this reveal a bug in stan backend?
+    n_dogs = 2
+    n_trials = 3
+    n_shock = np.array([[1.1, 1.1, 1.1],
+                        [0.1, 0.1, 1.1]])
+    n_avoid = np.array([[0.1, 0.1, 1.1],
+                        [0.1, 1.1, 0.1]])
+    beta = automap(normal(0,100) for i in range(3))
+    y = Array((n_dogs,n_trials))
+    for j in range(n_dogs):
+        for t in range(n_trials):
+            y[j, t] = bernoulli_logit(beta[0] + beta[1] * n_avoid[j, t] + beta[2] * n_shock[j, t])
+    print_upstream(y)
+
+    calc = Calculate(inference_stan,niter=100)
+    samps = calc.sample(y)
+
 
 def test_simpledogs1():
     # breaks
     n_dogs = 2
     n_trials = 3
-    n_shock = np.array([[1, 1, 1],
-                        [0, 0, 1]])
-    n_avoid = np.array([[0, 0, 1],
-                        [0, 1, 0]])
+    n_shock = np.array([[1.1, 1.1, 1.1],
+                        [0.1, 0.1, 1.1]])
+    n_avoid = np.array([[0.1, 0.1, 1.1],
+                        [0.1, 1.1, 0.1]])
     beta = automap(normal(0,100) for i in range(3))
     y = Array((n_dogs,n_trials))
     for j in range(n_dogs):

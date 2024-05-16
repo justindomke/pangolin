@@ -238,17 +238,6 @@ def expand_if_needed(x):
 
     return new_x
 
-def roll_back(rollbacks):
-    #print(f"{rollbacks=}")
-    for old, cond_dist, parents in reversed(rollbacks):
-        # print(f"{old.cond_dist=}")
-        # print(f"{cond_dist=}")
-        # print(f"{parents=}")
-        old_shape = old.shape
-        old.reassign(cond_dist,parents)
-        new_shape = old.shape
-        assert old_shape==new_shape
-
 def automap(x, nomerge=False, *, indent=0, check=True):
     """
     Transform a sequence of RVs into a single VMapDist RV and transform those
@@ -260,30 +249,54 @@ def automap(x, nomerge=False, *, indent=0, check=True):
     if isinstance(x, GeneratorType):
         x = tuple(x)
 
-    print(f'{" " * (indent * 4)}automap({nomerge}) called on {len(x)} inputs:')
-
-    def display(xi):
-        s = " " * (indent * 4)
-        if isinstance(xi, RV):
-            print(
-                f"{s}-{xi.cond_dist} {xi.shape} {[p.shape for p in xi.parents]} {[p.cond_dist if isinstance(p, RV) else type(p) for p in xi.parents]}")
-        elif isinstance(xi, np.ndarray):
-            print(f"{s}-{type(xi)} {xi.shape}")
-        else:
-            print(f"{s}-{type(xi)}")
-
-    for xi in x:
-        display(xi)
+    # print(f'{" " * (indent * 4)}automap({nomerge}) called on {len(x)} inputs:')
+    # def display(xi):
+    #     s = " " * (indent * 4)
+    #     if isinstance(xi, RV):
+    #         print(
+    #             f"{s}-{xi.cond_dist} {xi.shape} {[p.shape for p in xi.parents]} {[p.cond_dist if isinstance(p, RV) else type(p) for p in xi.parents]}")
+    #     elif isinstance(xi, np.ndarray):
+    #         print(f"{s}-{type(xi)} {xi.shape}")
+    #     else:
+    #         print(f"{s}-{type(xi)}")
+    # for xi in x:
+    #     display(xi)
 
     if check:
         assert is_sequence(x)
 
     # recurse if necessary
+    # if all(is_sequence(xi) for xi in x):
+    #     try:
+    #         new_x = [automap(xi, nomerge, indent=indent + 1, check=check) for xi in x]
+    #         rez = automap(new_x, nomerge, indent=indent + 1, check=check)  # TODO: right?
+    #         #print(f'\n{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
+    #         return rez
+    #     except UnmergableParentsError:
+    #         try:
+    #             new_x = [automap(xi, True, indent=indent + 1, check=check) for xi in x]
+    #             rez = automap(new_x, True, indent=indent + 1, check=check)  # TODO: right?
+    #             #print(f'\n{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
+    #             return rez
+    #         except UnmergableParentsError:
+    #             raise UnmergableParentsError()
+
+
     if all(is_sequence(xi) for xi in x):
-        new_x = [automap(xi, nomerge, indent=indent + 1, check=check) for xi in x]
-        rez = automap(new_x, nomerge, indent=indent + 1, check=check)  # TODO: right?
-        print(f'\n{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
-        return rez
+        try:
+            new_x = [automap(xi, False, indent=indent + 1, check=check) for xi in x]
+            try:
+                return automap(new_x, False, indent=indent + 1, check=check)
+            except UnmergableParentsError:
+                return automap(new_x, True, indent=indent + 1, check=check)
+        except UnmergableParentsError:
+            new_x = [automap(xi, True, indent=indent + 1, check=check) for xi in x]
+            try:
+                return automap(new_x, False, indent=indent + 1, check=check)
+            except UnmergableParentsError:
+                return automap(new_x, True, indent=indent + 1, check=check)
+
+
 
     #x = map_if_needed(x)
 
@@ -298,55 +311,33 @@ def automap(x, nomerge=False, *, indent=0, check=True):
         # stack together constant parents (no need to reassign)
         vals = [xi.cond_dist.value for xi in x]
         rez = makerv(np.array(vals))
-        print(f'{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
+        #print(f'{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
         return rez
 
     dist, N, M = check_parents_compatible(x)
 
-    # # get arguments
-    # v = [None] * M
-    # k = [None] * M
-    # for m in range(M):
-    #     p = [xn.parents[m] for xn in x]
-    #     v[m], k[m] = vec_args(p,check_validity)
+    # get arguments
+    v = []
+    k = []
+    for m in range(M):
+        p = [xn.parents[m] for xn in x]
+        my_v, my_k = vec_args(p, nomerge, indent=indent, check=check)
+        v.append(my_v)
+        k.append(my_k)
 
-    rollbacks = []
-    try:
-        # get arguments
-        v = []
-        k = []
-        for m in range(M):
-            p = [xn.parents[m] for xn in x]
-            my_v, my_k = vec_args(p, nomerge, rollbacks, indent=indent, check=check)
-            v.append(my_v)
-            k.append(my_k)
+    # equivalent list comprehensions—work but doesn't seem to be faster
+    # v,k = zip(*[vec_args([xn.parents[m] for xn in x],check_validity) for m in range(M)])
 
-        # equivalent list comprehensions—work but doesn't seem to be faster
-        # v,k = zip(*[vec_args([xn.parents[m] for xn in x],check_validity) for m in range(M)])
+    # create new vmapped RV
+    new_rv = VMapDist(dist, k, N)(*v)
 
-        # create new vmapped RV
-        new_rv = VMapDist(dist, k, N)(*v)
+    if is_pointless_rv(new_rv):
+        return new_rv.parents[0]
 
+    # DON'T re-assign old RVs
+    # This is dangerous because could lead to dual usage. But it's the simplest way to make exceptions work
 
-        if is_pointless_rv(new_rv):
-            # print("about to return:")
-            # pangolin.print_upstream(new_rv.parents[0])
-            return new_rv.parents[0]
-
-    # TODO: turn back on?
-    # assign old RVs to be slices of new vmapped RV
-    for n, xn in enumerate(x):
-        xn.clear()
-        for r in rollbacks:
-            if r[0] is xn:
-                assert False, "OH NO SAME"
-        rollbacks.append((xn, xn.cond_dist, tuple(xn.parents)))
-        xn.reassign(new_rv[n].cond_dist, new_rv[n].parents)
-
-    # print("about to return:")
-    # pangolin.print_upstream(new_rv)
-
-    print(f'\n{" " * (indent * 4)}automap returning: {new_rv.cond_dist} {new_rv.shape}')
+    #print(f'\n{" " * (indent * 4)}automap returning: {new_rv.cond_dist} {new_rv.shape}')
 
     return new_rv
 
@@ -383,21 +374,25 @@ def vec_args(p, nomerge, *, indent=0, check):
             assert pn.parents[1].cond_dist == Constant(n)
         return v, k
     except AssertionError:  # if none of that worked (nodes not all same and not Index), recurse
-        rollbacks = []
-        #p_vec = automap(p, nomerge, indent=indent + 1, check=check)
-        my_rollbacks = []
-        try:
-            p_vec = automap(p, nomerge, my_rollbacks, indent=indent + 1, check=check)
-        except UnmergableParentsError:
-            roll_back(my_rollbacks)
-            my_rollbacks = []
-            try:
-                p_vec = automap(p, True, my_rollbacks, indent=indent + 1, check=check)
-            except UnmergableParentsError:
-                roll_back(my_rollbacks)
-                raise UnmergableParentsError()
-        return vec_args(p_vec, nomerge, indent=indent + 1, check=check)
+        #try:
+        #   p_vec = automap(p, False, indent=indent + 1, check=check)
+        #except UnmergableParentsError:
+        #    p_vec = automap(p, True, indent=indent + 1, check=check)
+        #p_vec = automap(p, True, indent=indent + 1, check=check)
+        #return vec_args(p_vec, True, indent=indent + 1, check=check)
 
+        try:
+            p_vec = automap(p, False, indent=indent + 1, check=check)
+            try:
+                return vec_args(p_vec, False, indent=indent + 1, check=check)
+            except UnmergableParentsError:
+                return vec_args(p_vec, True, indent=indent + 1, check=check)
+        except UnmergableParentsError:
+            p_vec = automap(p, True, indent=indent + 1, check=check)
+            try:
+                return vec_args(p_vec, False, indent=indent + 1, check=check)
+            except UnmergableParentsError:
+                return vec_args(p_vec, True, indent=indent + 1, check=check)
 
 # def roll(x):
 #     """
