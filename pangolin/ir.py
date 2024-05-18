@@ -111,7 +111,8 @@ class Constant(CondDist):
         # return str(self.value).replace("\n", "").replace("  ", " ")
         # assure regular old numpy in case jax being used
         numpy_value = numpy.array(self.value)
-        return np.array_str(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
+        with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
+            return np.array2string(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
 
 
 class AllScalarCondDist(CondDist):
@@ -824,6 +825,10 @@ class RV(dag.Node):
     def ndim(self):
         return len(self._shape)
 
+    def __len__(self):
+        return self._shape[0]
+
+
     def __getitem__(self, idx):
         if not isinstance(idx, tuple):
             idx = (idx,)
@@ -940,31 +945,31 @@ class RV(dag.Node):
         for n in range(self.shape[0]):
             yield self[n]
 
-    def __eq__(self, other):
-        # # fast equality but detects limited cases
-        # if isinstance(self.cond_dist,Constant):
-        #     return self.cond_dist == other.cond_dist
-        # else:
-        #     return self is other
-
-        # slow equality but detects all cases
-        if self is other:
-            # if same objects then definitely equal
-            return True
-        elif self.cond_dist.random:
-            # if not same objects and random then definitely false
-            return False
-        else:
-            # if not random and deterministic, need to examine parents
-            # in principle this could be very expensive
-            return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
-                p1 == p2 for p1, p2 in zip(self.parents, other.parents))
-
-    def __hash__(self):
-        if self.cond_dist.random:
-            return super().__hash__()
-        else:
-            return hash((self.cond_dist, self.parents))
+    # def __eq__(self, other):
+    #     # # fast equality but detects limited cases
+    #     # if isinstance(self.cond_dist,Constant):
+    #     #     return self.cond_dist == other.cond_dist
+    #     # else:
+    #     #     return self is other
+    #
+    #     # slow equality but detects all cases
+    #     if self is other:
+    #         # if same objects then definitely equal
+    #         return True
+    #     elif self.cond_dist.random:
+    #         # if not same objects and random then definitely false
+    #         return False
+    #     else:
+    #         # if not random and deterministic, need to examine parents
+    #         # in principle this could be very expensive
+    #         return (self.cond_dist == other.cond_dist) and (len(self.parents) == len(other.parents)) and all(
+    #             p1 == p2 for p1, p2 in zip(self.parents, other.parents))
+    #
+    # def __hash__(self):
+    #     if self.cond_dist.random:
+    #         return super().__hash__()
+    #     else:
+    #         return hash((self.cond_dist, self.parents))
 
 
 class AbstractCondDist(CondDist):

@@ -3,11 +3,12 @@ import pangolin.automap
 
 class Array(RV):
     """
-    Make Array1D do all the actual work
+    Fill up lists and call automap when full
     """
 
-    def __init__(self, shape):
+    def __init__(self, shape, check=True):
         # do not call super!
+        self.check = check
         if isinstance(shape,int):
             shape = (shape,)
         assert isinstance(shape,tuple)
@@ -40,5 +41,5 @@ class Array(RV):
     def activate(self):
         #print("ACTIVATING")
         #print(f"{self.rvs=}")
-        rv = pangolin.automap.automap(self.rvs)
+        rv = pangolin.automap.automap(self.rvs.tolist(),check=self.check)
         super().__init__(rv.cond_dist, *rv.parents)

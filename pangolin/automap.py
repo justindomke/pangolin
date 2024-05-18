@@ -102,7 +102,7 @@ def is_sequence(x):
 class UnmergableParentsError(Exception):
     pass
 
-def check_parents_compatible(x):
+def check_parents_compatible(x,*,indent):
     N = len(x)
     M = len(x[0].parents)
     dist = x[0].cond_dist
@@ -118,7 +118,7 @@ def check_parents_compatible(x):
     for xi in x:
         #assert xi.cond_dist == dist
         if xi.cond_dist != dist:
-            print("UNMERGABLE!")
+            #print(f"{' '*indent}UNMERGABLE!")
             raise UnmergableParentsError()
         assert len(xi.parents) == M
 
@@ -161,87 +161,136 @@ def is_pointless_rv(x):
     # def ancestor_sample_flat(vars, *, niter=None):
 
 
-def map_if_needed(x):
+# def map_if_needed(x):
+#     """
+#     If some of x are VMapDist and others are just dist (with a matching base_dist) (and deterministic)
+#     then transform the non-mapped things into maps
+#     """
+#     length = len(x)
+#     if all(xi.cond_dist == x[0].cond_dist for xi in x):
+#         return x
+#
+#     if all(isinstance(xi.cond_dist, Constant) for xi in x):
+#         return x
+#
+#     is_mapped = [isinstance(x[i].cond_dist, VMapDist) for i in range(length)]
+#     dists = [x[i].cond_dist.base_cond_dist if is_mapped[i] else x[i].cond_dist for i in range(length)]
+#
+#     #print(f"{dists=}")
+#     assert all(d == dists[0] for d in dists)
+#     axis_size = None
+#     for i in range(length):
+#         if is_mapped[i]:
+#             axis_size = x[i].shape[0]
+#     assert axis_size is not None, "didn't find any mapped vars"
+#     new_x = [x[i] if is_mapped[i] else vmap(x[i].cond_dist, None, axis_size)(*x[i].parents) for i in range(length)]
+#     return new_x
+
+# def expand_if_needed(x):
+#     """
+#     given some set of vmapped x
+#     if some axis fails to be mapped on one but IS mapped on others
+#     AND the corresponding parent is a constant
+#     then blow up the constant to a larger size and map it
+#     """
+#     assert is_sequence(x)
+#     assert all(isinstance(xi.cond_dist, VMapDist) for xi in x)
+#     assert all(xi.cond_dist.base_cond_dist == x[0].cond_dist.base_cond_dist for xi in x)
+#     assert all(len(xi.parents) == len(x[0].parents) for xi in x)
+#     num_parents = len(x[0].parents)
+#     base_dist = x[0].cond_dist.base_cond_dist
+#
+#     mapped_axes = [None] * num_parents
+#     mapped_shape = [None] * num_parents
+#     mapped_size = None
+#     for xi in x:
+#         for n in range(num_parents):
+#             if xi.cond_dist.in_axes[n] is not None:
+#                 # TODO: check before overwrite
+#                 mapped_axes[n] = xi.cond_dist.in_axes[n]
+#                 mapped_shape[n] = xi.parents[n].shape[mapped_axes[n]]
+#                 if xi.cond_dist.axis_size is not None:
+#                     mapped_size = xi.cond_dist.axis_size
+#     mapped_axes = tuple(mapped_axes)
+#     # print(f"{mapped_axes=}")
+#     # print(f"{mapped_shape=}")
+#
+#     new_x = []
+#     for xi in x:
+#         if xi.cond_dist.in_axes != mapped_axes:
+#             new_parents = []
+#             for n in range(num_parents):
+#                 if xi.cond_dist.in_axes[n] is None and mapped_axes[n] is not None:
+#                     assert isinstance(xi.parents[n].cond_dist, Constant)
+#                     # new_value = xi.parents[0]
+#                     new_value = np.repeat(xi.parents[n].cond_dist.value, mapped_shape[n], axis=mapped_axes[n])
+#                     new_parents.append(makerv(new_value))
+#                 else:
+#                     new_parents.append(xi.parents[n])
+#             new_xi = VMapDist(base_dist, mapped_axes, mapped_size)(*new_parents)
+#             new_x.append(new_xi)
+#         else:
+#             new_x.append(xi)
+#     # print('-------------------------')
+#     # print(f"{[xi.cond_dist for xi in x]=}")
+#     # print(f"{[xi.cond_dist for xi in new_x]=}")
+#
+#     return new_x
+
+def equal_along_axis(x,axis):
+    # holy hell this is awkward
+    ref = x[(slice(None),)*axis + (0,)][(slice(None),)*axis + (np.newaxis,)]
+    return np.all(x==ref)
+
+def remove_redundant_dimension(arr, axis):
+    assert equal_along_axis(arr, axis)
+    return arr[(slice(None),)*axis + (0,)]
+
+def simplify(x):
     """
-    If some of x are VMapDist and others are just dist (with a matching base_dist) (and deterministic)
-    then transform the non-mapped things into maps
+    simplify a single node by removing unnecessary maps
     """
-    length = len(x)
-    if all(xi.cond_dist == x[0].cond_dist for xi in x):
+    if not isinstance(x.cond_dist,VMapDist):
         return x
+    assert len(x.parents) == len(x.cond_dist.in_axes)
+    new_parents = []
+    new_in_axes = []
+    for p, in_axis in zip(x.parents, x.cond_dist.in_axes):
+        if in_axis is not None and isinstance(p.cond_dist,Constant):
+            if equal_along_axis(p.cond_dist.value, in_axis):
+                new_value = remove_redundant_dimension(p.cond_dist.value, in_axis)
+                new_p = makerv(new_value)
+                new_in_axis = None
+                new_parents.append(new_p)
+                new_in_axes.append(new_in_axis)
+                continue
+        new_parents.append(p)
+        new_in_axes.append(in_axis)
+    new_parents = tuple(new_parents)
+    new_in_axes = tuple(new_in_axes)
 
-    if all(isinstance(xi.cond_dist, Constant) for xi in x):
+    if new_parents == x.parents and new_in_axes == x.cond_dist.in_axes:
         return x
+    print(f"{x.cond_dist=}")
+    print(f"{new_in_axes=}")
+    print(f"{new_parents=}")
+    return VMapDist(x.cond_dist.base_cond_dist, new_in_axes, x.cond_dist.axis_size)(*new_parents)
 
-    is_mapped = [isinstance(x[i].cond_dist, VMapDist) for i in range(length)]
-    dists = [x[i].cond_dist.base_cond_dist if is_mapped[i] else x[i].cond_dist for i in range(length)]
+def automap(x,*,check=True):
+    print('')
+    try:
+        return automap_recursive(x,check=check, toplevel=True, merge=True)
+    except UnmergableParentsError:
+        return automap_recursive(x, check=check, toplevel=True, merge=False)
+    # new_x = automap_recursive(x, check=check, toplevel=True, merge=False)
+    # return simplify(new_x)
 
-    #print(f"{dists=}")
-    assert all(d == dists[0] for d in dists)
-    axis_size = None
-    for i in range(length):
-        if is_mapped[i]:
-            axis_size = x[i].shape[0]
-    assert axis_size is not None, "didn't find any mapped vars"
-    new_x = [x[i] if is_mapped[i] else vmap(x[i].cond_dist, None, axis_size)(*x[i].parents) for i in range(length)]
-    return new_x
-
-
-def expand_if_needed(x):
-    """
-    given some set of vmapped x
-    if some axis fails to be mapped on one but IS mapped on others
-    AND the corresponding parent is a constant
-    then blow up the constant to a larger size and map it
-    """
-    assert is_sequence(x)
-    assert all(isinstance(xi.cond_dist, VMapDist) for xi in x)
-    assert all(xi.cond_dist.base_cond_dist == x[0].cond_dist.base_cond_dist for xi in x)
-    assert all(len(xi.parents) == len(x[0].parents) for xi in x)
-    num_parents = len(x[0].parents)
-    base_dist = x[0].cond_dist.base_cond_dist
-
-    mapped_axes = [None] * num_parents
-    mapped_shape = [None] * num_parents
-    mapped_size = None
-    for xi in x:
-        for n in range(num_parents):
-            if xi.cond_dist.in_axes[n] is not None:
-                # TODO: check before overwrite
-                mapped_axes[n] = xi.cond_dist.in_axes[n]
-                mapped_shape[n] = xi.parents[n].shape[mapped_axes[n]]
-                if xi.cond_dist.axis_size is not None:
-                    mapped_size = xi.cond_dist.axis_size
-    mapped_axes = tuple(mapped_axes)
-    # print(f"{mapped_axes=}")
-    # print(f"{mapped_shape=}")
-
-    new_x = []
-    for xi in x:
-        if xi.cond_dist.in_axes != mapped_axes:
-            new_parents = []
-            for n in range(num_parents):
-                if xi.cond_dist.in_axes[n] is None and mapped_axes[n] is not None:
-                    assert isinstance(xi.parents[n].cond_dist, Constant)
-                    # new_value = xi.parents[0]
-                    new_value = np.repeat(xi.parents[n].cond_dist.value, mapped_shape[n], axis=mapped_axes[n])
-                    new_parents.append(makerv(new_value))
-                else:
-                    new_parents.append(xi.parents[n])
-            new_xi = VMapDist(base_dist, mapped_axes, mapped_size)(*new_parents)
-            new_x.append(new_xi)
-        else:
-            new_x.append(xi)
-    # print('-------------------------')
-    # print(f"{[xi.cond_dist for xi in x]=}")
-    # print(f"{[xi.cond_dist for xi in new_x]=}")
-
-    return new_x
-
-def automap(x, nomerge=False, *, indent=0, check=True):
+def automap_recursive(x, *, indent=0, check, toplevel, merge):
     """
     Transform a sequence of RVs into a single VMapDist RV and transform those
     individual RVs into Indexes into that VMapDist RV.
+
+    Only allowed to modify random RVs when toplevel=true
 
     Also, recurse onto parents where possible/necessary.
     """
@@ -249,7 +298,7 @@ def automap(x, nomerge=False, *, indent=0, check=True):
     if isinstance(x, GeneratorType):
         x = tuple(x)
 
-    # print(f'{" " * (indent * 4)}automap({nomerge}) called on {len(x)} inputs:')
+    # print(f'{" " * (indent * 4)}automap({merge}) called on {len(x)} inputs:')
     # def display(xi):
     #     s = " " * (indent * 4)
     #     if isinstance(xi, RV):
@@ -262,41 +311,40 @@ def automap(x, nomerge=False, *, indent=0, check=True):
     # for xi in x:
     #     display(xi)
 
+    print(f'{" " * (indent * 4)}automap({merge}) called on {len(x)} inputs:',end='')
+    def display(xi):
+        s = ""
+        if isinstance(xi, RV):
+            print(
+                f"<{s}{xi.cond_dist} {xi.shape} {[p.shape for p in xi.parents]} {[p.cond_dist if isinstance(p, RV) else type(p) for p in xi.parents]}> ",end='')
+        elif isinstance(xi, np.ndarray):
+            print(f"<{s}{type(xi)} {xi.shape}> ", end='')
+        else:
+            print(f"<{s}{type(xi)}> ", end='')
+    for xi in x:
+        display(xi)
+    print('')
+
+
     if check:
         assert is_sequence(x)
 
-    # recurse if necessary
-    # if all(is_sequence(xi) for xi in x):
-    #     try:
-    #         new_x = [automap(xi, nomerge, indent=indent + 1, check=check) for xi in x]
-    #         rez = automap(new_x, nomerge, indent=indent + 1, check=check)  # TODO: right?
-    #         #print(f'\n{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
-    #         return rez
-    #     except UnmergableParentsError:
-    #         try:
-    #             new_x = [automap(xi, True, indent=indent + 1, check=check) for xi in x]
-    #             rez = automap(new_x, True, indent=indent + 1, check=check)  # TODO: right?
-    #             #print(f'\n{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
-    #             return rez
-    #         except UnmergableParentsError:
-    #             raise UnmergableParentsError()
-
-
     if all(is_sequence(xi) for xi in x):
+        # new_x = [automap_recursive(xi, indent=indent + 1, check=check, toplevel=toplevel, merge=merge) for xi in x]
+        # return automap_recursive(new_x, indent=indent + 1, check=check, toplevel=toplevel, merge=merge)
         try:
-            new_x = [automap(xi, False, indent=indent + 1, check=check) for xi in x]
-            try:
-                return automap(new_x, False, indent=indent + 1, check=check)
-            except UnmergableParentsError:
-                return automap(new_x, True, indent=indent + 1, check=check)
+            new_x = [automap_recursive(xi, indent=indent + 1, check=check, toplevel=toplevel,merge=True) for xi in x]
+            return automap_recursive(new_x, indent=indent + 1, check=check, toplevel=toplevel,merge=True)
         except UnmergableParentsError:
-            new_x = [automap(xi, True, indent=indent + 1, check=check) for xi in x]
+            print(f"{' '*(indent*4)}UNMERGABLE! Trying again")
             try:
-                return automap(new_x, False, indent=indent + 1, check=check)
+                new_x = [automap_recursive(xi, indent=indent + 1, check=check, toplevel=toplevel, merge=False) for xi in
+                         x]
+                return automap_recursive(new_x, indent=indent + 1, check=check, toplevel=toplevel, merge=True)
             except UnmergableParentsError:
-                return automap(new_x, True, indent=indent + 1, check=check)
-
-
+                print(f"{' ' * (indent*4)}UNMERGABLE! Trying last time.")
+                new_x = [automap_recursive(xi, indent=indent + 1, check=check, toplevel=toplevel, merge=False) for xi in x]
+                return automap_recursive(new_x, indent=indent + 1, check=check, toplevel=toplevel, merge=False)
 
     #x = map_if_needed(x)
 
@@ -314,14 +362,17 @@ def automap(x, nomerge=False, *, indent=0, check=True):
         #print(f'{" " * (indent * 4)}automap returning: {rez.cond_dist} {rez.shape}')
         return rez
 
-    dist, N, M = check_parents_compatible(x)
+    dist, N, M = check_parents_compatible(x, indent=indent)
+
+    if not toplevel and dist.random:
+        raise ValueError("automap can only process random RVs at top level")
 
     # get arguments
     v = []
     k = []
     for m in range(M):
         p = [xn.parents[m] for xn in x]
-        my_v, my_k = vec_args(p, nomerge, indent=indent, check=check)
+        my_v, my_k = vec_args(p, indent=indent, check=check, toplevel=toplevel, merge=merge)
         v.append(my_v)
         k.append(my_k)
 
@@ -334,65 +385,97 @@ def automap(x, nomerge=False, *, indent=0, check=True):
     if is_pointless_rv(new_rv):
         return new_rv.parents[0]
 
-    # DON'T re-assign old RVs
-    # This is dangerous because could lead to dual usage. But it's the simplest way to make exceptions work
+    # # Reassign RVs
+    # for xn,new_xn in zip(x,new_rv):
+    #     xn.reassign(new_rv.cond_dist, new_rv.parents)
 
-    #print(f'\n{" " * (indent * 4)}automap returning: {new_rv.cond_dist} {new_rv.shape}')
+
+    print(f'{" " * (indent * 4)}automap returning: {new_rv.cond_dist} {new_rv.shape}')
 
     return new_rv
 
 
-def vec_args(p, nomerge, *, indent=0, check):
+# def deep_equal(x,y):
+#     assert isinstance(x,RV)
+#     assert isinstance(y,RV)
+#     if x.cond_dist.random:
+#         return x is y
+#     if isinstance(x.cond_dist,Constant):
+#         return x is y
+#     return x.cond_dist == y.cond_dist and len(x.parents) == len(y.parents) and all(deep_equal(p_x,p_y) for p_x,p_y in zip(x.parents,y.parents))
+
+def deep_equal(x,y):
+    assert isinstance(x,RV)
+    assert isinstance(y,RV)
+    if x.cond_dist.random:
+        return x is y
+    return x.cond_dist == y.cond_dist and len(x.parents) == len(y.parents) and all(deep_equal(p_x,p_y) for p_x,p_y in zip(x.parents,y.parents))
+
+
+def vec_args(p,  *, indent=0, check, toplevel, merge):
     p0 = p[0]
     d0 = p0.cond_dist
-    if nomerge:
-        if all(pi is p0 for pi in p):
-            # if all parents are the same, return the first one and don't map
-            return (p0, None)
-    else:
-        if all(pi == p0 for pi in p):
-            # if all parents are the same, return the first one and don't map
-            return (p0, None)
-    # print(f"{p=}")
+    if all(pi is p0 for pi in p):
+        # if all parents are the same, return the first one and don't map
+        return (p0, None)
+    # elif merge and all(deep_equal(pi,p0) for pi in p):
+    #     print(f'{" " * (indent * 4)}DEEP EQUALITY FOUND')
+    #     # also safe to map in this case!
+    #     return (p0, None)
+    p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=True)
+    return p_vec, 0
 
-    try:
-        # if all parents are indices into the same RV with a single shared
-        # unsliced dimension and constant indices running from 0 to N
-        # then map over that dimension of the RV and discard the constant indices
+    # try:
+    #     # if all parents are indices into the same RV with a single shared
+    #     # unsliced dimension and constant indices running from 0 to N
+    #     # then map over that dimension of the RV and discard the constant indices
+    #
+    #     if check:
+    #         assert isinstance(p0.cond_dist, Index)
+    #     k = get_unsliced(p0.cond_dist)
+    #     v = p0.parents[0]
+    #     # if check_validity:
+    #
+    #     for n, pn in enumerate(p):
+    #         assert isinstance(pn.cond_dist, Index)
+    #         assert get_unsliced(pn.cond_dist) == k
+    #         assert pn.parents[0] == v
+    #         assert pn.parents[1].cond_dist == Constant(n)
+    #     return v, k
+    # except AssertionError:  # if none of that worked (nodes not all same and not Index), recurse
+    #     # p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=merge)
+    #     # return vec_args(p_vec, indent=indent + 1, check=check, toplevel=toplevel, merge=merge)
+    #
+    #     try:
+    #         p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=True)
+    #     except UnmergableParentsError:
+    #         p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=False)
+    #     return p_vec, 0
+        #k = 0
+        #v = p_vec
+        #return v,k
+        # p = [p_vec[i] for i in range(len(p_vec))]
+        # p0 = p[0]
+        #
+        # if check:
+        #     assert isinstance(p0.cond_dist, Index)
+        # k = get_unsliced(p0.cond_dist)
+        # v = p0.parents[0]
+        #
+        # for n, pn in enumerate(p):
+        #     assert isinstance(pn.cond_dist, Index)
+        #     assert get_unsliced(pn.cond_dist) == k
+        #     assert pn.parents[0] == v
+        #     assert pn.parents[1].cond_dist == Constant(n)
+        # return v, k
 
-        if check:
-            assert isinstance(p0.cond_dist, Index)
-        k = get_unsliced(p0.cond_dist)
-        v = p0.parents[0]
-        # if check_validity:
 
-        for n, pn in enumerate(p):
-            assert isinstance(pn.cond_dist, Index)
-            assert get_unsliced(pn.cond_dist) == k
-            assert pn.parents[0] == v  # THIS IS THE SLOW ONE!
-            # assert h.eq(pn.parents[0],v)
-            assert pn.parents[1].cond_dist == Constant(n)
-        return v, k
-    except AssertionError:  # if none of that worked (nodes not all same and not Index), recurse
-        #try:
-        #   p_vec = automap(p, False, indent=indent + 1, check=check)
-        #except UnmergableParentsError:
-        #    p_vec = automap(p, True, indent=indent + 1, check=check)
-        #p_vec = automap(p, True, indent=indent + 1, check=check)
-        #return vec_args(p_vec, True, indent=indent + 1, check=check)
-
-        try:
-            p_vec = automap(p, False, indent=indent + 1, check=check)
-            try:
-                return vec_args(p_vec, False, indent=indent + 1, check=check)
-            except UnmergableParentsError:
-                return vec_args(p_vec, True, indent=indent + 1, check=check)
-        except UnmergableParentsError:
-            p_vec = automap(p, True, indent=indent + 1, check=check)
-            try:
-                return vec_args(p_vec, False, indent=indent + 1, check=check)
-            except UnmergableParentsError:
-                return vec_args(p_vec, True, indent=indent + 1, check=check)
+        # try:
+        #     p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=merge)
+        #     return vec_args(p_vec, indent=indent + 1, check=check, toplevel=toplevel, merge=merge)
+        # except UnmergableParentsError:
+        #     p_vec = automap_recursive(p, indent=indent + 1, check=check, toplevel=False, merge=False)
+        #     return vec_args(p_vec, indent=indent + 1, check=check, toplevel=toplevel, merge=False)
 
 # def roll(x):
 #     """
