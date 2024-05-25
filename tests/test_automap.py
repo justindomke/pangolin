@@ -14,7 +14,7 @@ from pangolin.interface import (
 import numpy as np  # type: ignore
 from pangolin.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VMapRV
 from pangolin import *
-from pangolin.automap import automap, which_slice_kth_arg, is_pointless_rv, simplify, UnmergableParentsError
+from pangolin.automap_simple import automap, which_slice_kth_arg, is_pointless_rv, UnmergableParentsError
 from pangolin.arrays import Array
 from pangolin.calculate import Calculate
 from pangolin import inference_stan, inference_numpyro_modelbased
@@ -142,9 +142,12 @@ def test_simpledogs1():
                         [0.1, 1.1, 0.1]])
     beta = automap(normal(0,100) for i in range(3))
     y = Array((n_dogs,n_trials))
+    beta0 = beta[0]
+    beta1 = beta[1]
+    beta2 = beta[2]
     for j in range(n_dogs):
         for t in range(n_trials):
-            y[j, t] = bernoulli_logit(beta[0] + (beta[1] * n_avoid[j, t] + beta[2] * n_shock[j, t]))
+            y[j, t] = bernoulli_logit(beta0 + beta1 * n_avoid[j, t] + beta2 * n_shock[j, t])
 
     # beta0 = beta[0]
     # beta1 = beta[1]
@@ -183,7 +186,7 @@ def test_simpledogs3(): # OK
             y[j, t] = bernoulli_logit(n_avoid[j, t] + n_shock[j, t])
     print_upstream(y)
 
-def test_simpledogs4(): # OK
+def test_simpledogs4():
     n_dogs = 2
     n_trials = 3
     n_shock = np.array([[1, 1, 1],
@@ -252,7 +255,7 @@ def test_simpledogs8():
             y[j, t] = bernoulli_logit(beta + n_shock[j, t])
     print_upstream(y)
 
-def test_simpledogs9(): # OK
+def test_simpledogs9():
     n_dogs = 2
     n_trials = 3
     n_avoid = np.array([[0.1, 0, 1],
@@ -376,7 +379,7 @@ def test_simpledogs19():
             y[j, t] = bernoulli_logit(beta + x[j, t])
     print_upstream(y)
 
-def test_simpledogs20(): # OK
+def test_simpledogs20():
     n_dogs = 2
     n_trials = 2
     n_shock = np.array([[1.1, 2.2],
@@ -829,6 +832,7 @@ def test18():
     y = automap([xi for xi in x])
     assert isinstance(y,RV)
     print(x)
+    print_upstream(y)
     assert y.cond_dist == Constant(val)
 
 def test18b():

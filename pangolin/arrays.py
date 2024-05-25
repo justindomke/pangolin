@@ -1,5 +1,7 @@
 from pangolin import *
-import pangolin.automap
+#import pangolin.automap
+
+from pangolin.automap_simple import automap
 
 class Array(RV):
     """
@@ -41,5 +43,5 @@ class Array(RV):
     def activate(self):
         #print("ACTIVATING")
         #print(f"{self.rvs=}")
-        rv = pangolin.automap.automap(self.rvs.tolist(),check=self.check)
+        rv = automap(self.rvs.tolist(),check=self.check)
         super().__init__(rv.cond_dist, *rv.parents)
