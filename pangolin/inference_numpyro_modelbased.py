@@ -78,6 +78,10 @@ def numpyro_var(cond_dist, *numpyro_parents):
         return numpyro_mixture_var(cond_dist, *numpyro_parents)
     elif isinstance(cond_dist, interface.Truncated):  # Truncated dists
         return numpyro_truncated_var(cond_dist, *numpyro_parents)
+    elif isinstance(cond_dist, interface.Composite):
+        return numpyro_composite_var(cond_dist, *numpyro_parents)
+    elif isinstance(cond_dist, interface.Autoregressive):
+        return numpyro_autoregressive_var(cond_dist, *numpyro_parents)
     else:
         raise NotImplementedError(f"unsupported cond_dist {cond_dist} {type(cond_dist)}")
 
@@ -101,6 +105,67 @@ def numpyro_truncated_var(cond_dist: interface.Truncated, *numpyro_parents):
         low=cond_dist.lo,
         high=cond_dist.hi,
     )
+
+def numpyro_composite_var(cond_dist: interface.Composite, *numpyro_parents):
+    vals = list(numpyro_parents)
+    assert len(numpyro_parents) == cond_dist.num_inputs
+    for my_cond_dist, my_par_nums in zip(cond_dist.cond_dists, cond_dist.par_nums):
+        my_parents = [vals[i] for i in my_par_nums]
+        new_val = numpyro_var(my_cond_dist, *my_parents)
+        vals.append(new_val)
+    return vals[-1]
+
+# def numpyro_autoregressive_var(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
+#     # TODO: THIS CAN'T WORK—NEED TO CREATE A NEW "SCAN" DIST LIKE WE DID FOR VMAP?
+#
+#     # this exists but seems very buggy/limited
+#     # import numpyro.contrib.control_flow
+#     # carry, ys = numpyro.contrib.control_flow.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
+#     def myfun(carry, x):
+#         if x is None:
+#             inputs = (carry,)
+#         else:
+#             print(f"{len(x)=}")
+#             inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+#         print(f"{len(inputs)=}")
+#         y = numpyro_var(cond_dist.base_cond_dist, *inputs)
+#         print(f"{carry.shape=}")
+#         print(f"{y.shape=}")
+#         return y, y
+#     if numpyro_parents == ():
+#         numpyro_parents = None
+#     print(f"{numpyro_init=}")
+#     print(f"{numpyro_parents=}")
+#     print(f"{cond_dist.axis_size=}")
+#     #carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
+#
+#     return ys
+
+def numpyro_autoregressive_var(cond_dist, *numpyro_parents):
+    if cond_dist.random:
+        raise NotImplementedError()
+        #return numpyro_autoregressive_var_random(cond_dist, *numpyro_parents)
+    else:
+        return numpyro_autoregressive_var_nonrandom(cond_dist, *numpyro_parents)
+
+
+def numpyro_autoregressive_var_nonrandom(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
+    # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
+    def myfun(carry, x):
+        #if x is None:
+        #    inputs = (carry,)
+        #else:
+        #    inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+        #if x is None:
+        #    x = ()
+        inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+        y = numpyro_var(cond_dist.base_cond_dist, *inputs)
+        return y, y
+    #if numpyro_parents == ():
+    #    numpyro_parents = None
+    carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
+
+    return ys
 
 
 def numpyro_vmap_var(cond_dist, *numpyro_parents):

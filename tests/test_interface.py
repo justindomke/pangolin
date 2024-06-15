@@ -3,6 +3,8 @@ from pangolin.interface import *
 from pangolin import inference_numpyro, calculate
 from scipy import stats
 
+# TODO: many of these should move to test_ir
+
 calc = calculate.Calculate(inference_numpyro)
 
 

@@ -226,6 +226,8 @@ class_gencode_fns = {
     interface.LogProb: gencode_unsupported(),
     interface.Mixture: gencode_unsupported(),
     interface.Truncated: gencode_truncated,
+    interface.Composite: gencode_unsupported(),
+    interface.Autoregressive: gencode_unsupported(),
 }
 
 

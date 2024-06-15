@@ -111,8 +111,8 @@ class Constant(CondDist):
         # return str(self.value).replace("\n", "").replace("  ", " ")
         # assure regular old numpy in case jax being used
         numpy_value = numpy.array(self.value)
-        with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
-            return np.array2string(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
+        with numpy.printoptions(threshold=5, linewidth=50, edgeitems=2):
+            return numpy.array2string(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
 
 
 class AllScalarCondDist(CondDist):
@@ -666,6 +666,57 @@ class VMapDist(CondDist):
 
 
 ################################################################################
+# composite dists
+################################################################################
+
+class Composite(CondDist):
+    def __init__(self, num_inputs, cond_dists, par_nums):
+        assert isinstance(num_inputs,int)
+        assert all(isinstance(d,CondDist) for d in cond_dists)
+        for my_par_nums in par_nums:
+            assert all(isinstance(i,int) for i in my_par_nums)
+        for d in cond_dists[:-1]:
+            assert not d.random, "all but last cond_dist for Composite must be non-random"
+        self.num_inputs = num_inputs
+        self.cond_dists = cond_dists
+        self.par_nums = par_nums
+        super().__init__(name=f"Composite({cond_dists[-1].name})", random=cond_dists[-1].random)
+
+    def get_shape(self, *parents_shapes):
+        all_shapes = list(parents_shapes)
+        for my_cond_dist, my_par_nums in zip(self.cond_dists, self.par_nums):
+            my_parents_shapes = [all_shapes[i] for i in my_par_nums]
+            my_shape = my_cond_dist.get_shape(*my_parents_shapes)
+            all_shapes.append(my_shape)
+        return all_shapes[-1]
+
+################################################################################
+# autoregressive dists
+################################################################################
+
+class Autoregressive(CondDist):
+    def __init__(self, base_cond_dist, position, axis_size):
+        """
+        position - what argument number to recurse over
+        """
+        self.base_cond_dist = base_cond_dist
+        self.position = position
+        self.axis_size = axis_size # TODO: switch to "length"
+        super().__init__(name=f"Autoregressive({base_cond_dist.name})", random=base_cond_dist.random)
+
+    def get_shape(self, start_shape, *other_shapes):
+        for s in other_shapes:
+            assert s[0] == self.axis_size
+        base_other_shapes = tuple(s[1:] for s in other_shapes)
+
+        base_input_shapes = base_other_shapes[:self.position] + (start_shape,) + base_other_shapes[self.position:]
+        print(f"{base_input_shapes=}")
+        base_output_shape = self.base_cond_dist.get_shape(*base_input_shapes)
+        output_shape = (self.axis_size,) + base_output_shape
+        return output_shape
+
+
+################################################################################
 # mixtures
 ################################################################################
 
@@ -710,12 +761,13 @@ class Mixture(CondDist):
     def __hash__(self):
         return hash((self.mixing_dist, self.num_mixing_args, self.vmap_dist))
 
-
-# mixtures
+################################################################################
+# truncated dists
 ################################################################################
 
 
 class Truncated(CondDist):
+    # TODO: Make sure CondDist is in the small class that can actually be truncated
     def __init__(self, base_dist, lo=None, hi=None):
         assert isinstance(base_dist, CondDist)
         assert base_dist.random
