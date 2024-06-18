@@ -690,6 +690,12 @@ class Composite(CondDist):
             all_shapes.append(my_shape)
         return all_shapes[-1]
 
+    def __str__(self):
+        return f"composite({self.num_inputs},{self.cond_dists},{self.par_nums})"
+
+    def __repr__(self):
+        return f"Composite({self.num_inputs},{self.cond_dists},{self.par_nums})"
+
 ################################################################################
 # autoregressive dists
 ################################################################################
@@ -697,7 +703,9 @@ class Composite(CondDist):
 class Autoregressive(CondDist):
     def __init__(self, base_cond_dist, position, axis_size):
         """
+        base_cond_dist - what distribution to repeat on
         position - what argument number to recurse over
+        axis_size - the number of times to repeat
         """
         self.base_cond_dist = base_cond_dist
         self.position = position

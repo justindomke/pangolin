@@ -138,6 +138,76 @@ def log_prob(vars, given_vars=None):
         # evaluated[node] = None
     return l
 
+################################################################################
+# convenience functions to create Composite dists
+################################################################################
+
+def make_composite(fun,*input_shapes):
+    # TODO: take pytree of arguments
+    roots = [AbstractRV(shape) for shape in input_shapes]
+    print(f"{roots=}")
+    out = fun(*roots)
+    assert isinstance(out,RV), "output of function must be a single RV"
+    all_vars = dag.upstream_nodes(out)
+    num_inputs = len(input_shapes)
+    cond_dists = []
+    par_nums = []
+
+    linear_order = {}
+    num_non_roots_seen = 0
+    for var in all_vars:
+        if var in roots:
+            assert isinstance(var,AbstractRV)
+            linear_order[var] = roots.index(var)
+        else:
+            my_cond_dist = var.cond_dist
+            my_par_nums = [linear_order[p] for p in var.parents]
+            cond_dists.append(my_cond_dist)
+            par_nums.append(my_par_nums)
+            linear_order[var] = len(roots) + num_non_roots_seen
+            num_non_roots_seen += 1
+    return Composite(num_inputs, cond_dists, par_nums)
+
+def composite(fun):
+    def myfun(*inputs):
+        input_shapes = [x.shape for x in inputs]
+        op = make_composite(fun,*input_shapes)
+        return op(*inputs)
+    return myfun
+
+################################################################################
+# Autoregressive convenience function
+################################################################################
+
+def autoregressive(fun,length=None):
+    """
+    Convenience function for creating Autoregressive(Composite) RVs
+    fun - function where 1st argument is recursive variable and other arguments are whatever
+    length - length to be mapped over (optional unless there are no argments)
+    """
+    def myfun(init, *args):
+        if length is None:
+            if args == ():
+                raise ValueError("autoregressive needs length if there are no mapped args")
+            else:
+                my_length = args[0].shape[0]
+                for a in args:
+                    assert a.shape[0] == my_length, "all args must have matching first dim"
+        else:
+            for a in args:
+                assert a.shape[0] == length, "all args must have first dim matching length"
+            my_length = length
+
+        position = 0 # could generalize...
+        args_shapes = tuple(a.shape[1:] for a in args)
+        input_shapes = args_shapes[:position] + (init.shape,) + args_shapes[position:]
+        print(f"{input_shapes=}")
+        base_op = make_composite(fun,*input_shapes)
+        op = Autoregressive(base_op, position, my_length)
+        return op(init,*args)
+    return myfun
+
+
 
 ################################################################################
 # Full-blown VMap

@@ -1,3 +1,4 @@
+from pangolin.interface import *
 import pangolin.interface as interface
 import numpy as np
 from numpyro import distributions as dist
@@ -8,11 +9,45 @@ import numpyro
 from jax import numpy as jnp
 from jax.scipy import stats
 
-# def test_autoregressive1():
-#     op = interface.Autoregressive(interface.exponential, 0, 5)
-#     z = op(makerv(2.0))
-#     [zs] = inf.sample_flat([z],[],[])
-#     print(f"{zs=}")
+def test_autoregressive_exponential_sampling():
+    op = interface.Autoregressive(interface.exponential, 0, 5)
+    z = op(makerv(2.0))
+    [z_samp] = inf.ancestor_sample_flat([z],niter=1000)
+    print(f"{z_samp=}")
+
+def test_autoregressive_exponential_log_prob():
+    op = interface.Autoregressive(interface.exponential, 0, 5)
+    z = op(makerv(1.0))
+    z_samp = np.arange(2.0,7.0)
+    l = inf.numpyro_var(z.cond_dist, 1.0).log_prob(z_samp)
+    expected = 0.0
+    last = 1.0
+    for zi in z_samp:
+        expected += stats.expon.logpdf(zi,0,1/last) # loc/scale parameterization
+        last = zi
+    assert np.allclose(l,expected)
+
+def test_autoregressive_normal_sampling():
+    op = interface.Autoregressive(interface.normal_scale, 0, 5)
+    z = op(makerv(0.0),makerv(np.ones(5)))
+    [z_samp] = inf.ancestor_sample_flat([z],niter=1000)
+    z_std = np.std(z_samp,axis=0)
+    expected_z_std = np.sqrt(np.arange(1,6)) # random walk variance is additive
+    assert np.all(np.abs(z_std-expected_z_std)<.1)
+
+def test_autoregressive_normal_log_prob():
+    op = interface.Autoregressive(interface.normal_scale, 0, 5)
+    scales = np.arange(5)/2 + 1.5
+    z = op(makerv(0.25),makerv(scales))
+    [z_samp] = inf.ancestor_sample_flat([z])
+    l = inf.numpyro_var(z.cond_dist, 0.25, scales).log_prob(z_samp)
+    expected = 0.0
+    last = 0.25
+    for zi, scale in zip(z_samp, scales):
+        expected += stats.norm.logpdf(zi,last,scale)
+        last = zi
+    assert np.allclose(l, expected)
+
 
 def test_autoregressive_nonrandom1():
     op = interface.Autoregressive(interface.sin, 0, 5)
@@ -68,27 +103,86 @@ def test_autoregressive_cumdiv2():
     print(f"{expected=}")
     assert np.allclose(z_samp,expected)
 
+def test_composite1():
+    op = interface.Composite(2, [interface.add], [[0,1]])
+    l = inf.numpyro_var(op, 1.1, 2.2)
+    expected = 3.3
+    assert np.allclose(l, expected)
 
-# def test_composite1():
-#     op = interface.Composite(2, [interface.add], [[0,1]])
-#     l = inf.numpyro_var(op, 1.1, 2.2)
-#     expected = 3.3
-#     assert np.allclose(l, expected)
+def test_composite2():
+    op = interface.Composite(1, [interface.add, interface.mul],[[0,0],[0,1]])
+    l = inf.numpyro_var(op, 2.2)
+    expected = 4.4*2.2
+    assert np.allclose(l, expected)
+
+def test_composite3():
+    op = interface.Composite(1,[interface.mul,interface.normal_scale],[[0,0],[0,1]])
+    x = makerv(2.2)
+    z = op(x)
+    [zs] = inf.sample_flat([z], [], [], niter=10000)
+    assert jnp.abs(jnp.mean(zs) - 2.2) < 0.1
+    assert jnp.abs(jnp.std(zs) - 2.2**2) < 0.1
+
+def test_autoregressive_composite():
+    op0 = interface.Composite(1, [interface.mul, interface.normal_scale], [[0, 0], [0, 1]])
+    op = interface.Autoregressive(op0, 0, 5)
+    x = interface.normal_scale(0,1)
+    z = op(x)
+    [z_samp] = inf.ancestor_sample_flat([z])
+    print(f"{z_samp=}")
+    print(f"{z_samp.shape=}")
+
+def test_autoregressive_normal1():
+    x = normal_scale(0,1)
+    scales = makerv(np.arange(100))
+    z = autoregressive(lambda last: normal_scale(last,1), 100)(x)
+    [z_samp] = inf.ancestor_sample_flat([z])
+    assert z_samp.shape == (100,)
+
+def test_autoregressive_normal2():
+    x = normal_scale(0,1)
+    scales = makerv(np.arange(100))
+    z = autoregressive(lambda last, scale: normal_scale(last, scale))(x, scales)
+    [z_samp] = inf.ancestor_sample_flat([z])
+    assert z_samp.shape == (100,)
+
+def test_autoregressive_normal3():
+    x = normal_scale(0,1)
+    locs = makerv(np.arange(100))
+    z = autoregressive(lambda last, loc: normal_scale(loc,.9*abs(last) + .1))(x, locs)
+    [z_samp] = inf.ancestor_sample_flat([z])
+    print(z_samp)
+    assert z_samp.shape == (100,)
+
+def test_autoregressive_decorator():
+    x = interface.normal_scale(0, 1)
+    locs = makerv(np.arange(100))
+    # this is pretty horrible and wouldn't work with a length argument
+    @autoregressive
+    def f(last, loc):
+        return normal_scale(loc, 0.9*abs(last) + 0.1)
+    z = f(x,locs)
+    [z_samp] = inf.ancestor_sample_flat([z])
+    assert z_samp.shape == (100,)
+
+# def test_timeseries():
+#     # true params
+#     a_true = 0.7
+#     b_true = 2.5
+#     # generate dataset
+#     x_obs = []
+#     tmp = 0.0
+#     for i in range(100):
+#         loc = a_true * tmp
+#         scale = b_true
+#         tmp = loc + scale*np.random.randn()
+#         x_obs.append(tmp)
+#     x_obs = np.array(x_obs)
 #
-# def test_composite2():
-#     op = interface.Composite(1, [interface.add, interface.mul],[[0,0],[0,1]])
-#     l = inf.numpyro_var(op, 2.2)
-#     expected = 4.4*2.2
-#     assert np.allclose(l, expected)
-#
-# def test_composite3():
-#     op = interface.Composite(1,[interface.mul,interface.normal_scale],[[0,0],[0,1]])
-#     x = makerv(2.2)
-#     z = op(x)
-#     [zs] = inf.sample_flat([z], [], [])
-#     assert abs(jnp.mean(zs) - 2.2) < 0.1
-#     assert abs(jnp.std(zs) - 2.2**2) < 0.1
-#
+#     a = normal(0,1)
+#     b = normal(0,1)
+#     x = autoregressive(lambda last: normal_scale(a*last, b), 100)
+
 # def test_numpyro_var1():
 #     var = inf.numpyro_var(interface.normal_scale, 0, 1)
 #     assert isinstance(var, dist.Normal)

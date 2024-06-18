@@ -143,29 +143,76 @@ def numpyro_composite_var(cond_dist: interface.Composite, *numpyro_parents):
 
 def numpyro_autoregressive_var(cond_dist, *numpyro_parents):
     if cond_dist.random:
-        raise NotImplementedError()
-        #return numpyro_autoregressive_var_random(cond_dist, *numpyro_parents)
+        return numpyro_autoregressive_var_random(cond_dist, *numpyro_parents)
     else:
         return numpyro_autoregressive_var_nonrandom(cond_dist, *numpyro_parents)
 
 
 def numpyro_autoregressive_var_nonrandom(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
     # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
+    assert isinstance(cond_dist, interface.Autoregressive)
+    assert not cond_dist.random
     def myfun(carry, x):
-        #if x is None:
-        #    inputs = (carry,)
-        #else:
-        #    inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
-        #if x is None:
-        #    x = ()
         inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
         y = numpyro_var(cond_dist.base_cond_dist, *inputs)
         return y, y
-    #if numpyro_parents == ():
-    #    numpyro_parents = None
     carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
-
     return ys
+
+
+def numpyro_autoregressive_var_random(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
+    # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
+    assert isinstance(cond_dist, interface.Autoregressive)
+    assert cond_dist.random
+
+    class NewDist(dist.Distribution):
+        @property
+        def support(self):
+            return get_support(cond_dist.base_cond_dist)
+
+        def __init__(self, *args, validate_args=False):
+            self.args = args
+
+            # TODO: infer correct batch_shape?
+            batch_shape = ()
+            parents_shapes = [p.shape for p in args]
+            event_shape = cond_dist.get_shape(*parents_shapes)
+
+            super().__init__(
+                batch_shape=batch_shape,
+                event_shape=event_shape,
+                validate_args=validate_args,
+            )
+
+        def sample(self, key, sample_shape=()):
+            assert numpyro.util.is_prng_key(key)
+            assert sample_shape == ()
+
+            def base_sample(carry, key_and_x):
+                key = key_and_x[0]
+                x = key_and_x[1:]
+                inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+                var = numpyro_var(cond_dist.base_cond_dist, *inputs)
+                y = var.sample(key)
+                return y, y
+
+            keys = jax.random.split(key,cond_dist.axis_size)
+            carry, ys = jax.lax.scan(base_sample, numpyro_init, (keys,)+numpyro_parents, length=cond_dist.axis_size)
+            return ys
+
+        @dist_util.validate_sample
+        def log_prob(self, value):
+            def base_log_prob(carry, val_and_x):
+                val = val_and_x[0]
+                x = val_and_x[1:]
+                inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+                var = numpyro_var(cond_dist.base_cond_dist, *inputs)
+                return val, var.log_prob(val)
+
+            carry, ls = jax.lax.scan(base_log_prob, numpyro_init, (value,) + numpyro_parents, length=cond_dist.axis_size)
+            return jnp.sum(ls)
+
+    return NewDist(numpyro_init, *numpyro_parents)
 
 
 def numpyro_vmap_var(cond_dist, *numpyro_parents):
