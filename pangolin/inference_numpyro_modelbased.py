@@ -115,32 +115,6 @@ def numpyro_composite_var(cond_dist: interface.Composite, *numpyro_parents):
         vals.append(new_val)
     return vals[-1]
 
-# def numpyro_autoregressive_var(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
-#     # TODO: THIS CAN'T WORK—NEED TO CREATE A NEW "SCAN" DIST LIKE WE DID FOR VMAP?
-#
-#     # this exists but seems very buggy/limited
-#     # import numpyro.contrib.control_flow
-#     # carry, ys = numpyro.contrib.control_flow.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
-#     def myfun(carry, x):
-#         if x is None:
-#             inputs = (carry,)
-#         else:
-#             print(f"{len(x)=}")
-#             inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
-#         print(f"{len(inputs)=}")
-#         y = numpyro_var(cond_dist.base_cond_dist, *inputs)
-#         print(f"{carry.shape=}")
-#         print(f"{y.shape=}")
-#         return y, y
-#     if numpyro_parents == ():
-#         numpyro_parents = None
-#     print(f"{numpyro_init=}")
-#     print(f"{numpyro_parents=}")
-#     print(f"{cond_dist.axis_size=}")
-#     #carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
-#
-#     return ys
-
 def numpyro_autoregressive_var(cond_dist, *numpyro_parents):
     if cond_dist.random:
         return numpyro_autoregressive_var_random(cond_dist, *numpyro_parents)
@@ -153,10 +127,10 @@ def numpyro_autoregressive_var_nonrandom(cond_dist: interface.Autoregressive, nu
     assert isinstance(cond_dist, interface.Autoregressive)
     assert not cond_dist.random
     def myfun(carry, x):
-        inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+        inputs = (carry,) + x
         y = numpyro_var(cond_dist.base_cond_dist, *inputs)
         return y, y
-    carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.axis_size)
+    carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.length)
     return ys
 
 
@@ -191,13 +165,13 @@ def numpyro_autoregressive_var_random(cond_dist: interface.Autoregressive, numpy
             def base_sample(carry, key_and_x):
                 key = key_and_x[0]
                 x = key_and_x[1:]
-                inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+                inputs = (carry,) + x
                 var = numpyro_var(cond_dist.base_cond_dist, *inputs)
                 y = var.sample(key)
                 return y, y
 
-            keys = jax.random.split(key,cond_dist.axis_size)
-            carry, ys = jax.lax.scan(base_sample, numpyro_init, (keys,)+numpyro_parents, length=cond_dist.axis_size)
+            keys = jax.random.split(key,cond_dist.length)
+            carry, ys = jax.lax.scan(base_sample, numpyro_init, (keys,)+numpyro_parents, length=cond_dist.length)
             return ys
 
         @dist_util.validate_sample
@@ -205,11 +179,11 @@ def numpyro_autoregressive_var_random(cond_dist: interface.Autoregressive, numpy
             def base_log_prob(carry, val_and_x):
                 val = val_and_x[0]
                 x = val_and_x[1:]
-                inputs = x[:cond_dist.position] + (carry,) + x[cond_dist.position:]
+                inputs = (carry,) + x
                 var = numpyro_var(cond_dist.base_cond_dist, *inputs)
                 return val, var.log_prob(val)
 
-            carry, ls = jax.lax.scan(base_log_prob, numpyro_init, (value,) + numpyro_parents, length=cond_dist.axis_size)
+            carry, ls = jax.lax.scan(base_log_prob, numpyro_init, (value,) + numpyro_parents, length=cond_dist.length)
             return jnp.sum(ls)
 
     return NewDist(numpyro_init, *numpyro_parents)

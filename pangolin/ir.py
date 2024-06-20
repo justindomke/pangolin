@@ -701,26 +701,42 @@ class Composite(CondDist):
 ################################################################################
 
 class Autoregressive(CondDist):
-    def __init__(self, base_cond_dist, position, axis_size):
+    def __init__(self, base_cond_dist, length=None, num_constants=0):
         """
         base_cond_dist - what distribution to repeat on
-        position - what argument number to recurse over
-        axis_size - the number of times to repeat
+        num_constants - number of constant arguments (default 0)
+        length - the number of times to repeat (optional if there are )
         """
         self.base_cond_dist = base_cond_dist
-        self.position = position
-        self.axis_size = axis_size # TODO: switch to "length"
+        self.num_constants = num_constants
+        self.length = length
         super().__init__(name=f"Autoregressive({base_cond_dist.name})", random=base_cond_dist.random)
 
     def get_shape(self, start_shape, *other_shapes):
+        const_shapes = other_shapes[:self.num_constants]
+        other_shapes = other_shapes[self.num_constants:]
+
+        if self.length is None and other_shapes == ():
+            raise ValueError("Can't create Autoregressive with length=None and no mapped arguments")
+
+        if self.length is None:
+            my_length = other_shapes[0][0]
+        else:
+            my_length = self.length
+
+        print(f"{my_length=}")
+
         for s in other_shapes:
-            assert s[0] == self.axis_size
+            assert s[0] == my_length
         base_other_shapes = tuple(s[1:] for s in other_shapes)
 
-        base_input_shapes = base_other_shapes[:self.position] + (start_shape,) + base_other_shapes[self.position:]
+        base_input_shapes = (start_shape,) + const_shapes + base_other_shapes
+        print(f"{start_shape=}")
+        print(f"{const_shapes=}")
+        print(f"{base_other_shapes=}")
         print(f"{base_input_shapes=}")
         base_output_shape = self.base_cond_dist.get_shape(*base_input_shapes)
-        output_shape = (self.axis_size,) + base_output_shape
+        output_shape = (my_length,) + base_output_shape
         return output_shape
 
 

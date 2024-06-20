@@ -24,7 +24,8 @@ def test_make_composite1():
         b = a*a
         c = exponential(b)
         return c
-    op = interface.make_composite(f,())
+    op, consts = interface.make_composite(f,())
+    assert consts == []
     assert op.num_inputs == 1
     assert op.cond_dists == [mul, exponential]
     assert op.par_nums == [[0,0],[1]]
@@ -35,11 +36,33 @@ def test_make_composite2():
         d = a+c
         e = normal_scale(c,d)
         return e
-    op = interface.make_composite(f,(),())
+    op, consts = interface.make_composite(f,(),())
+    assert consts == []
     assert op.num_inputs == 2
     assert op.cond_dists == [mul, add, normal_scale]
     assert op.par_nums == [[0,1],[0,2],[2,3]]
 
+def test_make_composite_closure1():
+    x = normal_scale(0,1)
+    def f(a):
+        return normal_scale(x,a)
+    op, consts = interface.make_composite(f,())
+    assert consts == [x]
+    assert op.num_inputs == 2
+    assert op.cond_dists == [normal_scale]
+    assert op.par_nums == [[1,0]] # [[x,a]]
+
+def test_make_composite_closure2():
+    x = normal_scale(0,1)
+    y = normal_scale(0,1)
+    def f():
+        z = x*y
+        return normal_scale(y,z)
+    op, consts = interface.make_composite(f)
+    assert consts == [x,y]
+    assert op.num_inputs == 2
+    assert op.cond_dists == [mul,normal_scale]
+    assert op.par_nums == [[0,1],[1,2]] # [[x,y],[y,z]]
 
 def test_composite():
     def f(a):

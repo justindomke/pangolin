@@ -4,6 +4,7 @@ from . import dag, util
 import numpy as np
 import jax
 from .ir import *
+from typing import Sequence
 
 # valid unicode start characters: https://www.asmeurer.com/python-unicode-variable-names/start-characters.html
 
@@ -143,36 +144,61 @@ def log_prob(vars, given_vars=None):
 ################################################################################
 
 def make_composite(fun,*input_shapes):
+    """
+    Inputs:
+    - fun: A function that takes RVs as inputs and returns a single RV
+    - *input_shapes: shapes for each explicit input to fun
+    Outputs:
+    - op: a Composite op representing the function
+    - consts: a list of constants that fun captures as a closure
+    The final op expects as inputs *first* all the elements of consts and then the explicit inputs
+    """
+
     # TODO: take pytree of arguments
-    roots = [AbstractRV(shape) for shape in input_shapes]
-    print(f"{roots=}")
-    out = fun(*roots)
-    assert isinstance(out,RV), "output of function must be a single RV"
-    all_vars = dag.upstream_nodes(out)
-    num_inputs = len(input_shapes)
+    dummy_args = [AbstractRV(shape) for shape in input_shapes]
+
+    f = lambda *args: [fun(*args)] # vmap_generated_nodes runs on "flat" functoins
+    all_vars, [out] = vmap_generated_nodes(f, *dummy_args)
+    assert isinstance(out, RV), "output of function must be a single RV"
+
+    print(f"{all_vars=}")
+    print(f"{out=}")
+
     cond_dists = []
     par_nums = []
-
     linear_order = {}
-    num_non_roots_seen = 0
+
+    for var in dummy_args:
+        assert isinstance(var, AbstractRV)
+        linear_order[var] = dummy_args.index(var)
+
+    current_position = len(dummy_args)
+
+    consts = []
     for var in all_vars:
-        if var in roots:
-            assert isinstance(var,AbstractRV)
-            linear_order[var] = roots.index(var)
-        else:
-            my_cond_dist = var.cond_dist
-            my_par_nums = [linear_order[p] for p in var.parents]
-            cond_dists.append(my_cond_dist)
-            par_nums.append(my_par_nums)
-            linear_order[var] = len(roots) + num_non_roots_seen
-            num_non_roots_seen += 1
-    return Composite(num_inputs, cond_dists, par_nums)
+        for p in var.parents:
+            if p not in all_vars and p not in linear_order:
+                linear_order[p] = current_position
+                current_position += 1
+                consts.append(p)
+
+    num_inputs = current_position
+
+    for var in all_vars:
+        my_cond_dist = var.cond_dist
+        my_par_nums = [linear_order[p] for p in var.parents]
+        cond_dists.append(my_cond_dist)
+        par_nums.append(my_par_nums)
+        linear_order[var] = current_position
+        current_position += 1
+
+    return Composite(num_inputs, cond_dists, par_nums), consts
 
 def composite(fun):
     def myfun(*inputs):
         input_shapes = [x.shape for x in inputs]
-        op = make_composite(fun,*input_shapes)
-        return op(*inputs)
+        op, consts = make_composite(fun,*input_shapes)
+        return op(*consts, *inputs)
     return myfun
 
 ################################################################################
@@ -182,7 +208,8 @@ def composite(fun):
 def autoregressive(fun,length=None):
     """
     Convenience function for creating Autoregressive(Composite) RVs
-    fun - function where 1st argument is recursive variable and other arguments are whatever
+    fun - function where 1st argument is recursive variable and other arguments are whatever.
+          it is OK if fun implicitly uses existing random variables as a closure.
     length - length to be mapped over (optional unless there are no argments)
     """
     def myfun(init, *args):
@@ -198,13 +225,13 @@ def autoregressive(fun,length=None):
                 assert a.shape[0] == length, "all args must have first dim matching length"
             my_length = length
 
-        position = 0 # could generalize...
         args_shapes = tuple(a.shape[1:] for a in args)
-        input_shapes = args_shapes[:position] + (init.shape,) + args_shapes[position:]
-        print(f"{input_shapes=}")
-        base_op = make_composite(fun,*input_shapes)
-        op = Autoregressive(base_op, position, my_length)
-        return op(init,*args)
+        input_shapes = (init.shape,) + args_shapes
+        base_op, consts = make_composite(fun, *input_shapes)
+        print(f"{consts=}")
+        num_constants = len(consts)
+        op = Autoregressive(base_op, length=my_length, num_constants=num_constants)
+        return op(init,*consts,*args)
     return myfun
 
 
