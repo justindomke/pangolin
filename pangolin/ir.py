@@ -1115,8 +1115,11 @@ all_cond_dists = random_cond_dists + nonrandom_cond_dists
 
 
 # import here to avoid circular import problems
-from .loops import Loop, make_sliced_rv, slice_existing_rv
-
+#from .loops import Loop, make_sliced_rv, slice_existing_rv
+import pangolin.loops
+Loop = pangolin.loops.Loop
+make_sliced_rv = pangolin.loops.make_sliced_rv
+slice_existing_rv = pangolin.loops.slice_existing_rv
 
 def isloop(x):
     return isinstance(x, Loop)
