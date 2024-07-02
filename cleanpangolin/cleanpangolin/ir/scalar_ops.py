@@ -94,92 +94,51 @@ def all_scalar_op_factory(num_parents, name, random):
     return AllScalarOp
 
 
+
+
 Cauchy = all_scalar_op_factory(2, "Cauchy", True)
 "A Cauchy parameterized by location and scale. Call as `Cauchy()`."
-cauchy = Cauchy()
-"Convenience instance of the Cauchy distribution. Call as `cauchy(loc,scale)`."
 Normal = all_scalar_op_factory(2, "Normal", True)
-normal = Normal()
 NormalPrec = all_scalar_op_factory(2, "NormalPrec", True)
-normal_prec = NormalPrec()
 Bernoulli = all_scalar_op_factory(1, "Bernoulli", True)
-bernoulli = Bernoulli()
 BernoulliLogit = all_scalar_op_factory(1, "BernoulliLogit", True)
-bernoulli_logit = BernoulliLogit()
 Binomial = all_scalar_op_factory(2, "Binomial", True)
-binomial = Binomial()
 Uniform = all_scalar_op_factory(2, "Uniform", True)
-uniform = Uniform()
-"Uniform distribution. `uniform(low,high)`"
 Beta = all_scalar_op_factory(2, "Beta", True)
-beta = Beta()
 Exponential = all_scalar_op_factory(1, "Exponential", True)
-exponential = Exponential()
 Gamma = all_scalar_op_factory(2, "Gamma", True)
-gamma = Gamma()
 Poisson = all_scalar_op_factory(1, "Poisson", True)
-poisson = Poisson()
 BetaBinomial = all_scalar_op_factory(3, "BetaBinomial", True)
 beta_binomial = BetaBinomial()
 StudentT = all_scalar_op_factory(3, "StudentT", True)
-student_t = StudentT()
 # basic math operators, typically triggered infix operations
 Add = all_scalar_op_factory(2, "Add", False)
-add = Add()
 Sub = all_scalar_op_factory(2, "Sub", False)
-sub = Sub()
 Mul = all_scalar_op_factory(2, "Mul", False)
-mul = Mul()
 Div = all_scalar_op_factory(2, "Div", False)
-div = Div()
 Pow = all_scalar_op_factory(2, "Pow", False)
-pow = Pow()
-def sqrt(x):
-    "sqrt(x) is an alias for pow(x,0.5)"
-    return pow(x,0.5)
 # all the scalar functions included in JAGS manual
 # in general, try to use numpy / scipy names where possible
 Abs = all_scalar_op_factory(1, "Abs", False)
-abs = Abs()
 Arccos = all_scalar_op_factory(1, "Arccos", False)
-arccos = Arccos()
 Arccosh = all_scalar_op_factory(1, "Arccosh", False)
-arccosh = Arccosh()
 Arcsin = all_scalar_op_factory(1, "Arcsin", False)
-arcsin = Arcsin()
 Arcsinh = all_scalar_op_factory(1, "Arcsinh", False)
-arcsinh = Arcsinh()
 Arctan = all_scalar_op_factory(1, "arctan", False)
-arctan = Arctan()
 Arctanh = all_scalar_op_factory(1, "arctanh", False)
-arctanh = Arctanh()
 Cos = all_scalar_op_factory(1, "Cos", False)
-cos = Cos()
 Cosh = all_scalar_op_factory(1, "Cosh", False)
-cosh = Cosh()
 Exp = all_scalar_op_factory(1, "Exp", False)
-exp = Exp()
 InvLogit = all_scalar_op_factory(1, "InvLogit", False)
-inv_logit = InvLogit()
-expit = inv_logit
-sigmoid = inv_logit
 Log = all_scalar_op_factory(1, "Log", False)
-log = Log()
 Loggamma = all_scalar_op_factory(1, "Loggamma", False)
 "Log gamma function. TODO: do we want scipy.special.loggamma or scipy.special.gammaln? different!"
-log_gamma = Loggamma()
 Logit = all_scalar_op_factory(1, "Logit", False)  # logit in JAGS / stan / scipy
-logit = Logit()
 Sin = all_scalar_op_factory(1, "Sin", False)
-sin = Sin()
 Sinh = all_scalar_op_factory(1, "Sinh", False)
-sinh = Sinh()
 Step = all_scalar_op_factory(1, "Sin", False)  # step in JAGS / stan
-step = Step()
 Tan = all_scalar_op_factory(1, "Tan", False)
-tan = Tan()
 Tanh = all_scalar_op_factory(1, "Tanh", False)
-tanh = Tanh()
 
 # # use evil meta-programming to create convenience instances
 # import re

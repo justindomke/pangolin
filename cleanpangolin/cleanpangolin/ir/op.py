@@ -1,22 +1,12 @@
 from abc import ABC, abstractmethod
 from .rv import RV
-
-current_rv = [RV]
-
-
-class SetAutoRV:
-    def __init__(self, rv_class):
-        self.rv_class = rv_class
-
-    def __enter__(self):
-        current_rv.append(self.rv_class)
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        assert current_rv.pop(1) == self.rv_class
+from typing import Type
+from collections.abc import Callable
 
 
 class Op(ABC):
     """
+    Abstract base class for operators.
     An `Op` represents a deterministic function or conditional distribution.
     Note that it *only* represents it—all functionality for sampling or density
     evaluation, etc. is left to inference engines.
@@ -32,13 +22,33 @@ class Op(ABC):
 
     _frozen = False
 
-    def __init__(self, name: str, random: bool):
+    def __init__(
+        self, name: str, random: bool, default_rv_lookup: Callable[[], Type[RV]] = lambda: RV
+    ):
+        """
+        Create a new op
+        Parameters
+        ----------
+        name: str
+            name for the operator (used only for printing, not functionality)
+        random: bool
+            is this a conditional distribution? (`random=True`) or a deterministic function (
+            `random=False`)?
+        default_rv_lookup: Callable[[],Type[RV]]
+            `op(*args)` can be used as a convenient shorthand for `RV(op,*args)`. If this is
+            done, `default_rv_lookup()` is first called to choose the type of `RV`. (Default is
+            to always return `RV`). The purpose of this is to allow the same code to be used to
+            create, e.g., `RV`s that support operator overloading or abstract RVs depending on
+            the context.
+        """
         assert isinstance(name, str)
         assert isinstance(random, bool)
         self.name: str = name
         "The name of the Op"
         self.random: bool = random
         "True for conditional distributions, False for deterministic functions"
+        self.default_rv_lookup = default_rv_lookup
+        "When new RVs are created with `__call__` use this function to get RV type for created RV"
         self._frozen = True  # freeze after init
 
     def get_shape(self, *parents_shapes):
@@ -58,8 +68,11 @@ class Op(ABC):
             self.__dict__[key] = value
 
     def __call__(self, *parents):
-        """when you call a conditional distribution you get a RV"""
-        return current_rv[-1](self, *parents)
+        """@public
+        when you call a conditional distribution you get a new RV with type determined by
+        `default_rv_lookup()`"""
+        rv_class = self.default_rv_lookup()  # might be RV or a subclass
+        return rv_class(self, *parents)
 
     def __repr__(self):
         return self.name + "()"
