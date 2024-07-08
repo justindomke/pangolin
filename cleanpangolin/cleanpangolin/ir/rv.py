@@ -1,12 +1,6 @@
 from cleanpangolin import dag, util
 from abc import ABC, abstractmethod
-
-def makerv(x):
-    from .constant import Constant
-    if isinstance(x,RV):
-        return x
-    else:
-        return Constant(x)()
+from typing import Self
 
 class RV(dag.Node):
     """
@@ -15,11 +9,11 @@ class RV(dag.Node):
     _frozen = False
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op, *parents):
+    def __init__(self, op, *parents: Self):
         """
         Initialize an RV with Op `op` and parents `*parents`.
         """
-        parents = tuple(makerv(p) for p in parents)
+        #parents = tuple(makerv(p) for p in parents)
 
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)

@@ -7,9 +7,9 @@ def test_constant_RV():
     assert str(x) == '2'
     assert repr(x) == 'RV(Constant(2))'
 
-def test_op_RV_creation():
-    d = Constant(2)
-    x = d()
-    assert x.shape == ()
-    assert str(x) == '2'
-    assert repr(x) == 'RV(Constant(2))'
+# def test_op_RV_creation():
+#     d = Constant(2)
+#     x = d()
+#     assert x.shape == ()
+#     assert str(x) == '2'
+#     assert repr(x) == 'RV(Constant(2))'

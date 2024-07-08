@@ -12,15 +12,16 @@ available here.
 """
 
 from cleanpangolin.ir.op import Op
-from cleanpangolin.ir.rv import RV, makerv
+from cleanpangolin.ir.rv import RV
 from cleanpangolin.ir.constant import Constant
 from cleanpangolin.ir.scalar_ops import *
 from cleanpangolin.ir.multivariate_dists import *
 from cleanpangolin.ir.multivariate_funs import *
 from cleanpangolin.ir.index import Index, index
+from cleanpangolin.ir.vmap import VMap
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
-           'multivariate_funs','index','vmap']
+           'multivariate_funs','index','VMap','vmap']
 
 # force everything to be documented
 # __all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]

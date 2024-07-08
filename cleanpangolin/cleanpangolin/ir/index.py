@@ -84,7 +84,7 @@ shorthand for `x[[3,3,3],[0,1,2]]`. We might change this at some point if there 
 currently, JAGS is the only backend that can actually do inference in these settings.
 """
 
-from cleanpangolin.ir import Op, RV
+from cleanpangolin.ir import Op, RV, Constant
 import numpy as np
 from cleanpangolin import util
 
@@ -107,6 +107,10 @@ def index(var, *indices):
         The new indexed RV, conceptually equivalent to `var[*indices]`.
     """
 
+    # TODO: Technically this shouldn't even live in IR
+
+    indices = tuple(i if isinstance(i, slice) else RV(Constant(i)) for i in indices)
+
     # if parent is an Index that's only indexed with a single scalar argument then combine
     if hasattr(var,'cond_dist') and isinstance(var.cond_dist, Index):
         if len(var.parents) == 2:
@@ -127,7 +131,7 @@ def index(var, *indices):
             parents.append(index)
             slices.append(None)
 
-    return Index(*slices)(var, *parents)
+    return RV(Index(*slices), var, *parents)
 
 def _slice_length(size, slice):
     return len(np.ones(size)[slice])

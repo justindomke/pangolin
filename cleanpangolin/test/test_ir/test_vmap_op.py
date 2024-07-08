@@ -1,6 +1,6 @@
 import pytest
 from cleanpangolin.ir.vmap import VMap
-from cleanpangolin.ir.rv import makerv
+#from cleanpangolin.ir.rv import makerv
 from cleanpangolin.ir import Normal, StudentT
 import numpy as np
 from cleanpangolin.ir.index import Index

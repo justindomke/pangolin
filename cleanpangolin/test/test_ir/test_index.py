@@ -1,6 +1,6 @@
 import pytest
 from cleanpangolin.ir.index import Index, index
-from cleanpangolin.ir.rv import makerv
+from cleanpangolin.ir import RV, Constant
 import numpy as np
 
 fslice = slice(None) # full slice
@@ -68,7 +68,8 @@ def test_index_class(start_shape, idx):
     assert expected_shape == shape
 
 def dotest(x,*idx):
-    y = index(makerv(x),*idx)
+    x_rv = RV(Constant(x))
+    y = index(x_rv,*idx)
     z = x.__getitem__(idx)
     assert y.shape == z.shape
 

@@ -2,6 +2,7 @@ from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import Sequence
+import collections
 
 def comma_separated(stuff, fun=None, parens=True):
     "convenience function for printing and such"
@@ -52,6 +53,23 @@ class WriteOnceDict(dict):
         if key in self:
             raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDict")
         super().__setitem__(key, value)
+
+
+class WriteOnceDefaultDict(dict):
+    def __init__(self, default_factory):
+        self.default_factory = default_factory
+        super().__init__()
+
+    def __setitem__(self, key, value):
+        if key in self:
+            raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDefaultDict")
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        else:
+            return self.default_factory(key)
 
 
 def is_leaf_with_none(xi):

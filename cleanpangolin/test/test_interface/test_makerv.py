@@ -1,4 +1,4 @@
-from cleanpangolin.ir.rv import makerv
+from cleanpangolin.interface import makerv
 
 def test_makerv1():
     x = makerv(1)

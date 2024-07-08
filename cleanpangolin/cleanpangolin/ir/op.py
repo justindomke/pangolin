@@ -6,25 +6,24 @@ from collections.abc import Callable
 
 class Op(ABC):
     """
-    Abstract base class for operators.
-    An `Op` represents a deterministic function or conditional distribution.
-    Note that it *only* represents it—all functionality for sampling or density
-    evaluation, etc. is left to inference engines.
-    * Frozen after creation.
-    * `__eq__` should be defined so that *mathematically equivalent*
-    `CondDist`s are equal, regardless of if they occupy the same place in memory.
-    Unnecessary for pre-defined `CondDist` objects like `normal_scale` or `add`,
-    but needed for `CondDist`s that are constructed with parameters, like `VMapDist`.
-    * Some `CondDist`s, e.g. multivariate normal distributions, can have different
-    shapes depending on the shapes of the parents. So a concrete `CondDist` must
-    provide a `_get_shape(*parents_shapes)` method to resolve this.
+    Abstract base class for operators. An `Op` represents a deterministic function or conditional
+    distribution.
+
+    Notes:
+    * An `Op` *only* represents an operator—all functionality for sampling or density evaluation,
+    etc. is left to inference engines.
+    * `Op`s must provide an `__eq__` method such that *mathematically equivalent* `Op`s are
+    equal, regardless of if they occupy the same place in memory. For example, `d1 = Normal()`
+    and `d2 = Normal()` then `d1 == d2`. This base class provides a default implementation that
+    simply tests if the types are the same. If an Op takes parameters (e.g. `VMap`), this should be
+    overridden.
+    * `Op`s are programmatically enforced to be frozen after initialization.
     """
 
     _frozen = False
 
     def __init__(
-        self, name: str, random: bool, default_rv_lookup: Callable[[], Type[RV]] = lambda: RV
-    ):
+        self, name: str, random: bool):
         """
         Create a new op
         Parameters
@@ -34,12 +33,6 @@ class Op(ABC):
         random: bool
             is this a conditional distribution? (`random=True`) or a deterministic function (
             `random=False`)?
-        default_rv_lookup: Callable[[],Type[RV]]
-            `op(*args)` can be used as a convenient shorthand for `RV(op,*args)`. If this is
-            done, `default_rv_lookup()` is first called to choose the type of `RV`. (Default is
-            to always return `RV`). The purpose of this is to allow the same code to be used to
-            create, e.g., `RV`s that support operator overloading or abstract RVs depending on
-            the context.
         """
         assert isinstance(name, str)
         assert isinstance(random, bool)
@@ -47,13 +40,18 @@ class Op(ABC):
         "The name of the Op"
         self.random: bool = random
         "True for conditional distributions, False for deterministic functions"
-        self.default_rv_lookup = default_rv_lookup
-        "When new RVs are created with `__call__` use this function to get RV type for created RV"
         self._frozen = True  # freeze after init
 
     def get_shape(self, *parents_shapes):
         """
-        Given the shapes of parents, return the shape of the output of this `Op`.
+        Given the shapes of parents, return the shape of the output of this `Op`. Subclasses
+        must provide a `_get_shape(*parents_shapes)` function. This is needed because some `Op`s
+        (e.g. multivariate normal distributions) can have different shapes depending on the
+        shapes of the parents.
+
+        It is also expected that `Op`s define a `_get_shape` method that does error checking—e.g.
+        verifies that the correct number of arguments are provided and the shapes of the parents
+        are coherent with each other.
         """
         return self._get_shape(*parents_shapes)
 
@@ -61,18 +59,14 @@ class Op(ABC):
     def _get_shape(self, *parents_shapes):
         pass
 
+    def __eq__(self, other):
+        return type(self) == type(other)
+
     def __setattr__(self, key, value):
         if self._frozen:
             raise TypeError("CondDists are immutable after init.")
         else:
             self.__dict__[key] = value
-
-    def __call__(self, *parents):
-        """@public
-        when you call a conditional distribution you get a new RV with type determined by
-        `default_rv_lookup()`"""
-        rv_class = self.default_rv_lookup()  # might be RV or a subclass
-        return rv_class(self, *parents)
 
     def __repr__(self):
         return self.name + "()"

@@ -1,4 +1,5 @@
 from cleanpangolin.ir.constant import Constant
+from cleanpangolin.ir import RV
 
 def test_constant_zero_dims():
     a = Constant(1)
@@ -24,7 +25,8 @@ def test_constant_equality():
 def test_wrong_number_of_args():
     try:
         d = Constant(2)
-        x = d(1)
+        tmp = RV(Constant(1))
+        x = RV(d,tmp)
         assert False
     except ValueError as e:
         assert str(e) == "Constant got 1 arguments but expected 0."

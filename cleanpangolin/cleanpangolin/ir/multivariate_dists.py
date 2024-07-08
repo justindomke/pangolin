@@ -23,9 +23,6 @@ class VecMatCondDist(Op):
             raise ValueError("second parameter must be matrix with size matching first parameter")
         return (N,)
 
-    def __eq__(self, other):
-        return type(self) == type(other)
-
 
 class MultiNormal(VecMatCondDist):
     """
@@ -38,8 +35,6 @@ class MultiNormal(VecMatCondDist):
         super().__init__(name="MultiNormal")
 
 
-multi_normal = MultiNormal()
-"""Convenience instance of `MultiNormal`."""
 
 
 class Categorical(Op):
@@ -61,12 +56,6 @@ class Categorical(Op):
                              f"expected 1.")
         return ()
 
-    def __eq__(self, other):
-        return isinstance(other, Categorical)
-
-
-categorical = Categorical()
-"""Convenience instance of `Categorical`."""
 
 class Multinomial(Op):
     """
@@ -87,12 +76,7 @@ class Multinomial(Op):
             raise ValueError("Second input to Multinomial op must be a 1-d vector")
         return p_shape
 
-    def __eq__(self, other):
-        return isinstance(other, Categorical)
 
-
-multinomial = Multinomial()
-"""Convenience instance of `Multinomial`."""
 
 class Dirichlet(Op):
     """Dirichlet distribution parameterized in terms of the concentration"""
@@ -107,10 +91,3 @@ class Dirichlet(Op):
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
         return concentration_shape
-
-    def __eq__(self, other):
-        return isinstance(other, Categorical)
-
-
-dirichlet = Dirichlet()
-"""Convenience instance of `Dirichlet`."""

@@ -27,7 +27,6 @@ def normal(loc, scale=None, prec=None):
 def sum(x, axis=None):
     x = makerv(x)
     sum_op = Sum(axis)
-
     return sum_op(x)
 
 
