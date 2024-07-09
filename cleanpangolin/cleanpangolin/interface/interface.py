@@ -7,6 +7,11 @@ from cleanpangolin.ir import RV, Op, Constant
 import cleanpangolin
 #from cleanpangolin.ir.op import SetAutoRV
 from cleanpangolin import ir
+from .index import index
+from cleanpangolin.util import most_specific_class
+
+def get_rv_class(*args:RV):
+    return most_specific_class(*args, base_classes=(OperatorRV,))
 
 class OperatorRV(RV):
 
@@ -49,6 +54,31 @@ class OperatorRV(RV):
     def __repr__(self):
         return "Operator" + super().__repr__()
 
+    def __getitem__(self, idx):
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+
+        # convert ellipsis into slices
+        num_ellipsis = len([i for i in idx if i is ...])
+        if num_ellipsis > 1:
+            raise ValueError("an index can only have a single ellipsis ('...')")
+        elif num_ellipsis == 1:
+            where = idx.index(...)
+            slices_needed = self.ndim - (len(idx) - 1)  # sub out ellipsis
+            if where > 0:
+                idx_start = idx[:where]
+            else:
+                idx_start = ()
+            idx_mid = (slice(None),) * slices_needed
+            idx_end = idx[where + 1:]
+            idx = idx_start + idx_mid + idx_end
+
+        if self.ndim == 0:
+            raise Exception("can't index scalar RV")
+        elif isinstance(idx, tuple) and len(idx) > self.ndim:
+            raise Exception("RV indexed with more dimensions than exist")
+        return index(self, *idx)
+
     #def __str__(self):
     #    return "Operator" + super().__str__()
 
@@ -73,14 +103,6 @@ def makerv(x):
 #     def __exit__(self, exc_type, exc_value, exc_tb):
 #         assert current_rv.pop(1) == self.rv_class
 
-
-def get_rv_class(*args: RV):
-    classes = (OperatorRV,) + tuple(type(a) for a in args)
-    for c in classes:
-        if all(issubclass(c,d) for d in classes):
-            #print(f"GET RV CLASS! {args=} {c=}")
-            return c
-    raise ValueError("no single most-specific argument type")
 
 def wrap_op(op:Op):
     """
@@ -159,3 +181,12 @@ def sum(x: RV, axis: int):
     """Sum random variable along given axis"""
     op = ir.Sum(axis)
     return wrap_op(op)(x)
+
+# indexing
+# TODO: ir.index should actually live in this module in the first place
+# def index(node, *idx):
+#     node = makerv(node)
+#     idx = tuple(makerv(i) for i in idx)
+#     rv_class = get_rv_class(node, *idx)
+#     out = ir.index(node, *idx)
+#     return rv_class(out.op, *out.parents)

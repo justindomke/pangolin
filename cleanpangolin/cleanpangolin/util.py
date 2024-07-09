@@ -344,3 +344,11 @@ def camel_case_to_snake_case(name):
     # from https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
     import re
     return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+
+
+def most_specific_class(*args, base_classes=()):
+    classes = base_classes + tuple(type(a) for a in args)
+    for c in classes:
+        if all(issubclass(c,d) for d in classes):
+            return c
+    raise ValueError("no single most-specific argument type")

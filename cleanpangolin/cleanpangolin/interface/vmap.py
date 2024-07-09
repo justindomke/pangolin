@@ -5,10 +5,101 @@ from cleanpangolin.ir import Op, RV, VMap, Constant
 from cleanpangolin import dag, ir, util
 from collections.abc import Callable
 from .interface import makerv, get_rv_class
-from typing import Sequence
+from typing import Sequence, Type
+import jax.tree_util
 
+def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=None):
+    """@public
+    vmap a function. See also the documentation for
+    [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) which has exactly the same
+    interface (with some extra arguments not supported here).
 
-def convert_args(rv_type, *args):
+    Parameters
+    ----------
+    f: Callable
+        The function to vmap. Should take a pytree of `RV`s as inputs and return a pytree of `RV`s
+        as outputs.
+    in_axes:
+        An integer, None, or sequence of values specifying what input axes to map over. If
+        the positional arguments to `f` are container (pytree) types then `in_axes` must be a
+        sequence with length equal to the number of positional arguments to `f` and each element
+        of `in_axes` must be a container tree prefix of the corresponding positional argument.
+    axis_size: int | None
+        An integer indicating the size of the axis to be mapped. This is optional unless all
+        leaves of `in_axes` are `None`.
+
+    Returns
+    -------
+    vec_f
+        batched/vectorized version of `f`
+    """
+
+    def call(*args):
+        # no greedy casting because this leads to ambiguity
+        # if the user sends [(1,2),(3,4)] is that a list of two
+        # arrays?
+        args = jax.tree_util.tree_map(makerv, args)
+
+        rv_class = get_rv_class(*jax.tree_util.tree_leaves(args))
+
+        # if isinstance(d, VMapDist) and i == 0:
+        #     my_dummy = AbstractRVWithDist(d.base_cond_dist, new_shape)
+        # else:
+        #     my_dummy = AbstractRV(new_shape)
+
+        def get_dummy(i, x):
+            if i is None:
+                new_shape = x.shape
+            else:
+                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
+                new_shape = lo + hi
+
+            # In old code tried to preserve x.op when isinstance(x.op, VMap)
+            op = AbstractOp(new_shape, x.op.random)
+            return rv_class(op)
+
+        dummy_args = util.tree_map_recurse_at_leaf(
+            get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
+        )
+        new_in_axes = util.tree_map_recurse_at_leaf(
+            lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
+        )
+
+        tree1 = jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)
+        tree2 = jax.tree_util.tree_structure(dummy_args, is_leaf=util.is_leaf_with_none)
+        tree3 = jax.tree_util.tree_structure(new_in_axes, is_leaf=util.is_leaf_with_none)
+        assert tree1 == tree2
+        assert tree1 == tree3
+
+        flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
+            new_in_axes, is_leaf=util.is_leaf_with_none
+        )
+        flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
+            f, *dummy_args, is_leaf=util.is_leaf_with_none
+        )
+        flat_args = flatten_inputs(*args)
+        flat_output = vmap_eval(flat_f, flat_in_axes, axis_size, *flat_args)
+        output = unflatten_output(flat_output)
+        return output
+    return call
+
+def convert_args(rv_type: Type[RV], *args: RV):
+    """
+    Given some set of (interdependent) RVs, get a new set where all are converted to a new type
+    but all inter-RV parent links are preserved.
+
+    Parameters
+    ----------
+    rv_type
+        Some subclass of `RV`
+    args:RV
+        arguments, all of type RV
+
+    Returns
+    -------
+    new_args:tuple[rv_type]
+        converted args
+    """
     abstract_args = {}
     for a in args:
         new_parents = [abstract_args[p] if p in abstract_args else p for p in a.parents]
@@ -21,6 +112,7 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
     """
     Given a "flat" function and some number of RV arguments, get all the nodes that the function
     generates that are downstream of those arguments.
+
     Parameters
     ----------
     fun: Callable[[Tuple[RV]], List[RV]]
@@ -85,32 +177,49 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
 
     return all_vars, out
 
-class AbstractRV(OperatorRV):
-    # TODO: ShapedRV?
-    def __repr__(self):
-        return "Abstract" + super().__repr__()[8:]  # len("Operator")=8
-
-
 
 class AbstractOp(Op):
-    def __init__(self, shape, random):
-        # TODO: Pass anticipated parents_shapes for checking?
+    """
+    An `AbstractOp` doesn't actually do anything and expects no parents. It just has a fixed shape.
+    """
+
+    def __init__(self, shape: tuple[int], random: bool):
+        """
+        Create an abstract Op.
+
+        Parameters
+        ----------
+        shape: tuple[int]
+            the shape for the output
+        random: bool
+            is the op random
+        """
         self.shape = shape
         super().__init__(name="AbstractOp", random=random)
 
     def _get_shape(self, *parents_shapes):
         return self.shape
 
-    # TODO: What to do about equality?
+    def __eq__(self, other):
+        """
+        Equality for abstract ops is very restricted
+        """
+        return id(self) == id(other)
 
 
-def vmap_dummy_args(in_axes, axis_size, *args):
+def vmap_dummy_args(in_axes: tuple[int|None], axis_size: int|None, *args: RV):
     """
-    Given a "full" arguments, get a list of "dummy" (AbstractRV) arguments
+    Given a "full" arguments, get a list of dummy/sliced arguments
+    Parameters
+    ----------
+    in_axes: tuple[int|None]
+        What axis to map each argument over. Should have same same length as `args`
     """
 
     if not util.all_unique(args):
         raise ValueError("vmap_dummy_args requires all unique arguments")
+
+    rv_class = get_rv_class(*args)
 
     dummy_args = []
     for i, a in zip(in_axes, args, strict=True):
@@ -120,7 +229,7 @@ def vmap_dummy_args(in_axes, axis_size, *args):
             new_op = a.op.base_op  # why do we care?
         else:
             new_op = AbstractOp(new_shape, a.op.random)
-        my_dummy = AbstractRV(new_op)  # no parents!
+        my_dummy = rv_class(new_op)  # no parents!
 
         dummy_args.append(my_dummy)
         if axis_size is None:
@@ -175,6 +284,3 @@ def vmap_eval(f, in_axes, axis_size, *args):
     return output
 
 
-# TODO
-# NEXT STEP
-# ADD ACTUAL VMAP!

@@ -17,7 +17,7 @@ from cleanpangolin.ir.constant import Constant
 from cleanpangolin.ir.scalar_ops import *
 from cleanpangolin.ir.multivariate_dists import *
 from cleanpangolin.ir.multivariate_funs import *
-from cleanpangolin.ir.index import Index, index
+from cleanpangolin.ir.index import Index
 from cleanpangolin.ir.vmap import VMap
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',

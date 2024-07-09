@@ -88,51 +88,6 @@ from cleanpangolin.ir import Op, RV, Constant
 import numpy as np
 from cleanpangolin import util
 
-def index(var, *indices):
-    """
-    Convenience function to create a new indexed RV.
-
-    Parameters
-    ----------
-    var: RV
-        the RV to be indexed
-    indices
-        each element of `indices` must either be (a) a slice with fixed integer indices, (b) an RV
-        with integer values, or (c) something that can be cast to a constant. The length of
-        `indices` is permitted to be less than `var.ndim`. If so, extra full slices are added for
-        all missing dimensions.
-    Returns
-    -------
-    new_rv: RV
-        The new indexed RV, conceptually equivalent to `var[*indices]`.
-    """
-
-    # TODO: Technically this shouldn't even live in IR
-
-    indices = tuple(i if isinstance(i, slice) else RV(Constant(i)) for i in indices)
-
-    # if parent is an Index that's only indexed with a single scalar argument then combine
-    if hasattr(var,'cond_dist') and isinstance(var.cond_dist, Index):
-        if len(var.parents) == 2:
-            if var.parents[1].shape == ():
-                if var.cond_dist.slices[0] == None:
-                    if all(s == slice(None) for s in var.cond_dist.slices[1:]):
-                        return var.parents[0][(var.parents[1],) + indices]
-
-    # add extra full slices
-    indices = indices + (slice(None, None, None),) * (var.ndim - len(indices))
-
-    slices = []
-    parents = []
-    for index in indices:
-        if isinstance(index, slice):
-            slices.append(index)
-        else:
-            parents.append(index)
-            slices.append(None)
-
-    return RV(Index(*slices), var, *parents)
-
 def _slice_length(size, slice):
     return len(np.ones(size)[slice])
 
