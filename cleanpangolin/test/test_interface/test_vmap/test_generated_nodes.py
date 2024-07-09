@@ -19,13 +19,15 @@ def test_generated_nodes1():
     x0 = makerv(1)
     y0 = makerv(2)
     generated, out = generated_nodes(fun, x0, y0)
-    assert len(generated) == 2
-    assert generated[0].op == ir.Mul()
-    assert generated[0].parents[0] == x0
-    assert generated[0].parents[1].op == Constant(2)
-    assert generated[1].op == ir.Add()
-    assert generated[1].parents[0] == y0
-    assert generated[1].parents[1].op == Constant(3)
+    print(f"{generated=}")
+    assert len(generated) == 4
+    assert generated[0].op == Constant(2)
+    assert generated[1].op == ir.Mul()
+    assert generated[1].parents == (x0, generated[0])
+    assert generated[2].op == Constant(3)
+    assert generated[3].op == ir.Add()
+    assert generated[3].parents[0] == y0
+    assert generated[3].parents[1].op == Constant(3)
 
 
 def test_generated_nodes2():
@@ -52,24 +54,27 @@ def test_generated_nodes_closure():
     x = makerv(1)
 
     def fun(y):
-        tmp = x * 3  # shouldn't be included
+        tmp = x * 3 # tmp included, 3 not because constant
         z = y + tmp
         return [z]
 
     y0 = makerv(2)
     generated, out = generated_nodes(fun, y0)
-    assert len(generated) == 1
-    # z
-    z = generated[0]
-    assert z.op == ir.Add()
-    assert z.parents[0] == y0
+    assert len(generated) == 3
+    print(f"{generated=}")
+    # c
+    c = generated[0]
+    assert c.op == Constant(3)
     # tmp
-    tmp = z.parents[1]
+    tmp = generated[1]
     assert tmp.op == ir.Mul()
-    assert tmp.parents[0] == x
-    assert tmp.parents[1].op == Constant(3)
-    # z again
-    assert out[0] == z
+    assert tmp.parents == (x, c)
+    # z
+    z = generated[2]
+    assert z.op == ir.Add()
+    assert z.parents == (y0, tmp)
+    # output
+    assert out == [z]
 
 
 def test_generated_nodes_ignored_input():
@@ -79,16 +84,13 @@ def test_generated_nodes_ignored_input():
         return [2 * x]
 
     y0 = makerv(3)
-    try:
-        # should fail because output independent of y
-        generated, out = generated_nodes(fun, y0)
-        assert False
-    except ValueError:
-        pass
-    #assert generated == []
-    #assert out[0].op == ir.Mul()
-    #assert out[0].parents[0].op == Constant(2)
-    #assert out[0].parents[1] == x
+    generated, out = generated_nodes(fun, y0)
+    c = generated[0]
+    assert c.op == Constant(2)
+    z = generated[1]
+    assert z.op == ir.Mul()
+    assert z.parents == (c, x)
+    assert out == [z]
 
 
 def test_generated_nodes_passthrough():
@@ -163,14 +165,15 @@ def test_vmap_generated_nodes3():
 
 
 # illegal under current rules
-# def test_vmap_generated_nodes4():
-#     # both a and b captured as a closure
-#     a = makerv(0)
-#     b = makerv(1)
-#     f = lambda: [normal(a, b)]
-#     generated, out = generated_nodes(f)
-#     assert len(generated) == 1
-#     assert generated[0].op == ir.Normal()
+def test_vmap_generated_nodes4():
+    # both a and b captured as a closure
+    a = makerv(0)
+    b = makerv(1)
+    f = lambda: [normal(a, b)]
+    generated, out = generated_nodes(f)
+    assert len(generated) == 1
+    assert generated[0].op == ir.Normal()
+    assert generated[0].parents == (a,b)
 
 
 def test_vmap_generated_nodes5():
@@ -185,23 +188,33 @@ def test_vmap_generated_nodes5():
     # both a and b given
     f = lambda a, b: fun(a, b)
     nodes = list(generated_nodes(f, a, b)[0])
-
-    assert len(nodes) == 2
-    assert nodes[0].op == ir.Add()
-    assert nodes[1].op == ir.Normal()
+    assert len(nodes) == 3
+    loc, scale, z = nodes
+    assert loc.op == ir.Add()
+    assert loc.parents == (a,b)
+    assert scale.op == Constant(1)
+    assert z.op == ir.Normal()
+    assert z.parents == (loc, scale)
 
     # b captured with closure
     f = lambda a: fun(a, b)
     nodes = list(generated_nodes(f, a)[0])
-    assert len(nodes) == 2
-    assert nodes[0].op == add
-    assert nodes[2].op == ir.Normal()
+    assert len(nodes) == 3
+    loc, scale, z = nodes
+    assert loc.op == ir.Add()
+    assert loc.parents == (a, b)
+    assert scale.op == Constant(1)
+    assert z.op == ir.Normal()
+    assert z.parents == (loc, scale)
 
-    # # neither a nor b captured
-    # f = lambda: fun(a, b)
-    # nodes = list(vmap_generated_nodes(f)[0])
-    # assert len(nodes) == 3
-    # assert nodes[0].cond_dist == add
-    # assert isinstance(nodes[1].cond_dist, Constant)
-    # assert nodes[2].cond_dist == normal_scale
+    # neither a nor b captured
+    f = lambda: fun(a, b)
+    nodes = list(generated_nodes(f)[0])
+    assert len(nodes) == 3
+    loc, scale, z = nodes
+    assert loc.op == ir.Add()
+    assert loc.parents == (a, b)
+    assert scale.op == Constant(1)
+    assert z.op == ir.Normal()
+    assert z.parents == (loc, scale)
 

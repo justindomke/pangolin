@@ -8,6 +8,8 @@ from cleanpangolin.util import most_specific_class
 # - (or should we solve in the codegen phase?)
 
 def index(var:RV, *indices:RV | slice):
+    from cleanpangolin.interface.interface import current_rv_class # avoid circular import
+
     """
     Convenience function to create a new indexed RV.
 
@@ -32,11 +34,6 @@ def index(var:RV, *indices:RV | slice):
     indices = tuple(i if isinstance(i, (slice,RV)) else RV(Constant(i)) for i in indices)
 
     non_slice_indices = (i for i in indices if isinstance(i,RV))
-    # don't pass OperatorRV here, but I think OK because user should never explicitly call this
-    # function
-    rv_class = most_specific_class(var, *non_slice_indices)
-
-    print(f"{rv_class=}")
 
     # add extra full slices
     num_full_slices_needed = var.ndim - len(indices)
@@ -51,4 +48,4 @@ def index(var:RV, *indices:RV | slice):
             parents.append(i)
             slices.append(None)
 
-    return rv_class(Index(*slices), var, *parents)
+    return current_rv_class()(Index(*slices), var, *parents)

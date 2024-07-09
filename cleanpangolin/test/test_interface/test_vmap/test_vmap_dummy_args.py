@@ -12,6 +12,16 @@ from cleanpangolin.interface.vmap import (
 )
 import numpy as np
 
+def test_vmap_dummy_args():
+    in_axes = (0,)
+    axis_size = None
+    args = (makerv([1, 2, 3]),)
+    dummy_args, axis_size = vmap_dummy_args(in_axes, axis_size, *args)
+    assert len(dummy_args) == 1
+    assert axis_size == 3
+    assert dummy_args[0].shape == ()
+
+
 def test_vmap_dummy_args1():
     a = makerv(np.ones((5, 3)))
     b = makerv(np.ones(5))

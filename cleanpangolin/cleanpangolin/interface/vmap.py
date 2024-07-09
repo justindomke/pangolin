@@ -4,9 +4,10 @@ from . import OperatorRV
 from cleanpangolin.ir import Op, RV, VMap, Constant
 from cleanpangolin import dag, ir, util
 from collections.abc import Callable
-from .interface import makerv, get_rv_class
+from .interface import makerv, current_rv_class
 from typing import Sequence, Type
 import jax.tree_util
+from . import interface
 
 def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=None):
     """@public
@@ -40,7 +41,7 @@ def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=No
         # arrays?
         args = jax.tree_util.tree_map(makerv, args)
 
-        rv_class = get_rv_class(*jax.tree_util.tree_leaves(args))
+        rv_class = current_rv_class()
 
         # if isinstance(d, VMapDist) and i == 0:
         #     my_dummy = AbstractRVWithDist(d.base_cond_dist, new_shape)
@@ -111,7 +112,7 @@ def convert_args(rv_type: Type[RV], *args: RV):
 def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[list[RV], list[RV]]:
     """
     Given a "flat" function and some number of RV arguments, get all the nodes that the function
-    generates that are downstream of those arguments.
+    creates. This *includes* nodes that do not depend on the inputs.
 
     Parameters
     ----------
@@ -136,9 +137,12 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
 
         pass
 
-    abstract_args = convert_args(TracerRV, *args)
+    #abstract_args = convert_args(TracerRV, *args)
+    #abstract_out = fun(*abstract_args)
+
     # some outputs might be non-abstract if independent of abstract_args
-    abstract_out = fun(*abstract_args)
+    with interface.SetCurrentRV(TracerRV):
+        abstract_out = fun(*args)
 
     if not isinstance(abstract_out, list):
         raise ValueError("generated_nodes must take a function that returns a list")
@@ -147,7 +151,7 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
             f"all outputs of fun passed to generated_nodes must depend on at least one input. ("
             f"Got {abstract_out})"
         )
-    if any(a in abstract_args for a in abstract_out):
+    if any(a in args for a in abstract_out):
         raise ValueError("fun passed to generated_nodes cannot return input values")
 
     all_abstract_vars = dag.upstream_nodes(
@@ -158,8 +162,8 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
     # convert abstract nodes to concrete
     abstract_to_concrete = {}
     for abstract_var in all_abstract_vars:
-        if abstract_var in abstract_args:
-            where_var = abstract_args.index(abstract_var)
+        if abstract_var in args:
+            where_var = args.index(abstract_var)
             concrete_var = args[where_var]
         else:
             new_parents = tuple(
@@ -168,11 +172,11 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
             )
             # concrete_var = OperatorRV(abstract_var.op, *new_parents)
             # get most specific class
-            rv_class = get_rv_class(*new_parents)
+            rv_class = current_rv_class()
             concrete_var = rv_class(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var
 
-    all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in abstract_args]
+    all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in args]
     out = [abstract_to_concrete[v] if v in abstract_to_concrete else v for v in abstract_out]
 
     return all_vars, out
@@ -207,7 +211,7 @@ class AbstractOp(Op):
         return id(self) == id(other)
 
 
-def vmap_dummy_args(in_axes: tuple[int|None], axis_size: int|None, *args: RV):
+def vmap_dummy_args(in_axes: Sequence[int|None], axis_size: int|None, *args: RV):
     """
     Given a "full" arguments, get a list of dummy/sliced arguments
     Parameters
@@ -219,7 +223,7 @@ def vmap_dummy_args(in_axes: tuple[int|None], axis_size: int|None, *args: RV):
     if not util.all_unique(args):
         raise ValueError("vmap_dummy_args requires all unique arguments")
 
-    rv_class = get_rv_class(*args)
+    rv_class = current_rv_class()
 
     dummy_args = []
     for i, a in zip(in_axes, args, strict=True):
@@ -254,7 +258,7 @@ def vmap_eval(f, in_axes, axis_size, *args):
     # run function, get all generated nodes
     dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
 
-    rv_class = get_rv_class(*args)
+    rv_class = current_rv_class()
 
     dummy_to_real = util.WriteOnceDefaultDict(lambda p: p)
     dummy_mapped_axis = util.WriteOnceDefaultDict(lambda p: None)

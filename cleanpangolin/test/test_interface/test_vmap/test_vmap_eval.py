@@ -70,11 +70,9 @@ def test_vmap_eval_closure():
     in_axes = (0,)
     axis_size = 3
     x = makerv([1,2,3])
-    try:
-        [y] = vmap_eval(flat_fun, in_axes, axis_size, x)
-        assert False
-    except ValueError:
-        pass
+    [y] = vmap_eval(flat_fun, in_axes, axis_size, x)
+    assert y.op == ir.VMap(ir.Mul(), (None,None), 3)
+    assert y.parents == (z,z)
 
 
 def test_vmap_eval_constant():
@@ -133,3 +131,80 @@ def test_double_vmap_eval():
     x = makerv([[1,2,3],[4,5,6]])
     [y] = vec_fun2(x)
     assert y.op == ir.VMap(ir.VMap(ir.Exp(),(0,),3),(0,),2)
+
+def test_vmap_eval1():
+    "should fail because of incoherent axes sizes"
+    try:
+        y = vmap_eval(
+            lambda loc, scale: normal(loc, scale),
+            [None, None],
+            5,
+            np.zeros(3),
+            np.ones(3),
+        )
+        assert False
+    except AssertionError as e:
+        assert True
+
+
+def test_vmap_eval2():
+    y = vmap_eval(
+        lambda loc, scale: [normal(loc, scale)], [0, None], 3, np.zeros(3), 1
+    )[0]
+    assert y.shape == (3,)
+
+
+def test_vmap_eval3():
+    def f(x):
+        return [normal(x, x)]
+
+    y = vmap_eval(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
+    assert y.shape == (3,)
+
+
+def test_vmap_eval4():
+    def f(x):
+        loc = x * 1.1
+        scale = x**2.2
+        return [normal(loc, scale)]
+
+    y = vmap_eval(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
+    assert y.shape == (3,)
+
+
+def test_vmap_eval6():
+    def f():
+        return [normal(0, 1)]
+
+    x = vmap_eval(f, [], 3)[0]
+    assert x.shape == (3,)
+
+
+def test_vmap_eval7():
+    def f(x):
+        loc = x * 1.1
+        scale = x**2.2
+        y = normal(loc, scale)
+        x = normal(0, 1)
+        z = normal(1, 2)
+        return [y, x, z]
+
+    y, x, z = vmap_eval(f, [0], 3, np.array([3.3, 4.4, 5.5]))
+    assert y.shape == (3,)
+    assert x.shape == (3,)
+    assert z.shape == (3,)
+
+
+def test_vmap_eval8():
+    def f(x):
+        loc = x * 1.1
+        scale = x**2.2
+        y = normal(loc, scale)
+        x = normal(0, 1)
+        z = normal(1, 2)
+        return [y, x, z]
+
+    y, x, z = vmap_eval(f, [0], None, np.array([3.3, 4.4, 5.5]))
+    assert y.shape == (3,)
+    assert x.shape == (3,)
+    assert z.shape == (3,)
