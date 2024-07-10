@@ -8,13 +8,10 @@ from cleanpangolin.util import most_specific_class
 # - (or should we solve in the codegen phase?)
 
 def index(var:RV, *indices:RV | slice):
-    from cleanpangolin.interface.interface import current_rv_class # avoid circular import
-
     """
-    Convenience function to create a new indexed RV.
-
-    Note: Users are not expected to call this function directly. Instead they should just use
-    normal indexing notation like `x[y]`.
+    Convenience function to create a new indexed RV. Typically, users would not call this function
+    directly but use normal indexing notation like `x[y]` and rely on operator overloading to
+    call this function.
 
     Parameters
     ----------
@@ -30,6 +27,8 @@ def index(var:RV, *indices:RV | slice):
     new_rv: RV
         The new indexed RV, conceptually equivalent to `var[*indices]`.
     """
+
+    from cleanpangolin.interface.interface import current_rv_class # avoid circular import
 
     indices = tuple(i if isinstance(i, (slice,RV)) else RV(Constant(i)) for i in indices)
 

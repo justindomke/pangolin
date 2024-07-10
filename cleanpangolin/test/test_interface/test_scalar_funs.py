@@ -8,6 +8,14 @@ def test_wrong_number_of_args():
             assert False
         except ValueError as e:
             assert str(e) == f"Normal op got {len(args)} arguments but expected 2."
+        except TypeError as e: # wrong number of args
+            if len(args) == 0:
+                assert str(e) == f"normal() missing 2 required positional arguments: 'loc' and 'scale'"
+            elif len(args) == 1:
+                assert str(
+                    e) == f"normal() missing 1 required positional argument: 'scale'"
+            else:
+                assert str(e) == f"normal() takes 2 positional arguments but {len(args)} were given"
 
 def test_normal_rv_rv():
     x = makerv(0)

@@ -12,6 +12,15 @@ from cleanpangolin import ir
 from .index import index
 from cleanpangolin.util import most_specific_class
 
+for_api = [] # list of all functions to be exported for global API
+
+def api(fun):
+    """
+    Decorator to include function in global API
+    """
+    for_api.append(fun.__name__)
+    return fun
+
 
 class OperatorRV(RV):
     def __add__(self, other):
@@ -88,8 +97,10 @@ class OperatorRV(RV):
 
 rv_classes = [OperatorRV]
 
+
 def current_rv_class():
     return rv_classes[-1]
+
 
 class SetCurrentRV:
     def __init__(self, rv_class):
@@ -102,6 +113,7 @@ class SetCurrentRV:
         assert rv_classes.pop() == self.rv_class
 
 
+@api
 def makerv(x):
     "Cast something to a constant if necessary"
     if isinstance(x, RV):
@@ -109,7 +121,7 @@ def makerv(x):
     else:
         return current_rv_class()(Constant(x))
 
-def wrap_op(op: Op, docstring: str=""):
+def wrap_op(op: Op, docstring: str = ""):
     """
     Given an op, create a convenience function.
 
@@ -125,160 +137,353 @@ def wrap_op(op: Op, docstring: str=""):
 
     return fun
 
+
 def create_rv(op, *args):
     args = tuple(makerv(a) for a in args)
     rv_class = current_rv_class()
     return rv_class(op, *args)
 
-def normal(loc,scale):
-    """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
-    variable. Call as `normal(loc,scale)`.
-
-    **Note:** The second parameter is the *scale* standard deviation."""
-    return create_rv(ir.Normal(),loc,scale)
 
 # scalar ops
-cauchy = wrap_op(ir.Cauchy())
-"Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random " \
-"variable. Call as `cauchy(loc,scale)`."
-#normal = wrap_op(ir.Normal())
-# "Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random " \
-# "variable. Call as `normal(loc,scale)`.\n\n **Note:** The second parameter is the *scale* / " \
-# "standard deviation."
-normal_prec = wrap_op(ir.NormalPrec())
-"""Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random 
-variable. Call as `normal_prec(loc,prec)`.\n\n **Note:** The second parameter is the *precision* 
-inverse variance."""
-bernoulli = wrap_op(ir.Bernoulli())
-"""Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random 
-variable. Call as `bernoulli(theta)`, where the mean is `theta`. (`theta` must be between 0 and 
-1.)"""
-bernoulli_logit = wrap_op(ir.BernoulliLogit())
-"""Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random 
-variable. Call as `bernoulli_logit(alpha)`, where the mean is `sigmoid(alpha)`. (`alpha` can be 
-any real number.)"""
-binomial = wrap_op(ir.Binomial())
-"""Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random 
-variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the 
-probability of success for each repetition."""
-uniform = wrap_op(ir.Uniform())
-"""Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution) 
-distributed random variable. Call as `uniform(low,high)`. `low` must be less than `high`."""
-beta = wrap_op(ir.Beta())
-"""Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable. 
-Call as `beta(alpha,beta)`."""
-exponential = wrap_op(ir.Exponential())
-"""Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed 
-random variable. Call as `exponential(lambda)`, where `lambda` is the scale."""
-gamma = wrap_op(ir.Gamma())
-"""Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
-random variable. Call as `exponential(lambda)`, where `lambda` is the scale."""
-poisson = wrap_op(ir.Poisson())
-"""Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
-random variable. Call as `poisson(lambda)`, where `lambda` is the rate."""
-student_t = wrap_op(ir.StudentT())
-"""Create a [location-scale student-t](
-https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution) 
-distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
-add = wrap_op(ir.Add())
-"""Add two scalar random variables. Call as `add(a,b)` (or `a+b` if `a` or `b` are `OperatorRV`)"""
-sub = wrap_op(ir.Sub())
-"""Subtract two scalar random variables. Call as `sub(a,b)` (or `a-b` if `a` or `b` are 
-`OperatorRV`)"""
-mul = wrap_op(ir.Mul())
-"""Multiply two scalar random variables. Call as `mul(a,b)` (or `a*b` if `a` or `b` are 
-`OperatorRV`)"""
-div = wrap_op(ir.Div())
-"""Divide two scalar random variables. Call as `div(a,b)` (or `a/b` if `a` or `b` are 
-`OperatorRV`)"""
-pow = wrap_op(ir.Pow())
-"""Take one random variable to a power. Call as `pow(a,b)` (or `a**b` if `a` and `b` are 
-`OperatorRV`)"""
 
+@api
+def normal(loc, scale):
+    """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
+    variable.
+
+    **Note:** The second parameter is the *scale* / standard deviation."""
+    return create_rv(ir.Normal(), loc, scale)
+
+@api
+def normal_prec(loc, prec):
+    """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
+    variable.
+
+    **Note:** The second parameter is the *precision* / inverse variance."""
+    return create_rv(ir.NormalPrec(), loc, prec)
+
+@api
+def cauchy(loc, scale):
+    """Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random
+    variable."""
+    return create_rv(ir.Cauchy(), loc, scale)
+
+@api
+def bernoulli(theta):
+    """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
+    variable.
+
+    Parameters
+    ----------
+    theta
+        the mean. must be between 0 and 1
+    """
+    return create_rv(ir.Bernoulli(), theta)
+
+@api
+def bernoulli_logit(alpha):
+    """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
+    variable.
+
+    Parameters
+    ----------
+    alpha
+        any real number. determines the mean as mean = `sigmoid(alpha)`
+    """
+
+    return create_rv(ir.BernoulliLogit(), alpha)
+
+@api
+def binomial(n, p):
+    """Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random
+    variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the
+    probability of success for each repetition."""
+    return create_rv(ir.Binomial(), n, p)
+
+@api
+def uniform(low, high):
+    """Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution)
+    distributed random variable. `low` must be less than `high`."""
+
+    return create_rv(ir.Uniform(), low, high)
+
+@api
+def beta(alpha, beta):
+    """Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable."""
+    return create_rv(ir.Beta(), alpha, beta)
+
+@api
+def exponential(scale):
+    """Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed
+    random variable."""
+
+    return create_rv(ir.Exponential(), scale)
+
+@api
+def gamma(alpha, beta):
+    """Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
+    random variable.
+
+    **Note:** We (like [stan](https://mc-stan.org/docs/2_21/functions-reference/gamma
+    -distribution.html)) follow the "shape/rate" parameterization, *not* the "shape/scale"
+    parameterization.
+    """
+
+    return create_rv(ir.Gamma(), alpha, beta)
+
+@api
+def poisson(rate):
+    """Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
+    random variable."""
+
+    return create_rv(ir.Poisson(), rate)
+
+@api
+def student_t(nu, loc, scale):
+    """Create a [location-scale student-t](
+    https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
+    distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
+
+    # TODO: make loc and scale optional?
+
+    return create_rv(ir.StudentT(), nu, loc, scale)
+
+@api
+def add(a, b):
+    """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
+    return create_rv(ir.Add(), a, b)
+
+@api
+def sub(a, b):
+    """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
+    b)`."""
+    return create_rv(ir.Sub(), a, b)
+
+@api
+def mul(a, b):
+    """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
+    return create_rv(ir.Mul(), a, b)
+
+@api
+def div(a, b):
+    """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
+    return create_rv(ir.Div(), a, b)
+
+@api
+def pow(a, b):
+    """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
+    a,b)`."""
+    return create_rv(ir.Pow(), a, b)
+
+@api
 def sqrt(x):
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
+@api
+def abs(a):
+    return create_rv(ir.Abs(), a)
 
-abs = wrap_op(ir.Abs())
-arccos = wrap_op(ir.Arccos())
-arccosh = wrap_op(ir.Arccosh())
-arcsin = wrap_op(ir.Arcsin())
-arcsinh = wrap_op(ir.Arcsinh())
-arctan = wrap_op(ir.Arctan())
-arctanh = wrap_op(ir.Arctanh())
-cos = wrap_op(ir.Cos())
-cosh = wrap_op(ir.Cosh())
-exp = wrap_op(ir.Exp())
-inv_logit = wrap_op(ir.InvLogit())
-expit = inv_logit
-sigmoid = inv_logit
-log = wrap_op(ir.Log())
-log_gamma = wrap_op(ir.Loggamma())
-logit = wrap_op(ir.Logit())
-sin = wrap_op(ir.Sin())
-sinh = wrap_op(ir.Sinh())
-step = wrap_op(ir.Step())
-tan = wrap_op(ir.Tan())
-tanh = wrap_op(ir.Tanh())
+@api
+def arccos(a):
+    return create_rv(ir.Arccos(), a)
+
+@api
+def arccosh(a):
+    return create_rv(ir.Arccosh(), a)
+
+@api
+def arcsin(a):
+    return create_rv(ir.Arcsin(), a)
+
+@api
+def arcsinh(a):
+    return create_rv(ir.Arcsinh(), a)
+
+@api
+def arctan(a):
+    return create_rv(ir.Arctan(), a)
+
+@api
+def arctanh(a):
+    return create_rv(ir.Arctanh(), a)
+
+@api
+def cos(a):
+    return create_rv(ir.Cos(), a)
+
+@api
+def cosh(a):
+    return create_rv(ir.Cosh(), a)
+
+@api
+def exp(a):
+    return create_rv(ir.Exp(), a)
+
+@api
+def inv_logit(a):
+    return create_rv(ir.InvLogit(), a)
+
+@api
+def expit(a):
+    """Equivalent to `inv_logit`"""
+    return create_rv(ir.InvLogit(), a)
+
+@api
+def sigmoid(a):
+    """Equivalent to `inv_logit`"""
+    return create_rv(ir.InvLogit(), a)
+
+@api
+def log(a):
+    return create_rv(ir.Log(), a)
+
+@api
+def log_gamma(a):
+    """Log gamma function.
+
+    **TODO**: do we want [scipy.special.loggamma](
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [
+    scipy.special.gammaln](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special
+    .gammaln.html)? These are different!
+    """
+    return create_rv(ir.Loggamma(), a)
+
+@api
+def logit(a):
+    return create_rv(ir.Logit(), a)
+
+@api
+def sin(a):
+    return create_rv(ir.Sin(), a)
+
+@api
+def sinh(a):
+    return create_rv(ir.Sinh(), a)
+
+@api
+def step(a):
+    return create_rv(ir.Step(), a)
+
+@api
+def tan(a):
+    return create_rv(ir.Tan(), a)
+
+@api
+def tanh(a):
+    return create_rv(ir.Tanh(), a)
+
 
 # multivariate dists
-multi_normal = wrap_op(ir.MultiNormal())
-"""Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
-categorical = wrap_op(ir.Categorical())
-"""Create a Categorical-distributed random variable. Call as `categorical(theta)` where `theta` 
-is a vector that sums to one."""
-multinomial = wrap_op(ir.Multinomial())
-"""Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed 
-random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a 
-vector of probabilities that sums to one."""
-"""Convenience instance of `Multinomial`."""
-dirichlet = wrap_op(ir.Dirichlet())
-"""Convenience instance of `Dirichlet`."""
+@api
+def multi_normal(mean,cov):
+    """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
+    return create_rv(ir.MultiNormal(), mean, cov)
+
+@api
+def categorical(theta):
+    """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
+    where `theta` is a vector of non-negative reals that sums to one."""
+    return create_rv(ir.Categorical(), theta)
+
+@api
+def multinomial(n,p):
+    """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
+    random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
+    vector of probabilities that sums to one."""
+    return create_rv(ir.Multinomial(), n, p)
+
+@api
+def dirichlet(alpha):
+    """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
+    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals."""
+    return create_rv(ir.Dirichlet(), alpha)
 
 # multivariate funs
-matmul = wrap_op(ir.MatMul())
-inv = wrap_op(ir.Inv())
-softmax = wrap_op(ir.Softmax())
-"""Softmax for 1-D vectors (TODO: conform to syntax of [scipy.special.softmax](
-https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.softmax.html))"""
 
-
-def sum(x: RV, axis: int):
-    """Sum random variable along given axis"""
-    op = ir.Sum(axis)
-    return wrap_op(op)(x)
-
-
-
-from functools import wraps
-def wrap_fun(fun):
+@api
+def matmul(a, b):
     """
-    Given a function that takes some set of arguments and returns an RV, get a new one that is
-    "safe" in the sense of (1) casting all inputs to RV and (2) returning an RV of the current
-    type.
+    Matrix product of two arrays. The behavior follows that of
+    [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
+    except that (currently) `a` and `b` must both be 1-D or 2-D arrays. In particular:
+    * If `a` and `b` are both 1-D then this represents an inner-product.
+    * If `a` is 1-D and `b` is 2-D then this represents vector/matrix multiplication
+    * If `a` is 2-D and `b` is 1-D then this represents matrix/vector multiplication
+    * If `a` and `b` are both 2-D then this represents matrix/matrix multiplication
     """
+    return create_rv(ir.MatMul(), a, b)
 
-    @wraps(fun)
-    def new_fun(*args):
-        args = tuple(makerv(a) for a in args)
-        rv = fun(*args)
-        rv_class = current_rv_class()
-        return rv_class(rv.op, rv.parents)
-
-    new_fun.__doc__ = f"{fun.__doc__};\n HI"
-    return new_fun
-
-@wrap_fun
-def new_normal(loc, scale):
+@api
+def inv(a):
     """
-    Get a normally distributed random variable.
+    Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
+    """
+    return create_rv(ir.Inv(), a)
+
+@api
+def softmax(a):
+    """
+    Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
+    syntax of [scipy.special.softmax](
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.softmax.html))
 
     Parameters
     ----------
-    loc
-        location / mean (scalar)
-    scale
-        scale / standard deviation (positive scalar)
+    a
+        1-D vector
     """
-    return RV(ir.Normal(), loc, scale)
+    return create_rv(ir.Inv(), a)
+
+
+@api
+def sum(x: RV, axis: int):
+    """
+    Take the sum of a random variable along a given axis
+
+    Parameters
+    ----------
+    x
+        an RV (or something that can be cast to a Constant RV)
+    axis
+        a non-negative integer (cannot be a random variable)
+    """
+    if not isinstance(axis, int):
+        raise ValueError("axis argument for sum must be an integer")
+    return create_rv(ir.Sum(axis),x)
+
+
+# from functools import wraps
+#
+#
+# def wrap_fun(fun):
+#     """
+#     Given a function that takes some set of arguments and returns an RV, get a new one that is
+#     "safe" in the sense of (1) casting all inputs to RV and (2) returning an RV of the current
+#     type.
+#     """
+#
+#     @wraps(fun)
+#     def new_fun(*args):
+#         args = tuple(makerv(a) for a in args)
+#         rv = fun(*args)
+#         rv_class = current_rv_class()
+#         return rv_class(rv.op, rv.parents)
+#
+#     new_fun.__doc__ = f"{fun.__doc__};\n HI"
+#     return new_fun
+#
+#
+# @wrap_fun
+# def new_normal(loc, scale):
+#     """
+#     Get a normally distributed random variable.
+#
+#     Parameters
+#     ----------
+#     loc
+#         location / mean (scalar)
+#     scale
+#         scale / standard deviation (positive scalar)
+#     """
+#     return RV(ir.Normal(), loc, scale)
