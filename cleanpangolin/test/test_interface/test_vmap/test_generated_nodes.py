@@ -192,7 +192,7 @@ def test_vmap_generated_nodes5():
     loc, scale, z = nodes
     assert loc.op == ir.Add()
     assert loc.parents == (a,b)
-    assert scale.op == Constant(1)
+    assert scale.op == ir.Constant(1)
     assert z.op == ir.Normal()
     assert z.parents == (loc, scale)
 
@@ -203,7 +203,7 @@ def test_vmap_generated_nodes5():
     loc, scale, z = nodes
     assert loc.op == ir.Add()
     assert loc.parents == (a, b)
-    assert scale.op == Constant(1)
+    assert scale.op == ir.Constant(1)
     assert z.op == ir.Normal()
     assert z.parents == (loc, scale)
 
@@ -214,7 +214,7 @@ def test_vmap_generated_nodes5():
     loc, scale, z = nodes
     assert loc.op == ir.Add()
     assert loc.parents == (a, b)
-    assert scale.op == Constant(1)
+    assert scale.op == ir.Constant(1)
     assert z.op == ir.Normal()
     assert z.parents == (loc, scale)
 

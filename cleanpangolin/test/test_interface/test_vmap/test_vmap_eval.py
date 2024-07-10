@@ -87,7 +87,7 @@ def test_vmap_eval_constant():
     [z] = vmap_eval(flat_fun, in_axes, axis_size, x)
     assert z.op == ir.VMap(ir.Mul(), (0,None), 3)
     assert z.parents[0] == x
-    assert z.parents[1].op == Constant(2)
+    assert z.parents[1].op == ir.Constant(2)
 
 
 def test_no_redundant_deterministic():
@@ -104,7 +104,7 @@ def test_no_redundant_deterministic():
     assert z.parents[0].op == ir.Mul()
     assert z.parents[1].op == ir.Constant(3)
     assert z.parents[0].parents[0] == x
-    assert z.parents[0].parents[1].op == Constant(2)
+    assert z.parents[0].parents[1].op == ir.Constant(2)
 
 
 

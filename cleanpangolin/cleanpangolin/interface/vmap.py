@@ -137,22 +137,22 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
 
         pass
 
-    #abstract_args = convert_args(TracerRV, *args)
-    #abstract_out = fun(*abstract_args)
-
     # some outputs might be non-abstract if independent of abstract_args
     with interface.SetCurrentRV(TracerRV):
         abstract_out = fun(*args)
 
     if not isinstance(abstract_out, list):
         raise ValueError("generated_nodes must take a function that returns a list")
-    if not all(isinstance(a, TracerRV) for a in abstract_out):
-        raise ValueError(
-            f"all outputs of fun passed to generated_nodes must depend on at least one input. ("
-            f"Got {abstract_out})"
-        )
     if any(a in args for a in abstract_out):
         raise ValueError("fun passed to generated_nodes cannot return input values")
+    for a in abstract_out:
+        if a in args:
+            raise ValueError("fun passed to generated_nodes cannot returned inputs.")
+        if not isinstance(a,RV):
+            raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
+        if not isinstance(a,TracerRV):
+            raise ValueError(f"fun passed to generated_nodes returned non-TracedRV type (got"
+                             f" {type(a)}. (Should be is using only pangolin.interface functions.)")
 
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, block_condition=lambda var: not isinstance(var, TracerRV)
@@ -170,8 +170,6 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
                 abstract_to_concrete[p] if isinstance(p, TracerRV) else p
                 for p in abstract_var.parents
             )
-            # concrete_var = OperatorRV(abstract_var.op, *new_parents)
-            # get most specific class
             rv_class = current_rv_class()
             concrete_var = rv_class(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var

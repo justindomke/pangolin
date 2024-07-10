@@ -1594,7 +1594,7 @@ def corr(node_a,node_b,given=None,**vargs):
     return mycov / (σa*σb)
 
 ################################################################################
-# Small standalone interface to call JAGS by writing files and 
+# Small standalone interface to call JAGS by writing files and
 # calling the command line program
 ################################################################################
 
