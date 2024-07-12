@@ -20,6 +20,7 @@ from cleanpangolin.ir.multivariate_funs import *
 from cleanpangolin.ir.index import Index
 from cleanpangolin.ir.vmap import VMap
 
+
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
            'multivariate_funs','index','VMap','vmap']
 

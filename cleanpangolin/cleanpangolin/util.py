@@ -4,6 +4,7 @@ import numpy as np
 from typing import Sequence
 import collections
 
+
 def comma_separated(stuff, fun=None, parens=True):
     "convenience function for printing and such"
     ret = ""
@@ -343,12 +344,24 @@ def replace_in_sequence(seq, i, new):
 def camel_case_to_snake_case(name):
     # from https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
     import re
-    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
 def most_specific_class(*args, base_classes=()):
     classes = base_classes + tuple(type(a) for a in args)
     for c in classes:
-        if all(issubclass(c,d) for d in classes):
+        if all(issubclass(c, d) for d in classes):
             return c
     raise ValueError("no single most-specific argument type")
+
+
+def is_numeric_numpy_array(x):
+    return np.issubdtype(x.dtype, np.integer) or np.issubdtype(x.dtype, np.floating)
+
+
+def unzip(source: Sequence[tuple], strict=False):
+    """
+    Reverses zip
+    """
+    return zip(*source, strict=strict)

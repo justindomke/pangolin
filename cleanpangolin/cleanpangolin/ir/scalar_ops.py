@@ -109,7 +109,6 @@ Exponential = all_scalar_op_factory(1, "Exponential", True)
 Gamma = all_scalar_op_factory(2, "Gamma", True)
 Poisson = all_scalar_op_factory(1, "Poisson", True)
 BetaBinomial = all_scalar_op_factory(3, "BetaBinomial", True)
-beta_binomial = BetaBinomial()
 StudentT = all_scalar_op_factory(3, "StudentT", True)
 # basic math operators, typically triggered infix operations
 Add = all_scalar_op_factory(2, "Add", False)

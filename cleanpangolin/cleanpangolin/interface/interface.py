@@ -12,7 +12,14 @@ from cleanpangolin import ir
 from .index import index
 from cleanpangolin.util import most_specific_class
 
-for_api = [] # list of all functions to be exported for global API
+from numpy.typing import ArrayLike
+# type hint for RVs or things that we will implicitly cast to RVs
+# this will include jax arrays (good) but will also accept strings (bad)
+RV_or_array = ArrayLike | RV
+
+
+for_api = []  # list of all functions to be exported for global API
+
 
 def api(fun):
     """
@@ -23,6 +30,8 @@ def api(fun):
 
 
 class OperatorRV(RV):
+    __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
+
     def __add__(self, other):
         return add(self, other)
 
@@ -114,12 +123,13 @@ class SetCurrentRV:
 
 
 @api
-def makerv(x):
+def makerv(x) -> RV:
     "Cast something to a constant if necessary"
     if isinstance(x, RV):
         return x
     else:
         return current_rv_class()(Constant(x))
+
 
 def wrap_op(op: Op, docstring: str = ""):
     """
@@ -146,30 +156,34 @@ def create_rv(op, *args):
 
 # scalar ops
 
+
 @api
-def normal(loc, scale):
+def normal(loc: RV_or_array, scale: RV_or_array) -> RV:
     """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
     variable.
 
     **Note:** The second parameter is the *scale* / standard deviation."""
     return create_rv(ir.Normal(), loc, scale)
 
+
 @api
-def normal_prec(loc, prec):
+def normal_prec(loc, prec) -> RV:
     """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
     variable.
 
     **Note:** The second parameter is the *precision* / inverse variance."""
     return create_rv(ir.NormalPrec(), loc, prec)
 
+
 @api
-def cauchy(loc, scale):
+def cauchy(loc, scale) -> RV:
     """Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random
     variable."""
     return create_rv(ir.Cauchy(), loc, scale)
 
+
 @api
-def bernoulli(theta):
+def bernoulli(theta) -> RV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -180,8 +194,9 @@ def bernoulli(theta):
     """
     return create_rv(ir.Bernoulli(), theta)
 
+
 @api
-def bernoulli_logit(alpha):
+def bernoulli_logit(alpha) -> RV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -193,34 +208,54 @@ def bernoulli_logit(alpha):
 
     return create_rv(ir.BernoulliLogit(), alpha)
 
+
 @api
-def binomial(n, p):
+def binomial(n, p) -> RV:
     """Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random
     variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the
     probability of success for each repetition."""
     return create_rv(ir.Binomial(), n, p)
 
+
 @api
-def uniform(low, high):
+def uniform(low, high) -> RV:
     """Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution)
     distributed random variable. `low` must be less than `high`."""
 
     return create_rv(ir.Uniform(), low, high)
 
+
 @api
-def beta(alpha, beta):
+def beta(alpha, beta) -> RV:
     """Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable."""
     return create_rv(ir.Beta(), alpha, beta)
 
 @api
-def exponential(scale):
+def beta_binomial(n,alpha,beta) -> RV:
+    """Create a
+    [beta-binomial](https://en.wikipedia.org/wiki/Beta-binomial_distribution)
+    distributed random variable.
+
+    **Note**: This follows the (n,alpha,beta) convention of
+    [stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html)
+    (and Wikipedia). Some other systems (e.g.
+    [numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial))
+    use alternate variable orderings. This is no problem for you as a user—pangolin does the
+    re-ordering for you if you call the numpyro backend. But keep it in mind if translating a
+    model from one system to another.
+    """
+    return create_rv(ir.BetaBinomial(), n, alpha, beta)
+
+@api
+def exponential(scale) -> RV:
     """Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed
     random variable."""
 
     return create_rv(ir.Exponential(), scale)
 
+
 @api
-def gamma(alpha, beta):
+def gamma(alpha, beta) -> RV:
     """Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
     random variable.
 
@@ -231,15 +266,17 @@ def gamma(alpha, beta):
 
     return create_rv(ir.Gamma(), alpha, beta)
 
+
 @api
-def poisson(rate):
+def poisson(rate) -> RV:
     """Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
     random variable."""
 
     return create_rv(ir.Poisson(), rate)
 
+
 @api
-def student_t(nu, loc, scale):
+def student_t(nu, loc, scale) -> RV:
     """Create a [location-scale student-t](
     https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
     distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
@@ -248,161 +285,194 @@ def student_t(nu, loc, scale):
 
     return create_rv(ir.StudentT(), nu, loc, scale)
 
+
 @api
-def add(a, b):
+def add(a, b) -> RV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
     return create_rv(ir.Add(), a, b)
 
+
 @api
-def sub(a, b):
+def sub(a, b) -> RV:
     """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
     b)`."""
     return create_rv(ir.Sub(), a, b)
 
+
 @api
-def mul(a, b):
+def mul(a, b) -> RV:
     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
     return create_rv(ir.Mul(), a, b)
 
+
 @api
-def div(a, b):
+def div(a, b) -> RV:
     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
     return create_rv(ir.Div(), a, b)
 
+
 @api
-def pow(a, b):
+def pow(a, b) -> RV:
     """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
     a,b)`."""
     return create_rv(ir.Pow(), a, b)
 
+
 @api
-def sqrt(x):
+def sqrt(x) -> RV:
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
+
 @api
-def abs(a):
+def abs(a) -> RV:
     return create_rv(ir.Abs(), a)
 
+
 @api
-def arccos(a):
+def arccos(a) -> RV:
     return create_rv(ir.Arccos(), a)
 
+
 @api
-def arccosh(a):
+def arccosh(a) -> RV:
     return create_rv(ir.Arccosh(), a)
 
+
 @api
-def arcsin(a):
+def arcsin(a) -> RV:
     return create_rv(ir.Arcsin(), a)
 
+
 @api
-def arcsinh(a):
+def arcsinh(a) -> RV:
     return create_rv(ir.Arcsinh(), a)
 
+
 @api
-def arctan(a):
+def arctan(a) -> RV:
     return create_rv(ir.Arctan(), a)
 
+
 @api
-def arctanh(a):
+def arctanh(a) -> RV:
     return create_rv(ir.Arctanh(), a)
 
+
 @api
-def cos(a):
+def cos(a) -> RV:
     return create_rv(ir.Cos(), a)
 
+
 @api
-def cosh(a):
+def cosh(a) -> RV:
     return create_rv(ir.Cosh(), a)
 
+
 @api
-def exp(a):
+def exp(a) -> RV:
     return create_rv(ir.Exp(), a)
 
-@api
-def inv_logit(a):
-    return create_rv(ir.InvLogit(), a)
 
 @api
-def expit(a):
+def inv_logit(a) -> RV:
+    return create_rv(ir.InvLogit(), a)
+
+
+@api
+def expit(a) -> RV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
+
 @api
-def sigmoid(a):
+def sigmoid(a) -> RV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
+
 @api
-def log(a):
+def log(a) -> RV:
     return create_rv(ir.Log(), a)
 
+
 @api
-def log_gamma(a):
+def log_gamma(a) -> RV:
     """Log gamma function.
 
-    **TODO**: do we want [scipy.special.loggamma](
-    https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [
-    scipy.special.gammaln](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special
-    .gammaln.html)? These are different!
+    **TODO**: do we want
+    [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html)
+    or
+    [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)?
+    These are different!
     """
     return create_rv(ir.Loggamma(), a)
 
+
 @api
-def logit(a):
+def logit(a) -> RV:
     return create_rv(ir.Logit(), a)
 
+
 @api
-def sin(a):
+def sin(a) -> RV:
     return create_rv(ir.Sin(), a)
 
+
 @api
-def sinh(a):
+def sinh(a) -> RV:
     return create_rv(ir.Sinh(), a)
 
+
 @api
-def step(a):
+def step(a) -> RV:
     return create_rv(ir.Step(), a)
 
-@api
-def tan(a):
-    return create_rv(ir.Tan(), a)
 
 @api
-def tanh(a):
+def tan(a) -> RV:
+    return create_rv(ir.Tan(), a)
+
+
+@api
+def tanh(a) -> RV:
     return create_rv(ir.Tanh(), a)
 
 
 # multivariate dists
 @api
-def multi_normal(mean,cov):
+def multi_normal(mean, cov) -> RV:
     """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
     return create_rv(ir.MultiNormal(), mean, cov)
 
+
 @api
-def categorical(theta):
+def categorical(theta) -> RV:
     """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
     where `theta` is a vector of non-negative reals that sums to one."""
     return create_rv(ir.Categorical(), theta)
 
+
 @api
-def multinomial(n,p):
+def multinomial(n, p) -> RV:
     """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
     random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
     vector of probabilities that sums to one."""
     return create_rv(ir.Multinomial(), n, p)
 
+
 @api
-def dirichlet(alpha):
+def dirichlet(alpha) -> RV:
     """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
     random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals."""
     return create_rv(ir.Dirichlet(), alpha)
 
+
 # multivariate funs
 
+
 @api
-def matmul(a, b):
+def matmul(a, b) -> RV:
     """
     Matrix product of two arrays. The behavior follows that of
     [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
@@ -414,15 +484,17 @@ def matmul(a, b):
     """
     return create_rv(ir.MatMul(), a, b)
 
+
 @api
-def inv(a):
+def inv(a) -> RV:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
     return create_rv(ir.Inv(), a)
 
+
 @api
-def softmax(a):
+def softmax(a) -> RV:
     """
     Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
     syntax of [scipy.special.softmax](
@@ -437,7 +509,7 @@ def softmax(a):
 
 
 @api
-def sum(x: RV, axis: int):
+def sum(x: RV, axis: int) -> RV:
     """
     Take the sum of a random variable along a given axis
 
@@ -450,7 +522,7 @@ def sum(x: RV, axis: int):
     """
     if not isinstance(axis, int):
         raise ValueError("axis argument for sum must be an integer")
-    return create_rv(ir.Sum(axis),x)
+    return create_rv(ir.Sum(axis), x)
 
 
 # from functools import wraps

@@ -8,8 +8,6 @@ import numpy as np
 from cleanpangolin.ir import Op
 
 
-
-
 class MatMul(Op):
     """
     A class that does matrix multiplication, following the rules of `numpy.matmul`.
@@ -56,9 +54,6 @@ class MatMul(Op):
             raise Exception("bug: should be impossible")
 
 
-matmul = MatMul()
-
-
 class Inv(Op):
     """
     Take the inverse of a square matrix
@@ -75,9 +70,6 @@ class Inv(Op):
         return p_shape
 
 
-inv = Inv()
-
-
 class Softmax(Op):
     """
     Softmax
@@ -91,9 +83,6 @@ class Softmax(Op):
         p_shape = parents[0]
         assert len(p_shape) == 1, "input to softmax would be 1d"
         return p_shape
-
-
-softmax = Softmax()
 
 
 class Sum(Op):
@@ -118,7 +107,7 @@ class Sum(Op):
         if self.axis is None:
             return ()
         else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1:]
+            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
 
     def __repr__(self):
         return f"Sum(axis={self.axis})"

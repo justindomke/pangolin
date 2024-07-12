@@ -4,7 +4,7 @@ import numpy as np
 from cleanpangolin.ir import Op
 
 
-class VecMatCondDist(Op):
+class VecMatOp(Op):
     """
     Convenience class to create "vec mat" distributions that take as input a vector of
     length N, a matrix of size NxN and is a vector of length N
@@ -24,7 +24,7 @@ class VecMatCondDist(Op):
         return (N,)
 
 
-class MultiNormal(VecMatCondDist):
+class MultiNormal(VecMatOp):
     """
     MultiNormal distribution parameterized in terms of the mean and covariance.
     """

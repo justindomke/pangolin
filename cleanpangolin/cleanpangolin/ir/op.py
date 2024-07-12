@@ -62,6 +62,9 @@ class Op(ABC):
     def __eq__(self, other):
         return type(self) == type(other)
 
+    def __hash__(self):
+        return hash(type(self))
+
     def __setattr__(self, key, value):
         if self._frozen:
             raise TypeError("CondDists are immutable after init.")

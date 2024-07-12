@@ -241,6 +241,9 @@ def vmap_dummy_args(in_axes: Sequence[int|None], axis_size: int|None, *args: RV)
     return tuple(dummy_args), axis_size
 
 
+# def map_dummies(dummy_nodes):
+
+
 def vmap_eval(f, in_axes, axis_size, *args):
     """
     actually evaluate a vmap.
@@ -285,4 +288,63 @@ def vmap_eval(f, in_axes, axis_size, *args):
     output = [dummy_to_real[dummy] for dummy in dummy_outputs]
     return output
 
+def plate(*args, size:int|None=None, in_axes=0):
+    """
+    Plate is a simple shortcut notation to vmap. For example
+
+    ```python
+    z = normal(0,1)
+    x = plate(size=10)(lambda:
+        normal(z,1)
+    )
+    ```
+
+    Is equivalent to
+    ```python
+    z = normal(0,1)
+    x = vmap(lambda: normal(z,1),axis_size=10)()
+    ```
+
+    And
+
+    ```python
+    z = multi_normal(np.ones(3),np.eye(3))
+    x = plate(z)(lambda z_i:
+        normal(z_i,1)
+    )
+    ```
+
+    Is equivalent to
+    ```python
+    z = multi_normal(np.ones(3),np.eye(3))
+    x = vmap(lambda z_i: normal(z_i,1))(z)
+    ```
+
+    And
+
+    ```python
+    z = multi_normal(np.ones(3),np.eye(3))
+    x = plate(z,size=3,in_axes=0)(lambda z_i:
+        normal(z_i,1)
+    )
+    ```
+
+    Is equivalent to
+    ```python
+    z = multi_normal(np.ones(3),np.eye(3))
+    x = vmap(lambda z_i: normal(z_i,1),in_axes=0,axis_size=3)(z)
+    ```
+    """
+
+    #args, in_axes = util.unzip(args_and_in_axes,strict=True)
+
+    print(f"PLATE CALLED {in_axes=} {args=} {size=}")
+
+    def get_mapped(fun:Callable):
+        print(f"{fun=}")
+        print(f"{in_axes=}")
+        print(f"{args=}")
+        print(f"{size=}")
+        return vmap(fun,in_axes,axis_size=size)(*args)
+    return get_mapped
 
