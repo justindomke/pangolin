@@ -22,7 +22,7 @@ from cleanpangolin.ir.vmap import VMap
 
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
-           'multivariate_funs','index','VMap','vmap']
+           'multivariate_funs','index','VMap','vmap','Add']
 
 # force everything to be documented
 # __all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]

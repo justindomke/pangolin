@@ -123,7 +123,7 @@ class SetCurrentRV:
 
 
 @api
-def makerv(x) -> RV:
+def makerv(x) -> OperatorRV:
     "Cast something to a constant if necessary"
     if isinstance(x, RV):
         return x

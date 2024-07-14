@@ -9,7 +9,17 @@ from typing import Sequence, Type
 import jax.tree_util
 from . import interface
 
-def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=None):
+from typing import Protocol
+from numpy.typing import ArrayLike
+
+# class FlatCallable(Protocol):
+#    def __call__(self, *args) -> list[RV]:
+#        ...
+
+FlatCallable = Callable[..., list[RV]]
+
+
+def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None = None):
     """@public
     vmap a function. See also the documentation for
     [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) which has exactly the same
@@ -52,7 +62,7 @@ def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=No
             if i is None:
                 new_shape = x.shape
             else:
-                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1:])
+                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
                 new_shape = lo + hi
 
             # In old code tried to preserve x.op when isinstance(x.op, VMap)
@@ -82,7 +92,9 @@ def vmap(f: Callable, in_axes: int | None | Sequence=0, axis_size: int | None=No
         flat_output = vmap_eval(flat_f, flat_in_axes, axis_size, *flat_args)
         output = unflatten_output(flat_output)
         return output
+
     return call
+
 
 def convert_args(rv_type: Type[RV], *args: RV):
     """
@@ -109,7 +121,7 @@ def convert_args(rv_type: Type[RV], *args: RV):
     return tuple(abstract_args[a] for a in args)
 
 
-def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[list[RV], list[RV]]:
+def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
     """
     Given a "flat" function and some number of RV arguments, get all the nodes that the function
     creates. This *includes* nodes that do not depend on the inputs.
@@ -148,11 +160,13 @@ def generated_nodes(fun: Callable[[tuple[RV]], list[RV]], *args: RV) -> tuple[li
     for a in abstract_out:
         if a in args:
             raise ValueError("fun passed to generated_nodes cannot returned inputs.")
-        if not isinstance(a,RV):
+        if not isinstance(a, RV):
             raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
-        if not isinstance(a,TracerRV):
-            raise ValueError(f"fun passed to generated_nodes returned non-TracedRV type (got"
-                             f" {type(a)}. (Should be is using only pangolin.interface functions.)")
+        if not isinstance(a, TracerRV):
+            raise ValueError(
+                f"fun passed to generated_nodes returned non-TracedRV type (got"
+                f" {type(a)}. (Should be is using only pangolin.interface functions.)"
+            )
 
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, block_condition=lambda var: not isinstance(var, TracerRV)
@@ -185,7 +199,7 @@ class AbstractOp(Op):
     An `AbstractOp` doesn't actually do anything and expects no parents. It just has a fixed shape.
     """
 
-    def __init__(self, shape: tuple[int], random: bool):
+    def __init__(self, shape: tuple[int, ...], random: bool):
         """
         Create an abstract Op.
 
@@ -209,13 +223,13 @@ class AbstractOp(Op):
         return id(self) == id(other)
 
 
-def vmap_dummy_args(in_axes: Sequence[int|None], axis_size: int|None, *args: RV):
+def vmap_dummy_args(in_axes: Sequence[int | None], axis_size: int | None, *args: RV):
     """
     Given a "full" arguments, get a list of dummy/sliced arguments
     Parameters
     ----------
     in_axes: tuple[int|None]
-        What axis to map each argument over. Should have same same length as `args`
+        What axis to map each argument over. Should have same length as `args`
     """
 
     if not util.all_unique(args):
@@ -241,29 +255,37 @@ def vmap_dummy_args(in_axes: Sequence[int|None], axis_size: int|None, *args: RV)
     return tuple(dummy_args), axis_size
 
 
-# def map_dummies(dummy_nodes):
-
-
-def vmap_eval(f, in_axes, axis_size, *args):
+def vmap_subgraph(roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_outputs):
     """
-    actually evaluate a vmap.
-    This function (but not vmap itself) works on "flat" function f, meaning that each
-    argument of the function is just a RV. And the function must return
-    a list of arguments which again are each just a RV.
+    Parameters
+    ----------
+    roots
+        "real" root RVs
+    dummy_roots
+        dummy root RVs (correspond to roots sliced according to `dummy_axes` and `axis_size`)
+    roots_axes
+        the axes along which dummy_roots have been sliced
+    axis_size
+        the axis size for all mapped nodes
+    dummy_nodes
+        sequence of RVs which may depend on each other
+    dummy_outputs
+        the desired outputs
+
+    Returns
+    -------
+    real_outputs
+        real nodes corresponding to `dummy_outputs`
     """
 
-    # make sure inputs are RVs
-    args = list(makerv(a) for a in args)
-    # slice arguments as appropriate
-    dummy_args, axis_size = vmap_dummy_args(in_axes, axis_size, *args)
-    # run function, get all generated nodes
-    dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
+    if any(a in dummy_roots for a in dummy_nodes):
+        raise ValueError("dummy_roots cannot be included in dummy_nodes")
 
     rv_class = current_rv_class()
 
     dummy_to_real = util.WriteOnceDefaultDict(lambda p: p)
     dummy_mapped_axis = util.WriteOnceDefaultDict(lambda p: None)
-    for dummy_arg, i, arg in zip(dummy_args, in_axes, args, strict=True):
+    for dummy_arg, i, arg in zip(dummy_roots, roots_axes, roots, strict=True):
         dummy_to_real[dummy_arg] = arg
         dummy_mapped_axis[dummy_arg] = i
 
@@ -280,15 +302,44 @@ def vmap_eval(f, in_axes, axis_size, *args):
             new_op = VMap(dummy_node.op, in_axes=my_in_axes, axis_size=axis_size)
             new_axis = 0
 
-        #dummy_to_real[dummy_node] = OperatorRV(new_op, *parents)
         dummy_to_real[dummy_node] = rv_class(new_op, *parents)
         dummy_mapped_axis[dummy_node] = new_axis
+    real_nodes = [dummy_to_real[dummy_node] for dummy_node in dummy_outputs]
+    return real_nodes
 
 
-    output = [dummy_to_real[dummy] for dummy in dummy_outputs]
-    return output
+def vmap_eval(f, in_axes, axis_size, *args):
+    """
+    actually evaluate a vmap.
+    This function (but not vmap itself) works on "flat" function f, meaning that each
+    argument of the function is just a RV. And the function must return
+    a list of arguments which again are each just a RV.
+    """
 
-def plate(*args, size:int|None=None, in_axes=0):
+    # make sure inputs are RVs
+    args = list(makerv(a) for a in args)
+    dummy_args, axis_size = vmap_dummy_args(in_axes, axis_size, *args)
+    dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
+
+    return vmap_subgraph(args, dummy_args, in_axes, axis_size, dummy_nodes, dummy_outputs)
+
+
+def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int | None):
+    """
+    vmap a flat function (one that takes some number of RV arguments and returns a list of RV
+    arguments)
+    """
+
+    def vec_f(*args):
+        args = list(makerv(a) for a in args)
+        dummy_args, my_axis_size = vmap_dummy_args(in_axes, axis_size, *args)
+        dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
+        return vmap_subgraph(args, dummy_args, in_axes, my_axis_size, dummy_nodes, dummy_outputs)
+
+    return vec_f
+
+
+def plate(*args, size: int | None = None, in_axes=0):
     """
     Plate is a simple shortcut notation to vmap. For example
 
@@ -336,15 +387,87 @@ def plate(*args, size:int|None=None, in_axes=0):
     ```
     """
 
-    #args, in_axes = util.unzip(args_and_in_axes,strict=True)
+    # args, in_axes = util.unzip(args_and_in_axes,strict=True)
 
     print(f"PLATE CALLED {in_axes=} {args=} {size=}")
 
-    def get_mapped(fun:Callable):
+    def get_mapped(fun: Callable):
         print(f"{fun=}")
         print(f"{in_axes=}")
         print(f"{args=}")
         print(f"{size=}")
-        return vmap(fun,in_axes,axis_size=size)(*args)
+        return vmap(fun, in_axes, axis_size=size)(*args)
+
     return get_mapped
 
+
+# class SubInt(int):
+#     def __new__(cls, value, *args, **kwargs):
+#         return super(SubInt, cls).__new__(cls, value)
+#
+#     def __add__(self, other):
+#         return SubInt(int(self)+int(other))
+#
+#     def __radd__(self, other):
+#         # needed because regular sum starts with 0
+#         return SubInt(int(self)+int(other))
+
+
+class Loop:
+    def __init__(self, length, auto_assign=True):
+        rv_class = interface.current_rv_class()
+        self.auto_assign = auto_assign
+        self.length = length
+        self.generated_rvs = []
+        self.loop_vars = {}
+        import numpy as np
+
+        self.range = rv_class(Constant(np.arange(length)))
+        self.i = self.range[0]
+
+        class NewRV(rv_class):
+            def __init__(myself, *args, **vargs):
+                self.generated_rvs.append(myself)
+                myself.my_loop = self
+                super().__init__(*args, **vargs)
+
+        self.new_rv_class = NewRV
+
+    def __enter__(self) -> OperatorRV:
+        interface.rv_classes.append(self.new_rv_class)
+        return self.i
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        assert self.new_rv_class == interface.rv_classes.pop()
+        if self.auto_assign:
+            loop_vars = [l for l in self.loop_vars]
+            dummy_loop_vars = [self.loop_vars[l] for l in loop_vars]
+            new_vars = vmap_subgraph(
+                [self.range], [self.i], [0], self.length, self.generated_rvs, dummy_loop_vars
+            )
+
+            for loop_var, new in zip(loop_vars, new_vars, strict=True):
+               loop_var.finalize(new.op, *new.parents)
+
+
+class LoopVar(OperatorRV):
+    def __init__(self):
+        # do NOT call super.__init__() for now
+        pass
+
+    def __setitem__(self, idx, dummy_rv):
+        loop = dummy_rv.my_loop
+        loop.loop_vars[self] = dummy_rv
+        self.dummy_rv = dummy_rv
+
+    def __getitem__(self, loop):
+        return self.dummy_rv
+
+    def finalize(self, op, *parents):
+        super().__init__(op, *parents)
+
+    def __repr__(self):
+        out = "LoopVar"
+        if hasattr(self,"dummy_rv"):
+            out += "(" + repr(self.dummy_rv) + ")"
+        return out
