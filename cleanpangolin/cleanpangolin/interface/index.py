@@ -1,5 +1,7 @@
 from cleanpangolin.ir import RV, Constant, Index
 from cleanpangolin.util import most_specific_class
+from cleanpangolin.interface import interface
+
 
 # TODO: some day merge "indexes into indexes"
 # - this seems to NOT be very simple—all depends on shapes of inputs and stuff)
@@ -7,7 +9,54 @@ from cleanpangolin.util import most_specific_class
 # - but for Stan or JAGS seems problematic?
 # - (or should we solve in the codegen phase?)
 
-def index(var:RV, *indices:RV | slice):
+
+def eliminate_ellipses(ndim, idx):
+    num_ellipsis = len([i for i in idx if i is ...])
+    if num_ellipsis > 1:
+        raise ValueError("an index can only have a single ellipsis ('...')")
+    elif num_ellipsis == 1:
+        where = idx.index(...)
+        slices_needed = ndim - (len(idx) - 1)  # sub out ellipsis
+        if where > 0:
+            idx_start = idx[:where]
+        else:
+            idx_start = ()
+        idx_mid = (slice(None),) * slices_needed
+        idx_end = idx[where + 1 :]
+        idx = idx_start + idx_mid + idx_end
+    return idx
+
+
+def pad_with_slices(ndim, idx):
+    num_full_slices_needed = ndim - len(idx)
+    return idx + (slice(None),) * num_full_slices_needed
+
+
+def convert_constants(idx):
+    from cleanpangolin.interface.interface import current_rv_class  # avoid circular import
+
+    rv_class = current_rv_class()
+    return tuple(i if isinstance(i, (slice, RV)) else rv_class(Constant(i)) for i in idx)
+
+
+def simplify_indices(ndim:int, idx):
+    """
+    Converts ellipses to slices and pads with slices but does not convert constants to RVs.
+    """
+
+    idx = eliminate_ellipses(ndim, idx)
+
+    if ndim == 0:
+        raise Exception("can't index scalar RV")
+    elif len(idx) > ndim:
+        raise Exception("RV indexed with more dimensions than exist")
+
+    idx = pad_with_slices(ndim, idx)
+
+    return idx
+
+
+def standard_index_fun(var: RV, *indices: RV | slice):
     """
     Convenience function to create a new indexed RV. Typically, users would not call this function
     directly but use normal indexing notation like `x[y]` and rely on operator overloading to
@@ -28,23 +77,20 @@ def index(var:RV, *indices:RV | slice):
         The new indexed RV, conceptually equivalent to `var[*indices]`.
     """
 
-    from cleanpangolin.interface.interface import current_rv_class # avoid circular import
+    from cleanpangolin.interface.interface import current_rv_class  # avoid circular import
 
-    indices = tuple(i if isinstance(i, (slice,RV)) else RV(Constant(i)) for i in indices)
+    indices = simplify_indices(var.ndim, indices)
 
-    non_slice_indices = (i for i in indices if isinstance(i,RV))
+    indices = convert_constants(indices)
 
-    # add extra full slices
-    num_full_slices_needed = var.ndim - len(indices)
-    indices = indices + (slice(None),) * num_full_slices_needed
-
-    slices = []
-    parents = []
-    for i in indices:
-        if isinstance(i, slice):
-            slices.append(i)
-        else:
-            parents.append(i)
-            slices.append(None)
+    slices = [i if isinstance(i, slice) else None for i in indices]
+    parents = [i for i in indices if not isinstance(i, slice)]
 
     return current_rv_class()(Index(*slices), var, *parents)
+
+
+index_funs = [standard_index_fun]
+
+
+def index(var: RV, *indices: RV | slice):
+    return index_funs[-1](var, *indices)

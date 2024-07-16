@@ -13,7 +13,6 @@ class RV(dag.Node):
         """
         Initialize an RV with Op `op` and parents `*parents`.
         """
-        #parents = tuple(makerv(p) for p in parents)
 
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)

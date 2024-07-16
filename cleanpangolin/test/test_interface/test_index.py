@@ -1,9 +1,93 @@
 from cleanpangolin.ir import RV, Constant, Index
 from cleanpangolin.interface import OperatorRV, makerv
-from cleanpangolin.interface.index import index
+from cleanpangolin.interface.index import index, simplify_indices
 import numpy as np
 
 fslice = slice(None)  # full slice
+
+
+def test_simplify_indices_slice():
+    idx = (slice(None),)
+    assert simplify_indices(1, idx) == (slice(None),)
+    assert simplify_indices(2, idx) == (slice(None), slice(None))
+    assert simplify_indices(3, idx) == (slice(None), slice(None), slice(None))
+
+
+def test_simplify_indices_int():
+    idx = (5,)
+    assert simplify_indices(1, idx) == (5,)
+    assert simplify_indices(2, idx) == (5, slice(None))
+    assert simplify_indices(3, idx) == (5, slice(None), slice(None))
+
+
+def test_simplify_indices_slice_int():
+    idx = (slice(None), 5)
+    assert simplify_indices(2, idx) == (slice(None), 5)
+    assert simplify_indices(3, idx) == (slice(None), 5, slice(None))
+    assert simplify_indices(4, idx) == (slice(None), 5, slice(None), slice(None))
+
+
+def test_simplify_indices_int_slice():
+    idx = (5, slice(None))
+    assert simplify_indices(2, idx) == (5, slice(None))
+    assert simplify_indices(3, idx) == (5, slice(None), slice(None))
+    assert simplify_indices(4, idx) == (5, slice(None), slice(None), slice(None))
+
+
+def test_simplify_indices_ellipses():
+    idx = (...,)
+    assert simplify_indices(1, idx) == (slice(None),)
+    assert simplify_indices(2, idx) == (slice(None), slice(None))
+    assert simplify_indices(3, idx) == (slice(None), slice(None), slice(None))
+
+
+def test_simplify_indices_int_ellipses():
+    idx = (5, ...)
+    assert simplify_indices(1, idx) == (5,)
+    assert simplify_indices(2, idx) == (5, slice(None))
+    assert simplify_indices(3, idx) == (5, slice(None), slice(None))
+    assert simplify_indices(4, idx) == (5, slice(None), slice(None), slice(None))
+
+
+def test_simplify_indices_ellipses_int():
+    idx = (..., 5)
+    assert simplify_indices(1, idx) == (5,)
+    assert simplify_indices(2, idx) == (slice(None), 5)
+    assert simplify_indices(3, idx) == (slice(None), slice(None), 5)
+    assert simplify_indices(4, idx) == (slice(None), slice(None), slice(None), 5)
+
+
+def test_simplify_indices_slice_ellipses_int():
+    idx = (slice(None), ..., 5)
+    assert simplify_indices(2, idx) == (slice(None), 5)
+    assert simplify_indices(3, idx) == (slice(None), slice(None), 5)
+    assert simplify_indices(4, idx) == (slice(None), slice(None), slice(None), 5)
+
+
+def test_simplify_indices_slice_int_ellipses_int():
+    idx = (slice(None), 4, ..., 5)
+    assert simplify_indices(3, idx) == (slice(None), 4, 5)
+    assert simplify_indices(4, idx) == (slice(None), 4, slice(None), 5)
+    assert simplify_indices(5, idx) == (slice(None), 4, slice(None), slice(None), 5)
+
+
+def test_simplify_indices_partial_slice_int_ellipses_int():
+    idx = (slice(0, 5, 2), 4, ..., 5)
+    assert simplify_indices(3, idx) == (slice(0, 5, 2), 4, 5)
+    assert simplify_indices(4, idx) == (slice(0, 5, 2), 4, slice(None), 5)
+    assert simplify_indices(5, idx) == (slice(0, 5, 2), 4, slice(None), slice(None), 5)
+
+
+# def test_simplify_indices1():
+#     ndim = 2
+#     idx = (slice(None), 2)
+#     assert simplify_indices(ndim, idx) == (slice(None), 2, slice(None))
+#
+#     assert simplify_indices(ndim, idx) == (slice(None), 2, slice(None))
+
+
+# def test_simplify_indices2():
+#     ndim =
 
 
 def dotest(x, *idx):
@@ -11,7 +95,6 @@ def dotest(x, *idx):
     y = index(x_rv, *idx)
     z = x.__getitem__(idx)
     assert y.shape == z.shape
-
 
 
 def test_1d_full_slice():
@@ -162,13 +245,15 @@ def test_indexing_shapes():
     x0 = np.random.randn(5, 6, 7, 8)
     x = OperatorRV(Constant(x0))
     y = x[:, :, 1:3, 0:3]
-    assert y.shape == (5,6,2,3)
+    assert y.shape == (5, 6, 2, 3)
+
 
 def test_indexing_int():
     x = makerv([1, 2, 3])
     y = x[0]
     assert isinstance(y.op, Index)
     assert y.shape == ()
+
 
 def test_indexing_rv_int():
     x = makerv([1, 2, 3])
@@ -225,6 +310,7 @@ def test_indexing6():
     assert isinstance(y.op, Index)
     assert y.shape == (4, 3)
 
+
 # disabled this optimization for now
 # def test_double_indexing_optimization1():
 #     x0 = np.random.randn(5, 6, 7, 8)
@@ -254,7 +340,6 @@ def test_indexing6():
 #     print(f"{z.op=}")
 #     print(f"{z.parents[0].op=}")
 #     #assert z.op == Index(None, None, slice(None), slice(None))
-
 
 
 # broadcasting for indices not (yet?) implemented

@@ -11,12 +11,12 @@ import cleanpangolin
 from cleanpangolin import ir
 from .index import index
 from cleanpangolin.util import most_specific_class
-
+from abc import ABC, abstractmethod
 from numpy.typing import ArrayLike
+
 # type hint for RVs or things that we will implicitly cast to RVs
 # this will include jax arrays (good) but will also accept strings (bad)
 RV_or_array = ArrayLike | RV
-
 
 for_api = []  # list of all functions to be exported for global API
 
@@ -75,25 +75,6 @@ class OperatorRV(RV):
         if not isinstance(idx, tuple):
             idx = (idx,)
 
-        # convert ellipsis into slices
-        num_ellipsis = len([i for i in idx if i is ...])
-        if num_ellipsis > 1:
-            raise ValueError("an index can only have a single ellipsis ('...')")
-        elif num_ellipsis == 1:
-            where = idx.index(...)
-            slices_needed = self.ndim - (len(idx) - 1)  # sub out ellipsis
-            if where > 0:
-                idx_start = idx[:where]
-            else:
-                idx_start = ()
-            idx_mid = (slice(None),) * slices_needed
-            idx_end = idx[where + 1 :]
-            idx = idx_start + idx_mid + idx_end
-
-        if self.ndim == 0:
-            raise Exception("can't index scalar RV")
-        elif isinstance(idx, tuple) and len(idx) > self.ndim:
-            raise Exception("RV indexed with more dimensions than exist")
         return index(self, *idx)
 
     # def __str__(self):
@@ -103,6 +84,35 @@ class OperatorRV(RV):
     #     for n in range(self.shape[0]):
     #         yield self[n]
 
+
+# class RVManager(ABC):
+#     @classmethod
+#     @abstractmethod
+#     def makerv(cls,x) -> RV:
+#         pass
+#
+#     @classmethod
+#     @abstractmethod
+#     def create_rv(cls, op, *parents):
+#         pass
+#
+#
+# class OperatorRVMangager(RVManager):
+#     @classmethod
+#     def create_rv(cls, op, *parents):
+#         return OperatorRV(op, *parents)
+#
+#     @classmethod
+#     def makerv(cls,x) -> RV:
+#         if isinstance(x, RV):
+#             return x
+#         else:
+#             return OperatorRV(Constant(x))
+
+def assert_not_non_operator_rv(x):
+    if isinstance(x,RV):
+        if not isinstance(x,OperatorRV):
+            raise Exception("got non-operatorRV RV {type(x)} {x}")
 
 rv_classes = [OperatorRV]
 
@@ -122,30 +132,44 @@ class SetCurrentRV:
         assert rv_classes.pop() == self.rv_class
 
 
-@api
-def makerv(x) -> OperatorRV:
-    "Cast something to a constant if necessary"
-    if isinstance(x, RV):
+def my_makerv(x) -> OperatorRV:
+    assert_not_non_operator_rv(x)
+
+    if isinstance(x, OperatorRV):
         return x
     else:
         return current_rv_class()(Constant(x))
 
 
-def wrap_op(op: Op, docstring: str = ""):
-    """
-    Given an op, create a convenience function.
+makerv_funs = [my_makerv]
 
-    Always returns a new RV of the most specific class. (Which must be unique)
-    """
 
-    def fun(*args):
-        args = tuple(makerv(a) for a in args)
-        rv_class = current_rv_class()
-        return rv_class(op, *args)
+@api
+def makerv(x) -> OperatorRV:
+    "Cast something to a constant if necessary"
+    out = makerv_funs[-1](x)
+    if not isinstance(out, OperatorRV):
+        raise Exception(
+            f"Custom makerv function must return subclass of OperatorRV was " f"{type(out)}"
+        )
+    return out
 
-    fun.__doc__ = docstring
 
-    return fun
+# def wrap_op(op: Op, docstring: str = ""):
+#     """
+#     Given an op, create a convenience function.
+#
+#     Always returns a new RV of the most specific class. (Which must be unique)
+#     """
+#
+#     def fun(*args):
+#         args = tuple(makerv(a) for a in args)
+#         rv_class = current_rv_class()
+#         return rv_class(op, *args)
+#
+#     fun.__doc__ = docstring
+#
+#     return fun
 
 
 def create_rv(op, *args):
@@ -158,7 +182,7 @@ def create_rv(op, *args):
 
 
 @api
-def normal(loc: RV_or_array, scale: RV_or_array) -> RV:
+def normal(loc: RV_or_array, scale: RV_or_array) -> OperatorRV:
     """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
     variable.
 
@@ -167,7 +191,7 @@ def normal(loc: RV_or_array, scale: RV_or_array) -> RV:
 
 
 @api
-def normal_prec(loc, prec) -> RV:
+def normal_prec(loc, prec) -> OperatorRV:
     """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
     variable.
 
@@ -176,14 +200,14 @@ def normal_prec(loc, prec) -> RV:
 
 
 @api
-def cauchy(loc, scale) -> RV:
+def cauchy(loc, scale) -> OperatorRV:
     """Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random
     variable."""
     return create_rv(ir.Cauchy(), loc, scale)
 
 
 @api
-def bernoulli(theta) -> RV:
+def bernoulli(theta) -> OperatorRV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -196,7 +220,7 @@ def bernoulli(theta) -> RV:
 
 
 @api
-def bernoulli_logit(alpha) -> RV:
+def bernoulli_logit(alpha) -> OperatorRV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -210,7 +234,7 @@ def bernoulli_logit(alpha) -> RV:
 
 
 @api
-def binomial(n, p) -> RV:
+def binomial(n, p) -> OperatorRV:
     """Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random
     variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the
     probability of success for each repetition."""
@@ -218,7 +242,7 @@ def binomial(n, p) -> RV:
 
 
 @api
-def uniform(low, high) -> RV:
+def uniform(low, high) -> OperatorRV:
     """Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution)
     distributed random variable. `low` must be less than `high`."""
 
@@ -226,12 +250,13 @@ def uniform(low, high) -> RV:
 
 
 @api
-def beta(alpha, beta) -> RV:
+def beta(alpha, beta) -> OperatorRV:
     """Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable."""
     return create_rv(ir.Beta(), alpha, beta)
 
+
 @api
-def beta_binomial(n,alpha,beta) -> RV:
+def beta_binomial(n, alpha, beta) -> OperatorRV:
     """Create a
     [beta-binomial](https://en.wikipedia.org/wiki/Beta-binomial_distribution)
     distributed random variable.
@@ -246,8 +271,9 @@ def beta_binomial(n,alpha,beta) -> RV:
     """
     return create_rv(ir.BetaBinomial(), n, alpha, beta)
 
+
 @api
-def exponential(scale) -> RV:
+def exponential(scale) -> OperatorRV:
     """Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed
     random variable."""
 
@@ -255,7 +281,7 @@ def exponential(scale) -> RV:
 
 
 @api
-def gamma(alpha, beta) -> RV:
+def gamma(alpha, beta) -> OperatorRV:
     """Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
     random variable.
 
@@ -268,7 +294,7 @@ def gamma(alpha, beta) -> RV:
 
 
 @api
-def poisson(rate) -> RV:
+def poisson(rate) -> OperatorRV:
     """Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
     random variable."""
 
@@ -276,7 +302,7 @@ def poisson(rate) -> RV:
 
 
 @api
-def student_t(nu, loc, scale) -> RV:
+def student_t(nu, loc, scale) -> OperatorRV:
     """Create a [location-scale student-t](
     https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
     distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
@@ -287,117 +313,117 @@ def student_t(nu, loc, scale) -> RV:
 
 
 @api
-def add(a, b) -> RV:
+def add(a, b) -> OperatorRV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
     return create_rv(ir.Add(), a, b)
 
 
 @api
-def sub(a, b) -> RV:
+def sub(a, b) -> OperatorRV:
     """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
     b)`."""
     return create_rv(ir.Sub(), a, b)
 
 
 @api
-def mul(a, b) -> RV:
+def mul(a, b) -> OperatorRV:
     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
     return create_rv(ir.Mul(), a, b)
 
 
 @api
-def div(a, b) -> RV:
+def div(a, b) -> OperatorRV:
     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
     return create_rv(ir.Div(), a, b)
 
 
 @api
-def pow(a, b) -> RV:
+def pow(a, b) -> OperatorRV:
     """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
     a,b)`."""
     return create_rv(ir.Pow(), a, b)
 
 
 @api
-def sqrt(x) -> RV:
+def sqrt(x) -> OperatorRV:
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
 
 @api
-def abs(a) -> RV:
+def abs(a) -> OperatorRV:
     return create_rv(ir.Abs(), a)
 
 
 @api
-def arccos(a) -> RV:
+def arccos(a) -> OperatorRV:
     return create_rv(ir.Arccos(), a)
 
 
 @api
-def arccosh(a) -> RV:
+def arccosh(a) -> OperatorRV:
     return create_rv(ir.Arccosh(), a)
 
 
 @api
-def arcsin(a) -> RV:
+def arcsin(a) -> OperatorRV:
     return create_rv(ir.Arcsin(), a)
 
 
 @api
-def arcsinh(a) -> RV:
+def arcsinh(a) -> OperatorRV:
     return create_rv(ir.Arcsinh(), a)
 
 
 @api
-def arctan(a) -> RV:
+def arctan(a) -> OperatorRV:
     return create_rv(ir.Arctan(), a)
 
 
 @api
-def arctanh(a) -> RV:
+def arctanh(a) -> OperatorRV:
     return create_rv(ir.Arctanh(), a)
 
 
 @api
-def cos(a) -> RV:
+def cos(a) -> OperatorRV:
     return create_rv(ir.Cos(), a)
 
 
 @api
-def cosh(a) -> RV:
+def cosh(a) -> OperatorRV:
     return create_rv(ir.Cosh(), a)
 
 
 @api
-def exp(a) -> RV:
+def exp(a) -> OperatorRV:
     return create_rv(ir.Exp(), a)
 
 
 @api
-def inv_logit(a) -> RV:
+def inv_logit(a) -> OperatorRV:
     return create_rv(ir.InvLogit(), a)
 
 
 @api
-def expit(a) -> RV:
+def expit(a) -> OperatorRV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
 
 @api
-def sigmoid(a) -> RV:
+def sigmoid(a) -> OperatorRV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
 
 @api
-def log(a) -> RV:
+def log(a) -> OperatorRV:
     return create_rv(ir.Log(), a)
 
 
 @api
-def log_gamma(a) -> RV:
+def log_gamma(a) -> OperatorRV:
     """Log gamma function.
 
     **TODO**: do we want
@@ -410,51 +436,51 @@ def log_gamma(a) -> RV:
 
 
 @api
-def logit(a) -> RV:
+def logit(a) -> OperatorRV:
     return create_rv(ir.Logit(), a)
 
 
 @api
-def sin(a) -> RV:
+def sin(a) -> OperatorRV:
     return create_rv(ir.Sin(), a)
 
 
 @api
-def sinh(a) -> RV:
+def sinh(a) -> OperatorRV:
     return create_rv(ir.Sinh(), a)
 
 
 @api
-def step(a) -> RV:
+def step(a) -> OperatorRV:
     return create_rv(ir.Step(), a)
 
 
 @api
-def tan(a) -> RV:
+def tan(a) -> OperatorRV:
     return create_rv(ir.Tan(), a)
 
 
 @api
-def tanh(a) -> RV:
+def tanh(a) -> OperatorRV:
     return create_rv(ir.Tanh(), a)
 
 
 # multivariate dists
 @api
-def multi_normal(mean, cov) -> RV:
+def multi_normal(mean, cov) -> OperatorRV:
     """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
     return create_rv(ir.MultiNormal(), mean, cov)
 
 
 @api
-def categorical(theta) -> RV:
+def categorical(theta) -> OperatorRV:
     """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
     where `theta` is a vector of non-negative reals that sums to one."""
     return create_rv(ir.Categorical(), theta)
 
 
 @api
-def multinomial(n, p) -> RV:
+def multinomial(n, p) -> OperatorRV:
     """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
     random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
     vector of probabilities that sums to one."""
@@ -462,7 +488,7 @@ def multinomial(n, p) -> RV:
 
 
 @api
-def dirichlet(alpha) -> RV:
+def dirichlet(alpha) -> OperatorRV:
     """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
     random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals."""
     return create_rv(ir.Dirichlet(), alpha)
@@ -472,7 +498,7 @@ def dirichlet(alpha) -> RV:
 
 
 @api
-def matmul(a, b) -> RV:
+def matmul(a, b) -> OperatorRV:
     """
     Matrix product of two arrays. The behavior follows that of
     [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
@@ -486,7 +512,7 @@ def matmul(a, b) -> RV:
 
 
 @api
-def inv(a) -> RV:
+def inv(a) -> OperatorRV:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
@@ -494,7 +520,7 @@ def inv(a) -> RV:
 
 
 @api
-def softmax(a) -> RV:
+def softmax(a) -> OperatorRV:
     """
     Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
     syntax of [scipy.special.softmax](
@@ -509,7 +535,7 @@ def softmax(a) -> RV:
 
 
 @api
-def sum(x: RV, axis: int) -> RV:
+def sum(x: RV, axis: int) -> OperatorRV:
     """
     Take the sum of a random variable along a given axis
 
