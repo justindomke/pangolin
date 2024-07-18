@@ -163,7 +163,7 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
         if not isinstance(a, TracerRV):
             raise ValueError(
                 f"fun passed to generated_nodes returned non-TracedRV type (got"
-                f" {type(a)}. (Should be is using only pangolin.interface functions.)"
+                f" {type(a)}. (Should be using only pangolin.interface functions.)"
             )
 
     all_abstract_vars = dag.upstream_nodes(

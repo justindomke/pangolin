@@ -14,7 +14,7 @@ from cleanpangolin.ir import VMap
 
 import numpy as np  # type: ignore
 from cleanpangolin.interface.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, \
-    VMapRV, vmaprv
+    slot
 from cleanpangolin import *
 from cleanpangolin.interface import loops, OperatorRV
 from cleanpangolin.interface.index import index_funs
@@ -454,7 +454,7 @@ def test_tracing_outside_var():
 def test_assignment():
     loc = makerv(0)
     scale = makerv(1)
-    x = VMapRV()
+    x = slot()
     with Loop(3) as i:
         x[i] = normal(loc, scale)
     assert x.op == VMap(ir.Normal(), (None, None), 3)
@@ -465,7 +465,7 @@ def test_assignment_inline():
     loc = makerv(0)
     scale = makerv(1)
     with Loop(3) as i:
-        (x := VMapRV())[i] = normal(loc, scale)
+        (x := slot())[i] = normal(loc, scale)
     assert x.op == VMap(ir.Normal(), (None, None), 3)
     assert x.parents == (loc, scale)
     assert isinstance(x, OperatorRV)
@@ -474,7 +474,7 @@ def test_assignment_inline():
 
 
 def test_assignment_casting():
-    x = VMapRV()
+    x = slot()
     with Loop(3) as i:
         x[i] = normal(0, 1)
     assert x.op == VMap(ir.Normal(), (None, None), 3)
@@ -486,8 +486,8 @@ def test_assignment_casting():
 def test_2d_assignment():
     loc = makerv(0)
     scale = makerv(1)
-    x = VMapRV()
-    y = VMapRV()
+    x = slot()
+    y = slot()
     with Loop(3) as i:
         x[i] = normal(loc, scale)
         with Loop(5) as j:
@@ -499,8 +499,8 @@ def test_2d_assignment():
 
 
 def test_2d_assignment_casting():
-    x = VMapRV()
-    y = VMapRV()
+    x = slot()
+    y = slot()
     with Loop(3) as i:
         x[i] = normal(0, 1)
         with Loop(5) as j:
@@ -517,7 +517,7 @@ def test_rhs_slicing1():
 
 def test_loops_with_full_slicing1():
     z = makerv([1, 2, 3])
-    x = VMapRV()
+    x = slot()
     scale = makerv(1)  # TODO: CURRENTLY NECESSARY!
     with Loop() as i:
         xi = normal(z[i], scale)
@@ -530,7 +530,7 @@ def test_loops_with_full_slicing1():
 
 def test_loops_with_full_slicing2():
     z = makerv([1, 2, 3])
-    x = VMapRV()
+    x = slot()
     with Loop(3) as i:
         # x[i] = normal_scale(z[i], scale)
         zi = z[i]
@@ -544,7 +544,7 @@ def test_loops_with_full_slicing2():
 
 def test_loops_with_full_slicing3():
     z = makerv([1, 2, 3])
-    x = VMapRV()
+    x = slot()
     with Loop() as i:
         # x[i] = normal_scale(z[i], scale)
         zi = z[i]
@@ -593,7 +593,7 @@ def test_shape_inside_two_loops_2d():
 def test_assign_syntax1():
     assert loops.Loop.loops == []
     x = makerv(np.random.randn(2, 3))
-    y = VMapRV()
+    y = slot()
     with Loop() as i:
         print(f"assigning to y[i] {loops=}")
         y[i] = x[i, :]
@@ -607,7 +607,7 @@ def test_assign_syntax1():
 def test_assign_syntax2():
     x = makerv(np.random.randn(2))
     y = makerv(np.random.randn(3))
-    z = VMapRV()
+    z = slot()
     with Loop() as i:
         with Loop() as j:
             z[i, j] = x[i] * y[j]
@@ -618,15 +618,15 @@ def test_assign_syntax2():
 
 def test_assign_syntax3():
     "What if there's no loop var on right?"
-    z = VMapRV()
+    z = slot()
     with Loop(3) as i:
         z[i] = normal(0, 1)
     assert z.shape == (3,)
 
 
 def test_full_syntax1():
-    x = VMapRV()
-    y = VMapRV()
+    x = slot()
+    y = slot()
     with Loop(3) as i:
         x[i] = normal(0, 1)
         with Loop(4) as j:
@@ -643,7 +643,7 @@ def test_full_syntax1():
 def test_double_loops1():
     z = makerv([[1, 2], [3, 4], [5, 6]])
 
-    x = VMapRV()
+    x = slot()
     with Loop(3) as i:
         with Loop(2) as j:
             zij = z[i, j]
@@ -659,7 +659,7 @@ def test_double_loops1_inline():
         with Loop(2) as j:
             zij = z[i, j]
             xij = normal(zij, zij)
-            (x := VMapRV())[i, j] = xij
+            (x := slot())[i, j] = xij
     assert x.shape == (3, 2)
 
 
@@ -667,7 +667,7 @@ def test_double_loops2():
     x = makerv([7, 8, 9])
     y = makerv([10, 11])
 
-    z = VMapRV()
+    z = slot()
     with Loop(3) as i:
         with Loop(2) as j:
             z[i, j] = x[i] + y[j]
@@ -685,7 +685,7 @@ def test_double_loops3():
     x = makerv([7, 8, 9])
     y = makerv([[1, 2], [3, 4], [5, 6]])
 
-    z = VMapRV()
+    z = slot()
     with Loop(3) as i:
         with Loop(2) as j:
             z[i, j] = x[i] + y[i, j]
@@ -703,8 +703,8 @@ def test_double_loops4():
     x = makerv([7, 8, 9])
     y = makerv([[1, 2], [3, 4], [5, 6]])
 
-    z = VMapRV()
-    u = VMapRV()
+    z = slot()
+    u = slot()
     with Loop(3) as i:
         z[i] = x[i] + x[i]
         with Loop(2) as j:
@@ -730,8 +730,8 @@ def test_double_loops5():
 
     assert scale_x.shape == (3, 2)
 
-    z = VMapRV()
-    x = VMapRV()
+    z = slot()
+    x = slot()
     with Loop(3) as i:
         z[i] = normal(loc[i], scale_z[i])
         with Loop(2) as j:
@@ -745,8 +745,8 @@ def test_double_loops6():
 
     assert scale_x.shape == (3, 2)
 
-    z = VMapRV()
-    x = VMapRV()
+    z = slot()
+    x = slot()
     with Loop() as i:
         z[i] = normal(loc[i], scale_z[i])
         with Loop() as j:
@@ -754,7 +754,7 @@ def test_double_loops6():
 
 
 def test_loop_index_as_constant1():
-    z = VMapRV()
+    z = slot()
     with Loop(5) as i:
         z[i] = exponential(i)
     print(f"{z=}")
@@ -763,7 +763,7 @@ def test_loop_index_as_constant1():
 
 
 def test_loop_index_as_constant2():
-    z = VMapRV()
+    z = slot()
     with Loop(5) as i:
         z[i] = exponential(1) + i
     assert z.op == VMap(ir.Add(), (0, 0), 5)
@@ -772,14 +772,14 @@ def test_loop_index_as_constant2():
 
 
 def test_loop_index_as_constant3():
-    z = VMapRV()
+    z = slot()
     with Loop(5) as i:
         z[i] = i
     assert z.op == Constant(range(5))
 
 
 def test_loop_index_as_constant4():
-    z = VMapRV()
+    z = slot()
     with Loop(5) as i:
         z[i] = i + exponential(1)
     assert z.op == VMap(ir.Add(), (0, 0), 5)
@@ -788,7 +788,7 @@ def test_loop_index_as_constant4():
 
 
 def test_loop_index_as_constant5():
-    z = VMapRV()
+    z = slot()
     with Loop(3) as i:
         with Loop(4) as j:
             z[i, j] = i + j
@@ -821,10 +821,10 @@ def test_dirichlet():
         if coinflip():
             beta = makerv(beta)
 
-        phi = VMapRV()
-        theta = VMapRV()
-        w = VMapRV()
-        z = VMapRV()
+        phi = slot()
+        theta = slot()
+        w = slot()
+        z = slot()
         with Loop(K) as k:
             phi[k] = dirichlet(beta)
         with Loop(M) as m:
@@ -860,7 +860,7 @@ def test_logistic_regression_1d():
     y_obs = np.random.randint(ndata)
     w = normal(0, 1)
 
-    y = VMapRV()
+    y = slot()
     with Loop(ndata) as n:
         y[n] = bernoulli_logit(w * X[n])
 
@@ -872,7 +872,7 @@ def test_elementwise_mul_in_loop():
 
     w = makerv(np.ones(5))
     X = makerv(np.ones((7, 5)))
-    y = VMapRV()
+    y = slot()
     with Loop(7) as n:
         y[n] = elementwise_mul(w, X[n])
         assert y[n].shape == (5,)
@@ -883,12 +883,12 @@ def test_elementwise_mul_in_loop():
 def test_elementwise_mul_in_loop_after_vmap():
     elementwise_mul = vmap(mul)
 
-    w = VMapRV()
+    w = slot()
     with Loop(5) as i:
         w[i] = normal(0, 1)
 
     X = makerv(np.ones((7, 5)))
-    y = VMapRV()
+    y = slot()
     with Loop(7) as n:
         y[n] = elementwise_mul(w, X[n])
         assert y[n].shape == (5,)
@@ -923,14 +923,14 @@ def test_logistic_regression_all_variants():
         X = makerv(np.random.randn(ndata, ndims))
 
         if coinflip():
-            w = VMapRV()
+            w = slot()
             with Loop(ndims) as i:
                 w[i] = normal(0, 1)
         else:
             w = vmap(normal, None, ndims)(0, 1)
 
-        y = VMapRV()
-        score_elementwise = VMapRV()
+        y = slot()
+        score_elementwise = slot()
         with Loop(ndata) as n:
             if coinflip():
                 score = w @ X[n]
@@ -951,13 +951,13 @@ def test_logistic_regression():
     ndata = 100
     X = makerv(np.random.randn(ndata, ndims))
 
-    w = VMapRV()
+    w = slot()
     with Loop(ndims) as i:
         w[i] = normal(0, 1)
 
     elementwise_mul = vmap(mul)
 
-    y = VMapRV()
+    y = slot()
     with Loop(ndata) as n:
         score = sum(elementwise_mul(w, X[n]), axis=0)
         y[n] = bernoulli_logit(score)
@@ -970,12 +970,12 @@ def test_logistic_regression_fully_looped():
     ndata = 100
     X = makerv(np.random.randn(ndata, ndims))
 
-    w = VMapRV()
+    w = slot()
     with Loop(ndims) as i:
         w[i] = normal(0, 1)
 
-    y = VMapRV()
-    score_elementwise = VMapRV()
+    y = slot()
+    score_elementwise = slot()
     with Loop(ndata) as n:
         with Loop(ndims) as i:
             score_elementwise[n, i] = w[i] * X[n, i]
@@ -996,14 +996,14 @@ def test_heirarchical():
 
     x = makerv(np.random.randn(nusers, nobs, ndims))
 
-    w = VMapRV()
+    w = slot()
     with Loop(nusers) as i:
         with Loop(ndims) as j:
             w[i, j] = normal(0, 1)
 
     assert w.op == VMap(VMap(ir.Normal(), (None, None), ndims), (None, None), nusers)
 
-    y = VMapRV()
+    y = slot()
     with Loop(nusers) as i:
         with Loop(nobs) as k:
             y[i, k] = normal(w[i] @ x[i, k, :], 1)
@@ -1020,7 +1020,7 @@ def test_generated_nodes_with_loops():
     from cleanpangolin.interface.vmap import generated_nodes
 
     def f(x):
-        y = vmaprv()
+        y = slot()
         with Loop() as i:
             y[i] = x[i]
         return [y]

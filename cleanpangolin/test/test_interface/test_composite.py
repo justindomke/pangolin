@@ -1,7 +1,7 @@
 from cleanpangolin.interface import *
 from cleanpangolin.ir import Composite
 from cleanpangolin.interface.composite import make_composite, composite
-from cleanpangolin.interface.loops import Loop, VMapRV
+from cleanpangolin.interface.loops import Loop, slot
 
 def test_make_composite_plain_normal():
     op, consts = make_composite(normal, (), ())
@@ -113,8 +113,8 @@ def test_composite_with_loops():
     def f(x,y):
         with Loop() as i:
             with Loop() as j:
-                (c := VMapRV())[i,j] = x[i] * y[j]
-                (d := VMapRV())[i,j] = exp(c[i,j])
+                (c := slot())[i, j] = x[i] * y[j]
+                (d := slot())[i, j] = exp(c[i, j])
         return d
 
     x = vmap(normal,None,5)(0,1)

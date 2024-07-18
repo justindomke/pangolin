@@ -307,59 +307,60 @@ class HideLoops:
         Loop.loops = self.old_loops
 
 
-class VMapRV(OperatorRV):
-    """
-    A VMapRV is a "slot" into which you can assign inside of a Loop context. While
-    technically a RV, nothing is initialized until a single assigment call, which
-    must include all current loops, in order.
+# class slot(OperatorRV):
+#     """
+#     A VMapRV is a "slot" into which you can assign inside of a Loop context. While
+#     technically a RV, nothing is initialized until a single assigment call, which
+#     must include all current loops, in order.
+#
+#     Examples
+#     --------
+#     >>> from pangolin.loops import VMapRV, Loop
+#     >>> from pangolin import normal
+#     >>> x = VMapRV()
+#     >>> with Loop(3) as i:
+#     >>>     x[i] = normal(0,1)
+#     >>> x.shape
+#     (3,)
+#     """
+#
+#     def __init__(self, copy_rv=True):
+#         # do not call super!
+#         self.copy_rv = copy_rv
+#         pass
+#
+#     def __setitem__(self, idx, value):
+#         # TODO: somehow allow full slices for clarity?
+#
+#         if isinstance(value, Loop):
+#             value = loop_makerv(value)
+#
+#         assert isinstance(value, SlicedRV)
+#
+#         if Loop.loops == []:
+#             raise Exception("can't assign into VMapRV outside of Loop context")
+#         elif len(Loop.loops) == 1:
+#             assert Loop.loops == [idx]
+#         else:
+#             assert tuple(Loop.loops) == idx, "must assign using all loops, in order"
+#
+#         if self.copy_rv:
+#             # try to "become" the RV being copied
+#             super().__init__(value.full_rv.op, *value.full_rv.parents)
+#         else:
+#             # explicitly index from the RV being copied
+#
+#             with HideLoops():  # prevent indexing from seeing loops!
+#                 copy = value.full_rv[:]
+#             super().__init__(copy.op, *copy.parents)
+#         return self
 
-    Examples
-    --------
-    >>> from pangolin.loops import VMapRV, Loop
-    >>> from pangolin import normal
-    >>> x = VMapRV()
-    >>> with Loop(3) as i:
-    >>>     x[i] = normal(0,1)
-    >>> x.shape
-    (3,)
-    """
-
-    def __init__(self, copy_rv=True):
-        # do not call super!
-        self.copy_rv = copy_rv
-        pass
-
-    def __setitem__(self, idx, value):
-        # TODO: somehow allow full slices for clarity?
-
-        if isinstance(value, Loop):
-            value = loop_makerv(value)
-
-        assert isinstance(value, SlicedRV)
-
-        if Loop.loops == []:
-            raise Exception("can't assign into VMapRV outside of Loop context")
-        elif len(Loop.loops) == 1:
-            assert Loop.loops == [idx]
-        else:
-            assert tuple(Loop.loops) == idx, "must assign using all loops, in order"
-
-        if self.copy_rv:
-            # try to "become" the RV being copied
-            super().__init__(value.full_rv.op, *value.full_rv.parents)
-        else:
-            # explicitly index from the RV being copied
-
-            with HideLoops():  # prevent indexing from seeing loops!
-                copy = value.full_rv[:]
-            super().__init__(copy.op, *copy.parents)
-        return self
-
-def vmaprv():
+def slot():
 
     rv_type = type(makerv(1))
+    print(f"{rv_type=}")
 
-    class VMapRV(rv_type):
+    class VMapRV:
         """
         A VMapRV is a "slot" into which you can assign inside of a Loop context. While
         technically a RV, nothing is initialized until a single assigment call, which
@@ -398,7 +399,12 @@ def vmaprv():
 
             if self.copy_rv:
                 # try to "become" the RV being copied
-                super().__init__(value.full_rv.op, *value.full_rv.parents)
+                # super().__init__(self, value.full_rv.op, *value.full_rv.parents)
+                # ultra evil changing of self type!
+                self.__class__ = type(value.full_rv)
+                assert isinstance(self, type(value.full_rv))
+                print(f"1 {self.__class__=}")
+                type(value.full_rv).__init__(self, value.full_rv.op, *value.full_rv.parents)
             else:
                 # explicitly index from the RV being copied
 
