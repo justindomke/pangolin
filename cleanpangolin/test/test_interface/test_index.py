@@ -91,7 +91,7 @@ def test_simplify_indices_partial_slice_int_ellipses_int():
 
 
 def dotest(x, *idx):
-    x_rv = RV(Constant(x))
+    x_rv = OperatorRV(Constant(x))
     y = index(x_rv, *idx)
     z = x.__getitem__(idx)
     assert y.shape == z.shape

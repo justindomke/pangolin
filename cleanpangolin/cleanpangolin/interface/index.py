@@ -33,10 +33,9 @@ def pad_with_slices(ndim, idx):
 
 
 def convert_constants(idx):
-    from cleanpangolin.interface.interface import current_rv_class  # avoid circular import
+    from cleanpangolin.interface.interface import rv_factory  # avoid circular import
 
-    rv_class = current_rv_class()
-    return tuple(i if isinstance(i, (slice, RV)) else rv_class(Constant(i)) for i in idx)
+    return tuple(i if isinstance(i, (slice, RV)) else rv_factory(Constant(i)) for i in idx)
 
 
 def simplify_indices(ndim:int, idx):
@@ -77,7 +76,7 @@ def standard_index_fun(var: RV, *indices: RV | slice):
         The new indexed RV, conceptually equivalent to `var[*indices]`.
     """
 
-    from cleanpangolin.interface.interface import current_rv_class  # avoid circular import
+    from cleanpangolin.interface.interface import rv_factory  # avoid circular import
 
     indices = simplify_indices(var.ndim, indices)
 
@@ -86,7 +85,7 @@ def standard_index_fun(var: RV, *indices: RV | slice):
     slices = [i if isinstance(i, slice) else None for i in indices]
     parents = [i for i in indices if not isinstance(i, slice)]
 
-    return current_rv_class()(Index(*slices), var, *parents)
+    return rv_factory(Index(*slices), var, *parents)
 
 
 index_funs = [standard_index_fun]

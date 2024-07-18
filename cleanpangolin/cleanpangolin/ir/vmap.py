@@ -35,7 +35,8 @@ class VMap(Op):
                 axis is not None for axis in in_axes
             ), "if axis_size=None, at least one axis must be mapped"
         else:
-            assert isinstance(axis_size, int), "axis_size must be None or int"
+            if not isinstance(axis_size, (int,np.integer)):
+                raise Exception(f"axis_size must be None or int was {type(axis_size)}")
 
         self.base_op = base_op
         self.in_axes = in_axes

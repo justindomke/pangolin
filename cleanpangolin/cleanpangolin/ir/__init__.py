@@ -19,10 +19,10 @@ from cleanpangolin.ir.multivariate_dists import *
 from cleanpangolin.ir.multivariate_funs import *
 from cleanpangolin.ir.index import Index
 from cleanpangolin.ir.vmap import VMap
-
+from cleanpangolin.ir.composite import Composite
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
-           'multivariate_funs','index','VMap','vmap','Add']
+           'multivariate_funs','index','VMap','vmap','Add','Index','Composite']
 
 # force everything to be documented
 # __all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]

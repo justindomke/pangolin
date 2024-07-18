@@ -13,7 +13,8 @@ from cleanpangolin.interface import (
 from cleanpangolin.ir import VMap
 
 import numpy as np  # type: ignore
-from cleanpangolin.interface.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, VMapRV
+from cleanpangolin.interface.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, \
+    VMapRV, vmaprv
 from cleanpangolin import *
 from cleanpangolin.interface import loops, OperatorRV
 from cleanpangolin.interface.index import index_funs
@@ -460,6 +461,15 @@ def test_assignment():
     assert x.parents == (loc, scale)
     assert isinstance(x, OperatorRV)
 
+def test_assignment_inline():
+    loc = makerv(0)
+    scale = makerv(1)
+    with Loop(3) as i:
+        (x := VMapRV())[i] = normal(loc, scale)
+    assert x.op == VMap(ir.Normal(), (None, None), 3)
+    assert x.parents == (loc, scale)
+    assert isinstance(x, OperatorRV)
+
     # print_upstream(x)
 
 
@@ -624,6 +634,7 @@ def test_full_syntax1():
     assert x.shape == (3,)
     assert y.shape == (3, 4)
 
+
 ###############################################################################
 # test full functionality
 ###############################################################################
@@ -638,6 +649,17 @@ def test_double_loops1():
             zij = z[i, j]
             xij = normal(zij, zij)
             x[i, j] = xij
+    assert x.shape == (3, 2)
+
+
+def test_double_loops1_inline():
+    z = makerv([[1, 2], [3, 4], [5, 6]])
+
+    with Loop(3) as i:
+        with Loop(2) as j:
+            zij = z[i, j]
+            xij = normal(zij, zij)
+            (x := VMapRV())[i, j] = xij
     assert x.shape == (3, 2)
 
 
@@ -731,7 +753,6 @@ def test_double_loops6():
             x[i, j] = normal(z[i], scale_x[i, j])
 
 
-
 def test_loop_index_as_constant1():
     z = VMapRV()
     with Loop(5) as i:
@@ -746,8 +767,9 @@ def test_loop_index_as_constant2():
     with Loop(5) as i:
         z[i] = exponential(1) + i
     assert z.op == VMap(ir.Add(), (0, 0), 5)
-    assert z.parents[0].op == VMap(ir.Exponential(),(None,),5)
+    assert z.parents[0].op == VMap(ir.Exponential(), (None,), 5)
     assert z.parents[1].op == Constant(range(5))
+
 
 def test_loop_index_as_constant3():
     z = VMapRV()
@@ -760,25 +782,29 @@ def test_loop_index_as_constant4():
     z = VMapRV()
     with Loop(5) as i:
         z[i] = i + exponential(1)
-    assert z.op == VMap(ir.Add(), (0,0), 5)
+    assert z.op == VMap(ir.Add(), (0, 0), 5)
     assert z.parents[0].op == Constant(range(5))
     assert z.parents[1].op == VMap(ir.Exponential(), (None,), 5)
+
 
 def test_loop_index_as_constant5():
     z = VMapRV()
     with Loop(3) as i:
         with Loop(4) as j:
-            z[i,j] = i+j
-    assert z.op == VMap(VMap(ir.Add(), (None,0), 4), (0,None), 3)
+            z[i, j] = i + j
+    assert z.op == VMap(VMap(ir.Add(), (None, 0), 4), (0, None), 3)
     assert z.parents[0].op == Constant(range(3))
     assert z.parents[1].op == Constant(range(4))
 
+
 ###############################################################################
-# Test some real-ish examples
+# Test some real-ish examples. First up, dirichlet
 ###############################################################################
+
 
 def coinflip():
     return bool(np.random.randint(2))
+
 
 def test_dirichlet():
     K = 5
@@ -790,7 +816,7 @@ def test_dirichlet():
     for reps in range(10):
         alpha = np.ones(K)
         if coinflip():
-             alpha = makerv(alpha)
+            alpha = makerv(alpha)
         beta = np.ones(V)
         if coinflip():
             beta = makerv(beta)
@@ -805,9 +831,9 @@ def test_dirichlet():
             theta[m] = dirichlet(alpha)
             with Loop(N) as n:
                 if coinflip():
-                    z[m,n] = categorical(theta[m])
+                    z[m, n] = categorical(theta[m])
                 else:
-                    z[m, n] = categorical(theta[m,:])
+                    z[m, n] = categorical(theta[m, :])
                 if coinflip():
                     w[m, n] = categorical(phi[z[m, n]])
                 else:
@@ -823,19 +849,182 @@ def test_dirichlet():
         assert z.parents[0] == theta
 
 
-# def test_logistic_regression():
-#     ndims = 20
-#     ndata = 100
-#     X = makerv(np.random.randn(ndata,ndims))
-#     y = np.random.randint(ndata)
-#     w = VMapRV()
-#     with Loop(ndims) as i:
-#         w[i] = normal(0,1)
-#     assert w.shape == (ndims,)
-#
-#     with Loop(ndata) as n:
-#         tmp = vmap(mul)(w,X[n])
-#
-#         #score = sum(vmap(mul)(w,X[n]))
-#
-#
+###############################################################################
+# next, logistic regression
+###############################################################################
+
+
+def test_logistic_regression_1d():
+    ndata = 100
+    X = makerv(np.random.randn(ndata))
+    y_obs = np.random.randint(ndata)
+    w = normal(0, 1)
+
+    y = VMapRV()
+    with Loop(ndata) as n:
+        y[n] = bernoulli_logit(w * X[n])
+
+        # score = sum(vmap(mul)(w,X[n]))
+
+
+def test_elementwise_mul_in_loop():
+    elementwise_mul = vmap(mul)
+
+    w = makerv(np.ones(5))
+    X = makerv(np.ones((7, 5)))
+    y = VMapRV()
+    with Loop(7) as n:
+        y[n] = elementwise_mul(w, X[n])
+        assert y[n].shape == (5,)
+    assert y.shape == (7, 5)
+    assert y.op == VMap(VMap(ir.Mul(), (0, 0), 5), (None, 0), 7)
+
+
+def test_elementwise_mul_in_loop_after_vmap():
+    elementwise_mul = vmap(mul)
+
+    w = VMapRV()
+    with Loop(5) as i:
+        w[i] = normal(0, 1)
+
+    X = makerv(np.ones((7, 5)))
+    y = VMapRV()
+    with Loop(7) as n:
+        y[n] = elementwise_mul(w, X[n])
+        assert y[n].shape == (5,)
+    assert y.shape == (7, 5)
+    assert y.op == VMap(VMap(ir.Mul(), (0, 0), 5), (None, 0), 7)
+
+
+def check_logistic_regression_outputs(ndims, ndata, w, y):
+    assert w.shape == (ndims,)
+    assert w.op == VMap(ir.Normal(), (None, None), ndims)
+    assert w.parents[0].op == ir.Constant(0)
+    assert w.parents[1].op == ir.Constant(1)
+    assert y.op == VMap(ir.BernoulliLogit(), (0,), ndata)
+    [scores] = y.parents
+    if scores.op == VMap(ir.MatMul(), (None, 0), ndata):
+        assert scores.parents[0] == w
+        assert isinstance(scores.parents[1].op, Constant)
+        assert scores.parents[1].shape == (ndata, ndims)
+    else:
+        assert scores.op == VMap(ir.Sum(0), (0,), ndata)
+        [elementwise_scores] = scores.parents
+        assert elementwise_scores.op == VMap(VMap(ir.Mul(), (0, 0), ndims), (None, 0), ndata)
+
+
+def test_logistic_regression_all_variants():
+    for reps in range(10):
+        ndims = np.random.choice([2, 5, 10])
+        ndata = np.random.choice([2, 5, 10])
+        print(f"{ndims=}")
+        print(f"{ndata=}")
+
+        X = makerv(np.random.randn(ndata, ndims))
+
+        if coinflip():
+            w = VMapRV()
+            with Loop(ndims) as i:
+                w[i] = normal(0, 1)
+        else:
+            w = vmap(normal, None, ndims)(0, 1)
+
+        y = VMapRV()
+        score_elementwise = VMapRV()
+        with Loop(ndata) as n:
+            if coinflip():
+                score = w @ X[n]
+            elif coinflip():
+                score = sum(vmap(mul)(w, X[n]), axis=0)
+            else:
+                with Loop(ndims) as i:
+                    score_elementwise[n, i] = w[i] * X[n, i]
+                score = sum(score_elementwise[n], axis=0)
+
+            y[n] = bernoulli_logit(score)
+
+        check_logistic_regression_outputs(ndims, ndata, w, y)
+
+
+def test_logistic_regression():
+    ndims = 20
+    ndata = 100
+    X = makerv(np.random.randn(ndata, ndims))
+
+    w = VMapRV()
+    with Loop(ndims) as i:
+        w[i] = normal(0, 1)
+
+    elementwise_mul = vmap(mul)
+
+    y = VMapRV()
+    with Loop(ndata) as n:
+        score = sum(elementwise_mul(w, X[n]), axis=0)
+        y[n] = bernoulli_logit(score)
+
+    check_logistic_regression_outputs(ndims, ndata, w, y)
+
+
+def test_logistic_regression_fully_looped():
+    ndims = 20
+    ndata = 100
+    X = makerv(np.random.randn(ndata, ndims))
+
+    w = VMapRV()
+    with Loop(ndims) as i:
+        w[i] = normal(0, 1)
+
+    y = VMapRV()
+    score_elementwise = VMapRV()
+    with Loop(ndata) as n:
+        with Loop(ndims) as i:
+            score_elementwise[n, i] = w[i] * X[n, i]
+        score = sum(score_elementwise[n], axis=0)
+        y[n] = bernoulli_logit(score)
+
+    check_logistic_regression_outputs(ndims, ndata, w, y)
+
+
+###############################################################################
+# next, heirarchical models
+###############################################################################
+
+def test_heirarchical():
+    nusers = 5
+    ndims = 6
+    nobs = 7
+
+    x = makerv(np.random.randn(nusers, nobs, ndims))
+
+    w = VMapRV()
+    with Loop(nusers) as i:
+        with Loop(ndims) as j:
+            w[i, j] = normal(0, 1)
+
+    assert w.op == VMap(VMap(ir.Normal(), (None, None), ndims), (None, None), nusers)
+
+    y = VMapRV()
+    with Loop(nusers) as i:
+        with Loop(nobs) as k:
+            y[i, k] = normal(w[i] @ x[i, k, :], 1)
+
+    assert y.op == VMap(VMap(ir.Normal(), (0, None), nobs), (0, None), nusers)
+    scores = y.parents[0]
+    assert scores.op == VMap(VMap(ir.MatMul(), (None, 0), nobs), (0, 0), nusers)
+
+###############################################################################
+# Test that you can run generated_nodes on a function involving loops
+###############################################################################
+
+def test_generated_nodes_with_loops():
+    from cleanpangolin.interface.vmap import generated_nodes
+
+    def f(x):
+        y = vmaprv()
+        with Loop() as i:
+            y[i] = x[i]
+        return [y]
+
+    x = makerv([1,2,3])
+
+    generated_nodes(f,x)

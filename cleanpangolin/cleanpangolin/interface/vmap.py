@@ -4,7 +4,7 @@ from . import OperatorRV
 from cleanpangolin.ir import Op, RV, VMap, Constant
 from cleanpangolin import dag, ir, util
 from collections.abc import Callable
-from .interface import makerv, current_rv_class
+from .interface import makerv, rv_factory
 from typing import Sequence, Type
 import jax.tree_util
 from . import interface
@@ -51,8 +51,6 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
         # arrays?
         args = jax.tree_util.tree_map(makerv, args)
 
-        rv_class = current_rv_class()
-
         # if isinstance(d, VMapDist) and i == 0:
         #     my_dummy = AbstractRVWithDist(d.base_cond_dist, new_shape)
         # else:
@@ -67,7 +65,7 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
 
             # In old code tried to preserve x.op when isinstance(x.op, VMap)
             op = AbstractOp(new_shape, x.op.random)
-            return rv_class(op)
+            return rv_factory(op)
 
         dummy_args = util.tree_map_recurse_at_leaf(
             get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
@@ -150,7 +148,7 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
         pass
 
     # some outputs might be non-abstract if independent of abstract_args
-    with interface.SetCurrentRV(TracerRV):
+    with interface.SetRVFactory(TracerRV):
         abstract_out = fun(*args)
 
     if not isinstance(abstract_out, list):
@@ -184,8 +182,7 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
                 abstract_to_concrete[p] if isinstance(p, TracerRV) else p
                 for p in abstract_var.parents
             )
-            rv_class = current_rv_class()
-            concrete_var = rv_class(abstract_var.op, *new_parents)
+            concrete_var = rv_factory(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var
 
     all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in args]
@@ -235,17 +232,18 @@ def vmap_dummy_args(in_axes: Sequence[int | None], axis_size: int | None, *args:
     if not util.all_unique(args):
         raise ValueError("vmap_dummy_args requires all unique arguments")
 
-    rv_class = current_rv_class()
-
     dummy_args = []
     for i, a in zip(in_axes, args, strict=True):
         new_shape, new_axis_size = ir.vmap.split_shape(a.shape, i)
 
-        if isinstance(a.op, VMap) and i == 0:
-            new_op = a.op.base_op  # why do we care?
-        else:
-            new_op = AbstractOp(new_shape, a.op.random)
-        my_dummy = rv_class(new_op)  # no parents!
+        # once upon a time we did this—but don't remember the point of it
+        # if isinstance(a.op, VMap) and i == 0:
+        #     new_op = a.op.base_op  # why do we care?
+        # else:
+        #     new_op = AbstractOp(new_shape, a.op.random)
+
+        new_op = AbstractOp(new_shape, a.op.random)
+        my_dummy = rv_factory(new_op)  # no parents!
 
         dummy_args.append(my_dummy)
         if axis_size is None:
@@ -281,8 +279,6 @@ def vmap_subgraph(roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_
     if any(a in dummy_roots for a in dummy_nodes):
         raise ValueError("dummy_roots cannot be included in dummy_nodes")
 
-    rv_class = current_rv_class()
-
     dummy_to_real = util.WriteOnceDefaultDict(lambda p: p)
     dummy_mapped_axis = util.WriteOnceDefaultDict(lambda p: None)
     for dummy_arg, i, arg in zip(dummy_roots, roots_axes, roots, strict=True):
@@ -302,7 +298,7 @@ def vmap_subgraph(roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_
             new_op = VMap(dummy_node.op, in_axes=my_in_axes, axis_size=axis_size)
             new_axis = 0
 
-        dummy_to_real[dummy_node] = rv_class(new_op, *parents)
+        dummy_to_real[dummy_node] = rv_factory(new_op, *parents)
         dummy_mapped_axis[dummy_node] = new_axis
     real_nodes = [dummy_to_real[dummy_node] for dummy_node in dummy_outputs]
     return real_nodes
@@ -415,17 +411,17 @@ def plate(*args, size: int | None = None, in_axes=0):
 
 class Loop:
     def __init__(self, length, auto_assign=True):
-        rv_class = interface.current_rv_class()
+        #rv_class = interface.rv_factory()
         self.auto_assign = auto_assign
         self.length = length
         self.generated_rvs = []
         self.loop_vars = {}
-        import numpy as np
 
-        self.range = rv_class(Constant(np.arange(length)))
+        self.range = interface.rv_factory(Constant(range(length)))
         self.i = self.range[0]
 
-        class NewRV(rv_class):
+        # TODO: instead of creating new class, create new factory?
+        class NewRV(OperatorRV):
             def __init__(myself, *args, **vargs):
                 self.generated_rvs.append(myself)
                 myself.my_loop = self
@@ -434,11 +430,11 @@ class Loop:
         self.new_rv_class = NewRV
 
     def __enter__(self) -> OperatorRV:
-        interface.rv_classes.append(self.new_rv_class)
+        interface.rv_factories.append(self.new_rv_class)
         return self.i
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        assert self.new_rv_class == interface.rv_classes.pop()
+        assert self.new_rv_class == interface.rv_factories.pop()
         if self.auto_assign:
             loop_vars = [l for l in self.loop_vars]
             dummy_loop_vars = [self.loop_vars[l] for l in loop_vars]
@@ -471,3 +467,9 @@ class LoopVar(OperatorRV):
         if hasattr(self,"dummy_rv"):
             out += "(" + repr(self.dummy_rv) + ")"
         return out
+
+
+# indexed_vmap(
+#     lambda i, x, y:
+#     (z := VMapRV())[:,i] = x[:,i] * y[:,i]
+# )

@@ -28,6 +28,9 @@ def api(fun):
     for_api.append(fun.__name__)
     return fun
 
+####################################################################################################
+# The core OperatorRV class. Like an RV except has operator overloading
+####################################################################################################
 
 class OperatorRV(RV):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
@@ -85,100 +88,89 @@ class OperatorRV(RV):
     #         yield self[n]
 
 
-# class RVManager(ABC):
-#     @classmethod
-#     @abstractmethod
-#     def makerv(cls,x) -> RV:
-#         pass
-#
-#     @classmethod
-#     @abstractmethod
-#     def create_rv(cls, op, *parents):
-#         pass
-#
-#
-# class OperatorRVMangager(RVManager):
-#     @classmethod
-#     def create_rv(cls, op, *parents):
-#         return OperatorRV(op, *parents)
-#
-#     @classmethod
-#     def makerv(cls,x) -> RV:
-#         if isinstance(x, RV):
-#             return x
-#         else:
-#             return OperatorRV(Constant(x))
+####################################################################################################
+# rv_factory
+####################################################################################################
 
-def assert_not_non_operator_rv(x):
-    if isinstance(x,RV):
-        if not isinstance(x,OperatorRV):
-            raise Exception("got non-operatorRV RV {type(x)} {x}")
-
-rv_classes = [OperatorRV]
+def rv_factory(op, *args) -> OperatorRV:
+    """
+    Given an op and some args, create an OperatorRV. By default, this just calls `OperatorRV`.
+    But this can be overridden if you'd like to mess with subclasses by putting a new function
+    on the `rv_factories` list.
+    """
+    return rv_factories[-1](op, *args)
 
 
-def current_rv_class():
-    return rv_classes[-1]
+rv_factories = [OperatorRV]
 
-
-class SetCurrentRV:
-    def __init__(self, rv_class):
-        self.rv_class = rv_class
+class SetRVFactory:
+    def __init__(self, rv_factory):
+        self.rv_factory = rv_factory
 
     def __enter__(self):
-        rv_classes.append(self.rv_class)
+        rv_factories.append(self.rv_factory)
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        assert rv_classes.pop() == self.rv_class
+        assert rv_factories.pop() == self.rv_factory
 
 
-def my_makerv(x) -> OperatorRV:
-    assert_not_non_operator_rv(x)
+####################################################################################################
+# makerv
+####################################################################################################
 
-    if isinstance(x, OperatorRV):
-        return x
-    else:
-        return current_rv_class()(Constant(x))
-
-
-makerv_funs = [my_makerv]
+def non_operator_rv(x):
+    if isinstance(x, RV):
+        if not isinstance(x, OperatorRV):
+            return True
+    return False
 
 
 @api
 def makerv(x) -> OperatorRV:
-    "Cast something to a constant if necessary"
-    out = makerv_funs[-1](x)
+    """
+    In principle this is just a function that does nothing if the input is OperatorRV and creates a
+    new OperatorRV(Constant(...)) if it's something that can be cast to a numpy array. This
+    function is called by all the standard functions (`add`, `normal`, etc.) so that users can
+    directly pass constants.
+
+    This behavior, however, should be programmable, in case someone would like to use some other
+    class of `RV` (which must be a subclass of `OperatorRV`). So we create a list `makerv_funs` that
+    outside code can (presumably temporarily) stuck a new function on top of.
+    """
+    assert not non_operator_rv(x)
+    my_makerv = makerv_funs[-1]
+    out = my_makerv(x)
     if not isinstance(out, OperatorRV):
         raise Exception(
             f"Custom makerv function must return subclass of OperatorRV was " f"{type(out)}"
         )
     return out
 
+def standard_makerv(x) -> OperatorRV:
+    """
+    The "standard" makerv function. If the input is `OperatorRV`, then it just returns it.
+    Otherwise, creates a new `op=Constant(x)` and then creates an `OperatorRV` using
+    `current_rv_factory()`
+    """
+    assert not non_operator_rv(x)
 
-# def wrap_op(op: Op, docstring: str = ""):
-#     """
-#     Given an op, create a convenience function.
-#
-#     Always returns a new RV of the most specific class. (Which must be unique)
-#     """
-#
-#     def fun(*args):
-#         args = tuple(makerv(a) for a in args)
-#         rv_class = current_rv_class()
-#         return rv_class(op, *args)
-#
-#     fun.__doc__ = docstring
-#
-#     return fun
+    if isinstance(x, OperatorRV):
+        return x
+    else:
+        return rv_factory(Constant(x))
+
+
+makerv_funs = [standard_makerv]
+
+
+####################################################################################################
+# scalar ops
+####################################################################################################
 
 
 def create_rv(op, *args):
     args = tuple(makerv(a) for a in args)
-    rv_class = current_rv_class()
-    return rv_class(op, *args)
-
-
-# scalar ops
+    return rv_factory(op, *args)
 
 
 @api

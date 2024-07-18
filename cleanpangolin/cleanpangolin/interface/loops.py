@@ -1,21 +1,16 @@
 """WARNING: The loops module is highly experimental.
 """
 
-from cleanpangolin.ir import RV, Op, VMap, Constant
+from cleanpangolin.ir import RV, Op, VMap, Constant, Index
 from typing import Sequence, List, Self
 from cleanpangolin import util
-from cleanpangolin.interface import makerv, rv_classes, current_rv_class, makerv_funs, OperatorRV
+from cleanpangolin.interface import makerv, rv_factories, rv_factory, makerv_funs, OperatorRV
 from cleanpangolin.interface.vmap import AbstractOp
 import numpy as np
 from cleanpangolin.interface.index import index_funs, standard_index_fun, eliminate_ellipses, pad_with_slices
 from cleanpangolin.interface import index
 
-# when enter a loop context:
-
 def looped_index(var, *idx):
-    #if isinstance(var, VMapRV):
-    #    return VMapRV(loop_makerv())
-
     idx = eliminate_ellipses(var.ndim, idx)
     idx = pad_with_slices(var.ndim, idx)
 
@@ -30,27 +25,16 @@ def looped_index(var, *idx):
 
 
 def rv_maker(op: Op, *parents: OperatorRV):
-    assert isinstance(op,Op)
     return make_sliced_rv(op, *parents, all_loops=Loop.loops)
 
 def loop_makerv(x):
     if isinstance(x,Loop):
-        return current_rv_class()(Constant(np.arange(x.length)))[x]
+      return rv_factory(Constant(np.arange(x.length)))[x]
     if isinstance(x, RV):
         assert isinstance(x,OperatorRV)
         return x
     else:
-        return current_rv_class()(Constant(x))
-
-# TODO: add this error checking code
-# if any(isinstance(p, Loop) for p in idx):
-#     for p in idx:
-#         assert isinstance(p, Loop) or p == slice(
-#             None
-#         ), "can only mix Loop with full slice"
-#     return slice_existing_rv(self, idx, Loop.loops)
-
-
+        return rv_factory(Constant(x))
 
 class Loop:
     """
@@ -74,16 +58,21 @@ class Loop:
 
     def __enter__(self, length=None):
         Loop.loops.append(self)
-        rv_classes.append(rv_maker)
+        rv_factories.append(rv_maker)
         index_funs.append(looped_index)
         makerv_funs.append(loop_makerv)
 
         return self
 
+    # def __index__(self):
+    #     range_rv = current_rv_class()(Constant(np.arange(self.length)))
+    #     return SlicedRV(Index(None), range_rv, range_rv, full_rv=range_rv, loops=[range_rv], \
+    #                                                                        loop_axes=[0])
+
     def __exit__(self, exc_type, exc_value, exc_tb):
         assert makerv_funs.pop() is loop_makerv
         assert index_funs.pop() is looped_index
-        assert rv_classes.pop() is rv_maker
+        assert rv_factories.pop() is rv_maker
         assert Loop.loops.pop() is self
 
     def __add__(self, other):
@@ -256,7 +245,7 @@ def make_sliced_rv(op: Op, *parents: OperatorRV, all_loops: list[Loop]) -> Opera
     ----------
     op: Op
         The op distribution to apply to create the new SlicedRV
-    *parents: tuple[RV,...]
+    *parents: tuple[OperatorRV,...]
         Parents for the sliced RV, which might be regular RVs or sliced RVs
     all_loops: list[Loop]
         Context of all relevant loops
@@ -357,8 +346,6 @@ class VMapRV(OperatorRV):
 
         if self.copy_rv:
             # try to "become" the RV being copied
-            #value = makerv(value)
-            #assert isinstance(value,SlicedRV)
             super().__init__(value.full_rv.op, *value.full_rv.parents)
         else:
             # explicitly index from the RV being copied
@@ -368,15 +355,58 @@ class VMapRV(OperatorRV):
             super().__init__(copy.op, *copy.parents)
         return self
 
-    # def __getitem__(self, idx):
-    #     if Loop.loops == []:
-    #         raise Exception("can't assign into VMapRV outside of Loop context")
-    #     elif len(Loop.loops) == 1:
-    #         assert Loop.loops == [idx]
-    #     else:
-    #         assert tuple(Loop.loops) == idx, "must assign using all loops, in order"
-    #     return self
+def vmaprv():
 
+    rv_type = type(makerv(1))
 
+    class VMapRV(rv_type):
+        """
+        A VMapRV is a "slot" into which you can assign inside of a Loop context. While
+        technically a RV, nothing is initialized until a single assigment call, which
+        must include all current loops, in order.
+
+        Examples
+        --------
+        >>> from pangolin.loops import VMapRV, Loop
+        >>> from pangolin import normal
+        >>> x = VMapRV()
+        >>> with Loop(3) as i:
+        >>>     x[i] = normal(0,1)
+        >>> x.shape
+        (3,)
+        """
+
+        def __init__(self, copy_rv=True):
+            # do not call super!
+            self.copy_rv = copy_rv
+            pass
+
+        def __setitem__(self, idx, value):
+            # TODO: somehow allow full slices for clarity?
+
+            if isinstance(value, Loop):
+                value = loop_makerv(value)
+
+            assert isinstance(value, SlicedRV)
+
+            if Loop.loops == []:
+                raise Exception("can't assign into VMapRV outside of Loop context")
+            elif len(Loop.loops) == 1:
+                assert Loop.loops == [idx]
+            else:
+                assert tuple(Loop.loops) == idx, "must assign using all loops, in order"
+
+            if self.copy_rv:
+                # try to "become" the RV being copied
+                super().__init__(value.full_rv.op, *value.full_rv.parents)
+            else:
+                # explicitly index from the RV being copied
+
+                with HideLoops():  # prevent indexing from seeing loops!
+                    copy = value.full_rv[:]
+                super().__init__(copy.op, *copy.parents)
+            return self
+
+    return VMapRV()
 
 # https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method
