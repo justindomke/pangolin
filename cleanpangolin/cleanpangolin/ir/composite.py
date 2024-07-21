@@ -4,9 +4,16 @@ from cleanpangolin import util
 from typing import Sequence
 from cleanpangolin import ir
 
+
 class Composite(Op):
-    def __init__(self, num_inputs: int, ops: tuple[Op,...], par_nums: tuple[tuple[int, ...],...]):
+    def __init__(
+        self,
+        num_inputs: int,
+        ops: tuple[Op, ...] | list[Op],
+        par_nums: tuple[tuple[int, ...], ...] | list[list[int]],
+    ):
         assert isinstance(num_inputs, int)
+        print(f"{ops=}")
         assert all(isinstance(d, Op) for d in ops)
         for my_par_nums in par_nums:
             assert all(isinstance(i, int) for i in my_par_nums)
@@ -14,7 +21,8 @@ class Composite(Op):
             assert not d.random, "all but last op for Composite must be non-random"
         self.num_inputs = num_inputs
         self.ops = tuple(ops)
-        self.par_nums = tuple(par_nums)
+        #self.par_nums = tuple(par_nums)
+        self.par_nums = tuple(tuple(pp) for pp in par_nums)
         super().__init__(name=f"Composite({ops[-1].name})", random=ops[-1].random)
 
     def _get_shape(self, *parents_shapes):
@@ -30,3 +38,15 @@ class Composite(Op):
 
     def __repr__(self):
         return f"Composite({self.num_inputs},{self.ops},{self.par_nums})"
+
+    def __eq__(self, other):
+        if isinstance(other, Composite):
+            return (
+                self.num_inputs == other.num_inputs
+                and self.ops == other.ops
+                and self.par_nums == other.par_nums
+            )
+        return False
+
+    def __hash__(self):
+        return hash((self.num_inputs, self.ops, self.par_nums))

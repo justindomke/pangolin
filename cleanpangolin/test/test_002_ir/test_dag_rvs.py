@@ -1,4 +1,4 @@
-"""like test_dag.py except using RVs
+"""like test_001_dag.py except using RVs
 """
 
 from cleanpangolin.dag import (

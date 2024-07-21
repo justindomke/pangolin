@@ -34,6 +34,12 @@ def api(fun):
 
 class OperatorRV(RV):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
+    n = 1
+
+    def __init__(self, op, *parents):
+        self.n = OperatorRV.n
+        OperatorRV.n += 1
+        super().__init__(op, *parents)
 
     def __add__(self, other):
         return add(self, other)

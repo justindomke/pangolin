@@ -1,6 +1,8 @@
 from cleanpangolin.ir import Composite
-from cleanpangolin.interface import OperatorRV
+from cleanpangolin.interface import OperatorRV, makerv
 from .vmap import generated_nodes, AbstractOp
+from cleanpangolin import util
+import jax.tree_util
 
 def make_composite(fun, *input_shapes):
     """
@@ -52,10 +54,34 @@ def make_composite(fun, *input_shapes):
 
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
-def composite(fun):
+def composite_flat(fun):
     from cleanpangolin.interface.interface import rv_factory
     def myfun(*inputs):
         input_shapes = [x.shape for x in inputs]
         op, consts = make_composite(fun,*input_shapes)
         return rv_factory(op, *consts, *inputs)
     return myfun
+
+
+def composite(fun):
+    from cleanpangolin.interface.interface import rv_factory
+    def myfun(*inputs):
+        # this casts at the SMALLEST level - [0,0,0] becomes three scalars, not a vector
+        # can't do more because level of granularity unclear
+        inputs = jax.tree_util.tree_map(makerv, inputs)
+        flat_fun, flatten_input, unflatten_output = util.flatten_fun(fun, *inputs)
+
+        # remove first output, not list
+        new_flat_fun = lambda *args: flat_fun(*args)[0]
+
+        flat_inputs = flatten_input(*inputs)
+
+        test_out = new_flat_fun(*flat_inputs)
+        print(f"{test_out=}")
+
+        flat_input_shapes = [x.shape for x in flat_inputs]
+        op, consts = make_composite(new_flat_fun, *flat_input_shapes)
+        return rv_factory(op, *consts, *flat_inputs)
+
+    return myfun
+

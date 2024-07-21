@@ -286,6 +286,8 @@ def make_sliced_rv(op: Op, *parents: OperatorRV, all_loops: list[Loop]) -> Opera
         full_parents = [p.full_rv if isinstance(p, SlicedRV) else p for p in parents]
 
         full_rv = OperatorRV(vmap_op, *full_parents)
+        #full_rv = rv_factory(vmap_op, *full_parents)
+        #full_rv = all_loops[-1].rv_factory(vmap_op, *full_parents)
 
         return SlicedRV(
             op,

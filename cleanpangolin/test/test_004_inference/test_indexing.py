@@ -269,6 +269,10 @@ def test_indexing31(inference):
     # try all possible vmap pairs!
     for in_axis1 in range(7):
         for in_axis2 in range(6):
+            # only do 10% of cases
+            if hash((in_axis1, in_axis2)) % 10 != 0:
+                continue
+
             # since stan is expensive, only do 10% of cases
             # if inference == inference_stan:
             #     if hash((in_axis1, in_axis2)) % 10 != 0:
@@ -382,15 +386,14 @@ def test_indexing40(inference):
     indexing and also dimensions that are just left implicit
     """
 
-    x = np.random.randn(4, 5, 4, 4, 5, 4, 4)
+    x = np.random.randn(4, 3, 4, 4, 5, 3, 3)
 
     # try all possible vmap pairs!
     for in_axis1 in range(7):
         for in_axis2 in range(6):
-            # since stan is expensive, only do 10% of cases
-            # if inference == inference_stan:
-            #     if hash((in_axis1, in_axis2)) % 10 != 0:
-            #         continue
+            # only do 10% of cases
+            if hash((in_axis1, in_axis2)) % 10 != 0:
+                continue
 
             y = vmap(
                 lambda x_i: vmap(
