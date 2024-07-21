@@ -57,11 +57,11 @@ def autoregressive_flat(flat_fun, length=None, in_axes=None):
         args_shapes = tuple(a.shape for a in args)
         base_args_shapes = tuple(s[1:] for s in args_shapes)  # assume all mapped along 1st axis
         base_op, constants = make_composite(flat_fun, init_shape, *base_args_shapes)
-        # now make autoregressive
-        # in_axes = tuple(0 for a in args)
         where_self = 0
-        op = Autoregressive(base_op, my_length, in_axes=my_in_axes, where_self=where_self)
-        return rv_factory(op, init, *args)
+        op = Autoregressive(
+            base_op, my_length, in_axes=[None] * len(constants) + my_in_axes, where_self=where_self
+        )
+        return rv_factory(op, init, *constants, *args)
 
     return myfun
 

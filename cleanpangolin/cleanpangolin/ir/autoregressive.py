@@ -88,10 +88,10 @@ class Autoregressive(Op):
         return hash((self.base_op, self.length, self.in_axes, self.where_self))
 
     def __str__(self):
-        return f"autoregressive({self.base_op},{self.length},{self.where_self})"
+        return f"autoregressive({self.base_op},{self.length},{self.in_axes},{self.where_self})"
 
     def __repr__(self):
-        return f"Autoregressive({self.base_op},{self.length},{self.where_self})"
+        return f"Autoregressive({self.base_op},{self.length},{self.in_axes},{self.where_self})"
 
 
 # class Autoregressive(Op):

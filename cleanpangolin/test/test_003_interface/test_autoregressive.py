@@ -3,7 +3,7 @@ from cleanpangolin.interface.autoregressive import autoregressive, autoregressiv
 import numpy as np
 
 
-def test_simple():
+def test_simple_flat():
     def fun(x):
         return exponential(x)
 
@@ -24,6 +24,19 @@ def test_normal():
     base_op = ir.Composite(1, [ir.Constant(1.1), ir.Normal()], [[], [0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [])
+
+def test_normal_external_scale():
+    scale = makerv(1.1)
+
+    def fun(x):
+        return normal(x, scale)
+
+    u = makerv(2.2)
+    y = autoregressive_flat(fun, 10)(u)
+    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+    assert y.op.base_op == base_op
+    assert y.op == ir.Autoregressive(base_op, 10, [None])
+    assert y.parents == (u,scale)
 
 
 def test_normal_with_param():
@@ -167,24 +180,24 @@ def test_interesting_autoregressive():
     #print(f"{y.op=}")
     print(y.op)
 
-# def test_interesting_closure_autoregressive():
-#     x = [makerv(1),makerv(2)]
-#     y = [[makerv(3),makerv(4)],makerv(5)]
-#     stuff = {'hi': makerv(6), 'yo': makerv(7)}
-#
-#     def fun(last):
-#         a = x[0] + stuff['hi']
-#         b = x[1] * stuff['yo']
-#         c = y[0][0] / y[0][1]
-#         d = a / b
-#         e = c**d
-#         f = last - e
-#         return f
-#     init = 0.5
-#     y = autoregressive(fun,length=10)(init)
-#     #base_op = ir.Composite(8, [ir.Add(), ir.Mul(), ir.Div(), ir.Pow(), ir.Sub()],[[1,6]])
-#     #print(f"{y.op=}")
-#     print(y.op)
+def test_interesting_closure_autoregressive():
+    x = [makerv(1),makerv(2)]
+    y = [[makerv(3),makerv(4)],makerv(5)]
+    stuff = {'hi': makerv(6), 'yo': makerv(7)}
+
+    def fun(last):
+        a = x[0] + stuff['hi']
+        b = x[1] * stuff['yo']
+        c = y[0][0] / y[0][1]
+        d = a / b
+        e = c**d
+        f = last - e
+        return f
+    init = 0.5
+    y = autoregressive(fun,length=10)(init)
+    #base_op = ir.Composite(8, [ir.Add(), ir.Mul(), ir.Div(), ir.Pow(), ir.Sub()],[[1,6]])
+    #print(f"{y.op=}")
+    print(y.op)
 
 # TODO:
 # - in flat autoregressive capture closure variables through constants return list
