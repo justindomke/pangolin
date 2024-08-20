@@ -6,7 +6,8 @@ from .vmap import generated_nodes, AbstractOp
 from cleanpangolin import util
 import jax.tree_util
 from cleanpangolin.interface.interface import RV_or_array
-
+from cleanpangolin.interface.vmap import get_flat_vmap_args_and_axes
+from typing import Callable
 
 # def autoregressive_flat(length, flat_fun):
 #     """
@@ -58,6 +59,7 @@ def autoregressive_flat(flat_fun, length=None, in_axes=None):
         base_args_shapes = tuple(s[1:] for s in args_shapes)  # assume all mapped along 1st axis
         base_op, constants = make_composite(flat_fun, init_shape, *base_args_shapes)
         where_self = 0
+        #where_self = len(constants) # constants always first in composite
         op = Autoregressive(
             base_op, my_length, in_axes=[None] * len(constants) + my_in_axes, where_self=where_self
         )
@@ -66,46 +68,47 @@ def autoregressive_flat(flat_fun, length=None, in_axes=None):
     return myfun
 
 
-def get_flat_vmap_args_and_axes(in_axes, args):
-    from cleanpangolin.interface.interface import rv_factory
+# def get_flat_vmap_args_and_axes(in_axes, args):
+#     from cleanpangolin.interface.interface import rv_factory
+#
+#     def get_dummy(i, x):
+#         if i is None:
+#             new_shape = x.shape
+#         else:
+#             lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
+#             new_shape = lo + hi
+#
+#         # In old code tried to preserve x.op when isinstance(x.op, VMap)
+#         op = AbstractOp(new_shape, x.op.random)
+#         return rv_factory(op)
+#
+#     dummy_args = util.tree_map_recurse_at_leaf(
+#         get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
+#     )
+#     new_in_axes = util.tree_map_recurse_at_leaf(
+#         lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
+#     )
+#     check_tree_consistency(args, dummy_args, new_in_axes)
+#
+#     flat_args, args_treedef = jax.tree_util.tree_flatten(args, is_leaf=util.is_leaf_with_none)
+#     flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
+#         new_in_axes, is_leaf=util.is_leaf_with_none
+#     )
+#     return dummy_args, new_in_axes, flat_args, flat_in_axes
+#
+#
+# def check_tree_consistency(*args):
+#     trees = [jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)]
+#     for t in trees:
+#         assert t == trees[0]
 
-    def get_dummy(i, x):
-        if i is None:
-            new_shape = x.shape
-        else:
-            lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
-            new_shape = lo + hi
 
-        # In old code tried to preserve x.op when isinstance(x.op, VMap)
-        op = AbstractOp(new_shape, x.op.random)
-        return rv_factory(op)
-
-    dummy_args = util.tree_map_recurse_at_leaf(
-        get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
-    )
-    new_in_axes = util.tree_map_recurse_at_leaf(
-        lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
-    )
-    check_tree_consistency(args, dummy_args, new_in_axes)
-
-    flat_args, args_treedef = jax.tree_util.tree_flatten(args, is_leaf=util.is_leaf_with_none)
-    flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
-        new_in_axes, is_leaf=util.is_leaf_with_none
-    )
-    return dummy_args, new_in_axes, flat_args, flat_in_axes
-
-
-def check_tree_consistency(*args):
-    trees = [jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)]
-    for t in trees:
-        assert t == trees[0]
-
-
-def autoregressive(fun, length=None, in_axes=0):
+def autoregressive(fun: Callable, length:None | int = None, in_axes=0):
     """
     next = flat_fun(prev,*args)
     """
     from cleanpangolin.interface.interface import rv_factory
+
 
     def myfun(init: RV_or_array, *args):
         init = makerv(init)
@@ -123,6 +126,22 @@ def autoregressive(fun, length=None, in_axes=0):
         return autoregressive_flat(new_flat_fun, length, flat_in_axes)(init, *flat_args)
 
     return myfun
+
+
+def repeat(length=None, in_axes=0):
+    """
+    Simple decorator to create functions to create autoregressive RVs
+
+    Examples
+    --------
+    @auto(length=10)
+    def fun(last):
+        return normal(last,1)
+    x = fun(0)
+    """
+
+    return lambda fun: autoregressive(fun, length, in_axes)
+
 
 
 # def autoregressive(fun, length):

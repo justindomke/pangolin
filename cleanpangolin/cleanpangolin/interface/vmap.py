@@ -8,6 +8,7 @@ from .interface import makerv, rv_factory
 from typing import Sequence, Type
 import jax.tree_util
 from . import interface
+from .interface import api
 
 from typing import Protocol
 from numpy.typing import ArrayLike
@@ -18,7 +19,40 @@ from numpy.typing import ArrayLike
 
 FlatCallable = Callable[..., list[RV]]
 
+def check_tree_consistency(*args):
+    trees = [jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)]
+    for t in trees:
+        assert t == trees[0]
 
+def get_flat_vmap_args_and_axes(in_axes, args):
+    from cleanpangolin.interface.interface import rv_factory
+
+    def get_dummy(i, x):
+        if i is None:
+            new_shape = x.shape
+        else:
+            lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
+            new_shape = lo + hi
+
+        # In old code tried to preserve x.op when isinstance(x.op, VMap)
+        op = AbstractOp(new_shape, x.op.random)
+        return rv_factory(op)
+
+    dummy_args = util.tree_map_recurse_at_leaf(
+        get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
+    )
+    new_in_axes = util.tree_map_recurse_at_leaf(
+        lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
+    )
+    check_tree_consistency(args, dummy_args, new_in_axes)
+
+    flat_args, args_treedef = jax.tree_util.tree_flatten(args, is_leaf=util.is_leaf_with_none)
+    flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
+        new_in_axes, is_leaf=util.is_leaf_with_none
+    )
+    return dummy_args, new_in_axes, flat_args, flat_in_axes
+
+@api
 def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None = None):
     """@public
     vmap a function. See also the documentation for
@@ -45,6 +79,9 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
         batched/vectorized version of `f`
     """
 
+    if isinstance(in_axes,Sequence):
+        in_axes = tuple(in_axes)
+
     def call(*args):
         # no greedy casting because this leads to ambiguity
         # if the user sends [(1,2),(3,4)] is that a list of two
@@ -56,33 +93,36 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
         # else:
         #     my_dummy = AbstractRV(new_shape)
 
-        def get_dummy(i, x):
-            if i is None:
-                new_shape = x.shape
-            else:
-                lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
-                new_shape = lo + hi
+        # def get_dummy(i, x):
+        #     if i is None:
+        #         new_shape = x.shape
+        #     else:
+        #         lo, mid, hi = (x.shape[:i], x.shape[i], x.shape[i + 1 :])
+        #         new_shape = lo + hi
+        #
+        #     # In old code tried to preserve x.op when isinstance(x.op, VMap)
+        #     op = AbstractOp(new_shape, x.op.random)
+        #     return rv_factory(op)
+        #
+        # dummy_args = util.tree_map_recurse_at_leaf(
+        #     get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
+        # )
+        # new_in_axes = util.tree_map_recurse_at_leaf(
+        #     lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
+        # )
+        #
+        # tree1 = jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)
+        # tree2 = jax.tree_util.tree_structure(dummy_args, is_leaf=util.is_leaf_with_none)
+        # tree3 = jax.tree_util.tree_structure(new_in_axes, is_leaf=util.is_leaf_with_none)
+        # assert tree1 == tree2
+        # assert tree1 == tree3
 
-            # In old code tried to preserve x.op when isinstance(x.op, VMap)
-            op = AbstractOp(new_shape, x.op.random)
-            return rv_factory(op)
+        dummy_args, new_in_axes, flat_args, flat_in_axes = get_flat_vmap_args_and_axes(in_axes,
+                                                                                       args)
 
-        dummy_args = util.tree_map_recurse_at_leaf(
-            get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
-        )
-        new_in_axes = util.tree_map_recurse_at_leaf(
-            lambda i, x: i, in_axes, dummy_args, is_leaf=util.is_leaf_with_none
-        )
-
-        tree1 = jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)
-        tree2 = jax.tree_util.tree_structure(dummy_args, is_leaf=util.is_leaf_with_none)
-        tree3 = jax.tree_util.tree_structure(new_in_axes, is_leaf=util.is_leaf_with_none)
-        assert tree1 == tree2
-        assert tree1 == tree3
-
-        flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
-            new_in_axes, is_leaf=util.is_leaf_with_none
-        )
+        #flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
+        #    new_in_axes, is_leaf=util.is_leaf_with_none
+        #)
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
             f, *dummy_args, is_leaf=util.is_leaf_with_none
         )
@@ -160,6 +200,8 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, block_condition=lambda var: not is_abstract(var)
     )
+
+    all_abstract_vars = sorted(all_abstract_vars, key=lambda node:node.n)
 
     # convert abstract nodes to concrete
     abstract_to_concrete = {}
@@ -473,64 +515,64 @@ def plate(*args, size: int | None = None, in_axes=0):
 #         return SubInt(int(self)+int(other))
 
 
-class Loop:
-    def __init__(self, length, auto_assign=True):
-        # rv_class = interface.rv_factory()
-        self.auto_assign = auto_assign
-        self.length = length
-        self.generated_rvs = []
-        self.loop_vars = {}
-
-        self.range = interface.rv_factory(Constant(range(length)))
-        self.i = self.range[0]
-
-        # TODO: instead of creating new class, create new factory?
-        class NewRV(OperatorRV):
-            def __init__(myself, *args, **vargs):
-                self.generated_rvs.append(myself)
-                myself.my_loop = self
-                super().__init__(*args, **vargs)
-
-        self.new_rv_class = NewRV
-
-    def __enter__(self) -> OperatorRV:
-        interface.rv_factories.append(self.new_rv_class)
-        return self.i
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        assert self.new_rv_class == interface.rv_factories.pop()
-        if self.auto_assign:
-            loop_vars = [l for l in self.loop_vars]
-            dummy_loop_vars = [self.loop_vars[l] for l in loop_vars]
-            new_vars = vmap_subgraph(
-                [self.range], [self.i], [0], self.length, self.generated_rvs, dummy_loop_vars
-            )
-
-            for loop_var, new in zip(loop_vars, new_vars, strict=True):
-                loop_var.finalize(new.op, *new.parents)
-
-
-class LoopVar(OperatorRV):
-    def __init__(self):
-        # do NOT call super.__init__() for now
-        pass
-
-    def __setitem__(self, idx, dummy_rv):
-        loop = dummy_rv.my_loop
-        loop.loop_vars[self] = dummy_rv
-        self.dummy_rv = dummy_rv
-
-    def __getitem__(self, loop):
-        return self.dummy_rv
-
-    def finalize(self, op, *parents):
-        super().__init__(op, *parents)
-
-    def __repr__(self):
-        out = "LoopVar"
-        if hasattr(self, "dummy_rv"):
-            out += "(" + repr(self.dummy_rv) + ")"
-        return out
+# class Loop:
+#     def __init__(self, length, auto_assign=True):
+#         # rv_class = interface.rv_factory()
+#         self.auto_assign = auto_assign
+#         self.length = length
+#         self.generated_rvs = []
+#         self.loop_vars = {}
+#
+#         self.range = interface.rv_factory(Constant(range(length)))
+#         self.i = self.range[0]
+#
+#         # TODO: instead of creating new class, create new factory?
+#         class NewRV(OperatorRV):
+#             def __init__(myself, *args, **vargs):
+#                 self.generated_rvs.append(myself)
+#                 myself.my_loop = self
+#                 super().__init__(*args, **vargs)
+#
+#         self.new_rv_class = NewRV
+#
+#     def __enter__(self) -> OperatorRV:
+#         interface.rv_factories.append(self.new_rv_class)
+#         return self.i
+#
+#     def __exit__(self, exc_type, exc_value, exc_tb):
+#         assert self.new_rv_class == interface.rv_factories.pop()
+#         if self.auto_assign:
+#             loop_vars = [l for l in self.loop_vars]
+#             dummy_loop_vars = [self.loop_vars[l] for l in loop_vars]
+#             new_vars = vmap_subgraph(
+#                 [self.range], [self.i], [0], self.length, self.generated_rvs, dummy_loop_vars
+#             )
+#
+#             for loop_var, new in zip(loop_vars, new_vars, strict=True):
+#                 loop_var.finalize(new.op, *new.parents)
+#
+#
+# class LoopVar(OperatorRV):
+#     def __init__(self):
+#         # do NOT call super.__init__() for now
+#         pass
+#
+#     def __setitem__(self, idx, dummy_rv):
+#         loop = dummy_rv.my_loop
+#         loop.loop_vars[self] = dummy_rv
+#         self.dummy_rv = dummy_rv
+#
+#     def __getitem__(self, loop):
+#         return self.dummy_rv
+#
+#     def finalize(self, op, *parents):
+#         super().__init__(op, *parents)
+#
+#     def __repr__(self):
+#         out = "LoopVar"
+#         if hasattr(self, "dummy_rv"):
+#             out += "(" + repr(self.dummy_rv) + ")"
+#         return out
 
 
 # indexed_vmap(

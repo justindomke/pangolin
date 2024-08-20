@@ -51,9 +51,6 @@ class Autoregressive(Op):
                 assert isinstance(ax,int)
                 base_input_shapes.append(s[:ax] + s[ax + 1 :])
 
-        print(f"{other_shapes=}")
-        print(f"{base_input_shapes=}")
-
         # insert self
         # if n == self.where_self:
         #    base_input_shapes.append(start_shape)
@@ -66,8 +63,6 @@ class Autoregressive(Op):
         # for s in other_shapes:
         #    assert s[0] == my_length
         # base_other_shapes = tuple(s[1:] for s in other_shapes)
-
-        print(f"{base_input_shapes=}")
 
         # base_input_shapes = (start_shape,) + const_shapes + base_other_shapes
         base_output_shape = self.base_op.get_shape(*base_input_shapes)

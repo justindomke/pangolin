@@ -21,13 +21,13 @@ def test_generated_nodes1():
     generated, out = generated_nodes(fun, x0, y0)
     print(f"{generated=}")
     assert len(generated) == 4
-    assert generated[0].op == Constant(2)
+    assert generated[0].op == ir.Constant(2)
     assert generated[1].op == ir.Mul()
     assert generated[1].parents == (x0, generated[0])
-    assert generated[2].op == Constant(3)
+    assert generated[2].op == ir.Constant(3)
     assert generated[3].op == ir.Add()
     assert generated[3].parents[0] == y0
-    assert generated[3].parents[1].op == Constant(3)
+    assert generated[3].parents[1].op == ir.Constant(3)
 
 
 def test_generated_nodes2():
@@ -64,7 +64,7 @@ def test_generated_nodes_closure():
     print(f"{generated=}")
     # c
     c = generated[0]
-    assert c.op == Constant(3)
+    assert c.op == ir.Constant(3)
     # tmp
     tmp = generated[1]
     assert tmp.op == ir.Mul()
@@ -86,7 +86,7 @@ def test_generated_nodes_ignored_input():
     y0 = makerv(3)
     generated, out = generated_nodes(fun, y0)
     c = generated[0]
-    assert c.op == Constant(2)
+    assert c.op == ir.Constant(2)
     z = generated[1]
     assert z.op == ir.Mul()
     assert z.parents == (c, x)

@@ -12,7 +12,7 @@ def make_composite(fun, *input_shapes):
     Outputs:
     - op: a Composite op representing the function
     - consts: a list of constants that fun captures as a closure
-    The final op expects as inputs *first* all the elements of consts and then the explicit inputs
+    The final op expects as inputs *first* all the explicit inputs and then all the elements of consts
 
     Fun should not examine ops of its inputs.
     """
@@ -62,7 +62,6 @@ def composite_flat(fun):
         return rv_factory(op, *consts, *inputs)
     return myfun
 
-
 def composite(fun):
     from cleanpangolin.interface.interface import rv_factory
     def myfun(*inputs):
@@ -81,7 +80,7 @@ def composite(fun):
 
         flat_input_shapes = [x.shape for x in flat_inputs]
         op, consts = make_composite(new_flat_fun, *flat_input_shapes)
-        return rv_factory(op, *consts, *flat_inputs)
+        return rv_factory(op, *flat_inputs, *consts)
 
     return myfun
 

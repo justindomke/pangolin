@@ -12,10 +12,15 @@ __docformat__ = 'numpy'
 
 from cleanpangolin import interface, ir, inference
 
-from cleanpangolin.interface.interface import *
+from cleanpangolin.inference import *
+
+#from cleanpangolin.interface import autoregressive, print_upstream
+from cleanpangolin.interface import *
+#from cleanpangolin.interface.interface import *
 from cleanpangolin.interface.vmap import vmap
 from cleanpangolin.interface.index import index
 
 
+
 __all__ = ['ir','interface','vmap','index','inference']
-__all__ += interface.interface.for_api
+#__all__ += interface.interface.for_api

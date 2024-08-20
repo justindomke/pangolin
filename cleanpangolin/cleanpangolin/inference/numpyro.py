@@ -14,8 +14,11 @@ from cleanpangolin.ir.rv import RV
 from cleanpangolin import dag, util, ir
 from cleanpangolin.interface.interface import OperatorRV
 from numpy.typing import ArrayLike
+from cleanpangolin.interface import RV_or_array
+from cleanpangolin.inference import inference_util
 
-def get_model_flat(vars: list[RV], given: list[RV], vals: list[ArrayLike]):
+
+def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
     """
     Given a "flat" specification of an inference problem, get a numpyro model.
 
@@ -80,14 +83,17 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[ArrayLike]):
             assert isinstance(var, RV)
             name = var_to_name[var]
             numpyro_pars = [var_to_numpyro_rv[p] for p in var.parents]
+
             d = numpyro_var(var.op, *numpyro_pars)
 
             if var.op.random:
+                assert isinstance(d, dist.Distribution), "numpyo handler failed to return distribution for random op"
                 if var in given:
                     numpyro_rv = numpyro.sample(name, d, obs=vals[given.index(var)])
                 else:
                     numpyro_rv = numpyro.sample(name, d)
             else:
+                assert isinstance(d, jnp.ndarray), "numpyo handler failed to return jax.numpy array for nonrandom op"
                 numpyro_rv = numpyro.deterministic(name, d)
 
             var_to_numpyro_rv[var] = numpyro_rv
@@ -96,6 +102,7 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[ArrayLike]):
 
     return model, var_to_name
 
+
 # handlers that don't need to look at the op itself, just the type
 simple_handlers = {
     ir.Normal: dist.Normal,
@@ -103,7 +110,7 @@ simple_handlers = {
     ir.Bernoulli: dist.Bernoulli,
     ir.BernoulliLogit: dist.BernoulliLogits,
     ir.Beta: dist.Beta,
-    ir.BetaBinomial: lambda n, a, b: dist.BetaBinomial(a, b, n), # numpyro has a different order
+    ir.BetaBinomial: lambda n, a, b: dist.BetaBinomial(a, b, n),  # numpyro has a different order
     ir.Binomial: dist.Binomial,
     ir.Categorical: dist.Categorical,
     ir.Cauchy: dist.Cauchy,
@@ -146,15 +153,20 @@ simple_handlers = {
 
 numpyro_handlers = util.WriteOnceDict()
 
+
 def register_handler(op_class):
     def register(handler):
         numpyro_handlers[op_class] = handler
         return handler
+
     return register
+
 
 @register_handler(ir.Constant)
 def handle_constant(op: ir.Constant):
-    return op.value
+    # return op.value
+    return jnp.array(op.value) # return a jax array, not a numpy array
+
 
 @register_handler(ir.Index)
 def handle_index(op: ir.Index, val, *indices):
@@ -169,6 +181,7 @@ def handle_index(op: ir.Index, val, *indices):
     stuff = tuple(stuff)
     return val[stuff]
 
+
 @register_handler(ir.Sum)
 def handle_sum(op: ir.Sum, val):
     return jnp.sum(val, axis=op.axis)
@@ -182,10 +195,12 @@ def handle_vmap(op: ir.VMap, *numpyro_parents):
         return numpyro_vmap_var_nonrandom(op, *numpyro_parents)
 
 
-
-op_class_to_support = util.WriteOnceDefaultDict(default_factory=lambda key: dist.constraints.real_vector)
+op_class_to_support = util.WriteOnceDefaultDict(
+    default_factory=lambda key: dist.constraints.real_vector
+)
 op_class_to_support[ir.Exponential] = dist.constraints.positive
 op_class_to_support[ir.Dirichlet] = dist.constraints.simplex
+
 
 def get_support(op: ir.Op):
     """
@@ -194,9 +209,9 @@ def get_support(op: ir.Op):
     """
     op_class = type(op)
     return op_class_to_support[type(op)]
-    #if op in op_class_to_support:
+    # if op in op_class_to_support:
     #    return op_class_to_support[op_class]
-    #else:
+    # else:
     #    raise Exception("unsupported op class")
     # elif isinstance(op, ir.Truncated):
     #     if op.lo is not None and op.hi is not None:
@@ -239,7 +254,7 @@ def numpyro_vmap_var_random(op: ir.VMap, *numpyro_parents):
 
         def sample(self, key, sample_shape=()):
             assert numpyro.util.is_prng_key(key)
-            assert sample_shape == ()
+            assert sample_shape == () or sample_shape == (1,)
 
             def base_sample(key, *args):
                 var = numpyro_var(op.base_op, *args)
@@ -249,7 +264,12 @@ def numpyro_vmap_var_random(op: ir.VMap, *numpyro_parents):
             in_axes = (0,) + op.in_axes
             axis_size = op.axis_size
             args = (keys,) + self.args
-            return jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)
+            if sample_shape == (1,):
+                return jnp.array([jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)])
+            elif sample_shape == ():
+                return jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)
+            else:
+                assert False
 
         @dist_util.validate_sample
         def log_prob(self, value):
@@ -279,6 +299,154 @@ def numpyro_vmap_var_nonrandom(op: ir.VMap, *numpyro_parents):
     return jax.vmap(base_var, in_axes=in_axes, axis_size=axis_size)(*args)
 
 
+@register_handler(ir.Composite)
+def numpyro_composite_var(op: ir.Composite, *numpyro_parents):
+    vals = list(numpyro_parents)
+    assert len(numpyro_parents) == op.num_inputs
+    for my_cond_dist, my_par_nums in zip(op.ops, op.par_nums, strict=True):
+        my_parents = [vals[i] for i in my_par_nums]
+        new_val = numpyro_var(my_cond_dist, *my_parents)
+        vals.append(new_val)
+    return vals[-1]
+
+
+@register_handler(ir.Autoregressive)
+def numpyro_autoregressive_var(op, *numpyro_parents):
+    if op.random:
+        return numpyro_autoregressive_var_random(op, *numpyro_parents)
+    else:
+        return numpyro_autoregressive_var_nonrandom(op, *numpyro_parents)
+
+
+def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents):
+    for in_axis in op.in_axes:
+        assert in_axis in [0,None], "NumPyro only supports Autoregressive with in_axis of 0 or None"
+
+    mapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0)
+    unmapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if
+                             in_axis is None)
+
+    def merge_args(mapped_args):
+        ret = []
+        i_mapped = 0
+        i_unmapped = 0
+        for in_axis in op.in_axes:
+            if in_axis == 0:
+                ret.append(mapped_args[i_mapped])
+                i_mapped += 1
+            elif in_axis is None:
+                ret.append(unmapped_parents[i_unmapped])
+                i_unmapped += 1
+            else:
+                assert False
+        assert i_mapped == len(mapped_args)
+        assert i_unmapped == len(unmapped_parents)
+        return tuple(ret)
+    return mapped_parents, merge_args
+
+def numpyro_autoregressive_var_nonrandom(op: ir.Autoregressive, numpyro_init, *numpyro_parents):
+    # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
+    assert isinstance(op, ir.Autoregressive)
+    assert not op.random
+
+    mapped_parents, merge_args = handle_autoregressive_inputs(op, *numpyro_parents)
+    #print(f"{mapped_parents=}")
+    #print(f"{numpyro_parents=}")
+    #print(f"{merge_args(mapped_parents)=}")
+    assert merge_args(mapped_parents) == numpyro_parents
+
+    print(f"{numpyro_init=}")
+
+    def myfun(carry, x):
+        #inputs = (carry,) + x
+        inputs = (carry,) + merge_args(x)
+        #print(f"{inputs=}")
+        #print(f"{[a.shape for a in inputs]=}")
+        y = numpyro_var(op.base_op, *inputs)
+        return y, y
+
+    #myfun(numpyro_init, tuple(p[0] for p in mapped_parents))
+
+    #carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=op.length)
+    carry, ys = jax.lax.scan(myfun, numpyro_init, mapped_parents, length=op.length)
+    return ys
+
+
+def numpyro_autoregressive_var_random(op: ir.Autoregressive, numpyro_init, *numpyro_parents):
+    # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
+    assert isinstance(op, ir.Autoregressive)
+    assert op.random
+
+    mapped_parents, merge_args = handle_autoregressive_inputs(op, *numpyro_parents)
+
+    class NewDist(dist.Distribution):  # NUMPYRO dist
+        @property
+        def support(self):
+            return get_support(op.base_op)
+
+        def __init__(self, *args, validate_args=False):
+            self.args = args
+
+            # TODO: infer correct batch_shape?
+            batch_shape = ()
+            parents_shapes = [p.shape for p in args]
+            event_shape = op.get_shape(*parents_shapes)
+
+            super().__init__(
+                batch_shape=batch_shape,
+                event_shape=event_shape,
+                validate_args=validate_args,
+            )
+
+        def sample(self, key, sample_shape=()):
+            assert numpyro.util.is_prng_key(key)
+            #assert sample_shape == (), f"sample shape is {sample_shape} expected ()"
+            assert sample_shape in ((),(1,))
+            single_samp = (sample_shape == (1,))
+
+            #print(f"{sample_shape=} {single_samp=}")
+
+            def base_sample(carry, key_and_x):
+                #print(f"{key_and_x=}")
+                key = key_and_x[0]
+                x = key_and_x[1:]
+                #inputs = (carry,) + x
+                inputs = (carry,) + merge_args(x)
+                var = numpyro_var(op.base_op, *inputs)
+                y = var.sample(key)
+                return y, y
+
+
+            keys = jax.random.split(key, op.length)
+
+            #base_sample(numpyro_init, (keys[0],) + mapped_parents)
+
+            carry, ys = jax.lax.scan(
+                base_sample, numpyro_init, (keys,) + mapped_parents, length=op.length
+            )
+            if single_samp:
+                return jnp.array([ys])
+            else:
+                return ys
+
+        @dist_util.validate_sample
+        def log_prob(self, value):
+            def base_log_prob(carry, val_and_x):
+                val = val_and_x[0]
+                x = val_and_x[1:]
+                #inputs = (carry,) + x
+                inputs = (carry,) + merge_args(x)
+                var = numpyro_var(op.base_op, *inputs)
+                return val, var.log_prob(val)
+
+            carry, ls = jax.lax.scan(
+                base_log_prob, numpyro_init, (value,) + mapped_parents, length=op.length
+            )
+            return jnp.sum(ls)
+
+    return NewDist(numpyro_init, *numpyro_parents)
+
+
 # this "should" work to eliminate the need for simple_handlers. But for some reason it doesn't...
 # for op_type in simple_handlers:
 #     print(f"{op_type=}")
@@ -296,6 +464,113 @@ def numpyro_var(op, *numpyro_parents):
         return numpyro_handlers[op_type](op, *numpyro_parents)
 
 
+def generate_seed(size=()):
+    info = np.iinfo(int)
+    return np.random.randint(info.min, info.max, size=size)
+
+
+def generate_key():
+    seed = generate_seed()
+    # print(f"{seed=}")
+    return jax.random.PRNGKey(seed)
+
+
+def ancestor_sample_flat(vars, *, niter=None):
+    model, names = get_model_flat(vars, [], [])
+
+    def base_sample(seed):
+        with numpyro.handlers.seed(rng_seed=seed):
+            out = model()
+            return [out[names[var]] for var in vars]
+
+    if niter is None:
+        my_seed = generate_key()
+        return base_sample(my_seed)
+    else:
+        # seeds = jax.random.split(seed, niter)
+        seeds = generate_seed(niter)
+        return jax.vmap(base_sample)(seeds)
+
+
+def sample_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array], *, niter=10000):
+    # assert isinstance(vars, Sequence)
+    # assert isinstance(given, Sequence)
+    # assert isinstance(vals, Sequence)
+    assert len(given) == len(vals)
+
+    # TODO: activate ancestor sampling
+    if len(given) == 0:
+        print("ancestor sampling")
+        return ancestor_sample_flat(vars, niter=niter)
+
+    # TODO:
+    # raise an exception if no random vars
+
+    vals = [jnp.array(val) for val in vals]
+
+    model, names = get_model_flat(vars, given, vals)
+
+    def infer(kernel):
+        mcmc = numpyro.infer.MCMC(
+            kernel,
+            num_warmup=niter,
+            num_samples=niter,
+            progress_bar=False,
+        )
+        key = generate_key()
+
+        # numpyro gives some annoying future warnings
+        import warnings
+
+        with warnings.catch_warnings(action="ignore", category=FutureWarning):  # type: ignore
+            mcmc.run(key)
+
+        # wierd trick to get samples for deterministic sites
+        latent_samples = mcmc.get_samples()
+        #print(f"{latent_samples=}")
+        predictive = numpyro.infer.Predictive(model, latent_samples)
+        predictive_samples = predictive(key)
+        #print(f"{predictive_samples=}")
+        # merge
+        samples = {**latent_samples, **predictive_samples}
+        return samples
+
+    try:
+        kernel = numpyro.infer.DiscreteHMCGibbs(
+            numpyro.infer.NUTS(model), modified=True
+        )
+        samples = infer(kernel)
+    except AssertionError as e:
+        if str(e) != "Cannot detect any discrete latent variables in the model.":
+            raise e
+        kernel = numpyro.infer.NUTS(model)
+        # with warnings.simplefilter(action='ignore', category=FutureWarning):
+        samples = infer(kernel)
+
+    # try:
+    #     kernel = numpyro.infer.NUTS(model)
+    #     # with warnings.simplefilter(action='ignore', category=FutureWarning):
+    #     samples = infer(kernel)
+    # except ValueError as e:
+    #     print("sampling failed with default—switching to MixedHMC")
+    #     assert str(e) == "No sample sites in posterior samples to infer `num_samples`."
+    #     # kernel = numpyro.infer.MixedHMC(
+    #     #     numpyro.infer.HMC(model, trajectory_length=1.2), num_discrete_updates=20
+    #     # )
+    #     kernel = numpyro.infer.DiscreteHMCGibbs(
+    #         numpyro.infer.NUTS(model), modified=True
+    #     )
+    #     samples = infer(kernel)
+
+    return [samples[names[var]] for var in vars]
+
+
+#sample = inference_util.get_non_flat_sampler(sample_flat)
+calc = inference_util.Calculate(sample_flat)
+sample = calc.sample
+E = calc.E
+var = calc.var
+std = calc.std
 
 
 # def numpyro_var(cond_dist, *numpyro_parents):
@@ -345,78 +620,6 @@ def numpyro_var(op, *numpyro_parents):
 #         vals.append(new_val)
 #     return vals[-1]
 #
-# def numpyro_autoregressive_var(cond_dist, *numpyro_parents):
-#     if cond_dist.random:
-#         return numpyro_autoregressive_var_random(cond_dist, *numpyro_parents)
-#     else:
-#         return numpyro_autoregressive_var_nonrandom(cond_dist, *numpyro_parents)
-#
-#
-# def numpyro_autoregressive_var_nonrandom(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
-#     # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
-#     assert isinstance(cond_dist, interface.Autoregressive)
-#     assert not cond_dist.random
-#     def myfun(carry, x):
-#         inputs = (carry,) + x
-#         y = numpyro_var(cond_dist.base_cond_dist, *inputs)
-#         return y, y
-#     carry, ys = jax.lax.scan(myfun, numpyro_init, numpyro_parents, length=cond_dist.length)
-#     return ys
-#
-#
-# def numpyro_autoregressive_var_random(cond_dist: interface.Autoregressive, numpyro_init, *numpyro_parents):
-#     # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
-#     assert isinstance(cond_dist, interface.Autoregressive)
-#     assert cond_dist.random
-#
-#     class NewDist(dist.Distribution):
-#         @property
-#         def support(self):
-#             return get_support(cond_dist.base_cond_dist)
-#
-#         def __init__(self, *args, validate_args=False):
-#             self.args = args
-#
-#             # TODO: infer correct batch_shape?
-#             batch_shape = ()
-#             parents_shapes = [p.shape for p in args]
-#             event_shape = cond_dist.get_shape(*parents_shapes)
-#
-#             super().__init__(
-#                 batch_shape=batch_shape,
-#                 event_shape=event_shape,
-#                 validate_args=validate_args,
-#             )
-#
-#         def sample(self, key, sample_shape=()):
-#             assert numpyro.util.is_prng_key(key)
-#             assert sample_shape == ()
-#
-#             def base_sample(carry, key_and_x):
-#                 key = key_and_x[0]
-#                 x = key_and_x[1:]
-#                 inputs = (carry,) + x
-#                 var = numpyro_var(cond_dist.base_cond_dist, *inputs)
-#                 y = var.sample(key)
-#                 return y, y
-#
-#             keys = jax.random.split(key,cond_dist.length)
-#             carry, ys = jax.lax.scan(base_sample, numpyro_init, (keys,)+numpyro_parents, length=cond_dist.length)
-#             return ys
-#
-#         @dist_util.validate_sample
-#         def log_prob(self, value):
-#             def base_log_prob(carry, val_and_x):
-#                 val = val_and_x[0]
-#                 x = val_and_x[1:]
-#                 inputs = (carry,) + x
-#                 var = numpyro_var(cond_dist.base_cond_dist, *inputs)
-#                 return val, var.log_prob(val)
-#
-#             carry, ls = jax.lax.scan(base_log_prob, numpyro_init, (value,) + numpyro_parents, length=cond_dist.length)
-#             return jnp.sum(ls)
-#
-#     return NewDist(numpyro_init, *numpyro_parents)
 #
 #
 # def numpyro_mixture_var(cond_dist, *numpyro_parents):

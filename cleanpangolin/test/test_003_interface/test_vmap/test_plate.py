@@ -4,6 +4,7 @@ Tests to make sure plate is doing the same thing as vmap
 
 from cleanpangolin.interface.vmap import vmap, plate
 from cleanpangolin import *
+from cleanpangolin.interface import normal, multi_normal
 import numpy as np
 
 

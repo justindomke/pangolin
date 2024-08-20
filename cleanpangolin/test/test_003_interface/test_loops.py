@@ -16,7 +16,7 @@ import numpy as np  # type: ignore
 from cleanpangolin.interface.loops import Loop, SlicedRV, slice_existing_rv, make_sliced_rv, \
     slot
 from cleanpangolin import *
-from cleanpangolin.interface import loops, OperatorRV
+from cleanpangolin.interface import loops, OperatorRV, exponential, dirichlet, bernoulli_logit, mul, categorical, sum
 from cleanpangolin.interface.index import index_funs
 
 

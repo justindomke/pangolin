@@ -310,6 +310,37 @@ def student_t(nu, loc, scale) -> OperatorRV:
     return create_rv(ir.StudentT(), nu, loc, scale)
 
 
+def implicit_vectorized_scalar_fun(fun):
+    def new_fun(*args):
+        args = tuple(makerv(p) for p in args)
+        in_axes = []
+        vec_shape = None
+        for p in args:
+            if p.shape == ():
+                # scalars are always OK
+                in_axes.append(None)
+            else:
+                if vec_shape:
+                    assert (
+                            p.shape == vec_shape
+                    ), "can only vectorize scalars + arrays of same shape"
+                else:
+                    vec_shape = p.shape
+                in_axes.append(0)
+        if vec_shape is None:
+            return fun(*args)
+        else:
+            from .vmap import vmap
+            vectorized_dims = len(vec_shape)
+            my_fun = fun
+            for i in range(vectorized_dims):
+                my_fun = vmap(my_fun, in_axes)
+            return my_fun(*args)
+    return new_fun
+
+
+
+@implicit_vectorized_scalar_fun
 @api
 def add(a, b) -> OperatorRV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""

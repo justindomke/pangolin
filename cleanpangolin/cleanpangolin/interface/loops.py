@@ -110,7 +110,6 @@ class Loop:
     # def __rmatmul__(self, a):
     #     return matmul(a, self)
 
-
 def remove_indices(sequence, indices):
     return type(sequence)(x for (n, x) in enumerate(sequence) if n not in indices)
 
@@ -360,7 +359,7 @@ class HideLoops:
 def slot():
 
     rv_type = type(makerv(1))
-    print(f"{rv_type=}")
+    #print(f"{rv_type=}")
 
     class VMapRV:
         """
@@ -405,7 +404,7 @@ def slot():
                 # ultra evil changing of self type!
                 self.__class__ = type(value.full_rv)
                 assert isinstance(self, type(value.full_rv))
-                print(f"1 {self.__class__=}")
+                #print(f"1 {self.__class__=}")
                 type(value.full_rv).__init__(self, value.full_rv.op, *value.full_rv.parents)
             else:
                 # explicitly index from the RV being copied

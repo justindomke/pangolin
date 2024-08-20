@@ -1,4 +1,4 @@
-from cleanpangolin.interface.vmap import vmap_subgraph, AbstractOp, Loop, LoopVar
+from cleanpangolin.interface.vmap import vmap_subgraph, AbstractOp
 from cleanpangolin import ir
 from cleanpangolin.ir import RV, Constant
 from cleanpangolin.interface import OperatorRV, makerv
@@ -139,56 +139,56 @@ def test_int_subclass2():
 # [x] = vmap_subgraph([dummy_i], [i_range], [0], 10, [dummy_z, dummy_tmp, dummy_i], [dummy_x])
 
 
-def test_loop_manual():
-    x = makerv([10, 20, 30])
-    myloop = Loop(3, auto_assign=False)
-    with myloop as i:
-        dummy_z = x[i]
-
-    assert isinstance(dummy_z.op, ir.Index)
-    assert dummy_z.parents == (x, myloop.i)
-    assert myloop.generated_rvs == [dummy_z]
-
-    [z] = vmap_subgraph([myloop.range], [myloop.i], [0], 3, [dummy_z], [dummy_z])
-
-    assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
-    assert z.parents == (x, myloop.range)
-
-def test_loop_manual_finalization():
-    x = makerv([10, 20, 30])
-    z = LoopVar()
-    myloop = Loop(3, auto_assign=False)
-    with myloop as i:
-        z[i] = x[i]
-
-    [new_z] = vmap_subgraph([myloop.range], [myloop.i], [0], 3, [z.dummy_rv], [z.dummy_rv])
-
-    z.finalize(new_z.op, *new_z.parents)
-
-    assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
-    assert z.parents == (x, myloop.range)
-
-def test_loop_auto_finalization1():
-    x = makerv([10, 20, 30])
-    z = LoopVar()
-    myloop = Loop(3)
-    with myloop as i:
-        z[i] = x[i]
-
-    assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
-    assert z.parents == (x, myloop.range)
-
-def test_loop_auto_finalization2():
-    x = makerv([10, 20, 30])
-    z = LoopVar()
-    myloop = Loop(3)
-    with myloop as i:
-        z[i] = x[i] + i
-
-    assert z.op == ir.VMap(ir.Add(), (0, 0), 3)
-    assert z.parents[0].op == ir.VMap(ir.Index(None), (None,0),3)
-    assert z.parents[1] == myloop.range
-    assert z.parents[0].parents == (x, myloop.range)
+# def test_loop_manual():
+#     x = makerv([10, 20, 30])
+#     myloop = Loop(3, auto_assign=False)
+#     with myloop as i:
+#         dummy_z = x[i]
+#
+#     assert isinstance(dummy_z.op, ir.Index)
+#     assert dummy_z.parents == (x, myloop.i)
+#     assert myloop.generated_rvs == [dummy_z]
+#
+#     [z] = vmap_subgraph([myloop.range], [myloop.i], [0], 3, [dummy_z], [dummy_z])
+#
+#     assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
+#     assert z.parents == (x, myloop.range)
+#
+# def test_loop_manual_finalization():
+#     x = makerv([10, 20, 30])
+#     z = LoopVar()
+#     myloop = Loop(3, auto_assign=False)
+#     with myloop as i:
+#         z[i] = x[i]
+#
+#     [new_z] = vmap_subgraph([myloop.range], [myloop.i], [0], 3, [z.dummy_rv], [z.dummy_rv])
+#
+#     z.finalize(new_z.op, *new_z.parents)
+#
+#     assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
+#     assert z.parents == (x, myloop.range)
+#
+# def test_loop_auto_finalization1():
+#     x = makerv([10, 20, 30])
+#     z = LoopVar()
+#     myloop = Loop(3)
+#     with myloop as i:
+#         z[i] = x[i]
+#
+#     assert z.op == ir.VMap(ir.Index(None), (None, 0), 3)
+#     assert z.parents == (x, myloop.range)
+#
+# def test_loop_auto_finalization2():
+#     x = makerv([10, 20, 30])
+#     z = LoopVar()
+#     myloop = Loop(3)
+#     with myloop as i:
+#         z[i] = x[i] + i
+#
+#     assert z.op == ir.VMap(ir.Add(), (0, 0), 3)
+#     assert z.parents[0].op == ir.VMap(ir.Index(None), (None,0),3)
+#     assert z.parents[1] == myloop.range
+#     assert z.parents[0].parents == (x, myloop.range)
 
 
 # def test_double_loop():

@@ -2,6 +2,7 @@ from cleanpangolin.interface import *
 from cleanpangolin.ir import Composite
 from cleanpangolin.interface.composite import make_composite, composite_flat, composite
 from cleanpangolin.interface.loops import Loop, slot
+from cleanpangolin import ir
 
 
 def test_make_composite_plain_normal():
@@ -68,6 +69,52 @@ def test_make_composite_closure2():
     par_nums = ((0, 1), (1, 2))  # [[x,y],[y,z]]
     assert op == Composite(num_inputs, ops, par_nums)
     assert consts == [x, y]
+
+
+def test_make_composite_closure3():
+    #x = normal(0, 1)
+    y = normal(0, 1)
+
+    def f(x):
+        z = x * y
+        return normal(y, z)
+
+    op, consts = make_composite(f, ())
+    num_inputs = 2
+    ops = (ir.Mul(), ir.Normal())
+    par_nums = ((0, 1), (1, 2))  # [[x,y],[y,z]]
+    assert op == Composite(num_inputs, ops, par_nums)
+    assert consts == [y]
+
+
+def test_make_composite_closure4():
+    x = normal(0, 1)
+    #y = normal(0, 1)
+
+    def f(y):
+        z = x * y
+        return normal(y, z)
+
+    op, consts = make_composite(f, ())
+    num_inputs = 2
+    ops = (ir.Mul(), ir.Normal())
+    par_nums = ((1, 0), (0, 2))  # [[x,y],[y,z]]
+    assert op == Composite(num_inputs, ops, par_nums)
+    assert consts == [x]
+
+
+def test_make_composite_normal_const_rv():
+    scale = makerv(3.3)
+
+    def fun(x):
+        return normal(x, scale)
+
+    op, consts = make_composite(fun, ())
+    num_inputs = 2
+    ops = (ir.Normal(),)
+    par_nums = ((0, 1),)  # [[x,scale]]
+    assert op == Composite(num_inputs, ops, par_nums)
+    assert consts == [scale]
 
 
 def test_composite_flat_mul_exponential():
@@ -210,6 +257,33 @@ def test_composite_normal():
     assert z.parents[0].op == ir.Constant(2.2)
 
 
+def test_composite_normal_const_rv():
+    scale = makerv(3.3)
+
+    @composite
+    def fun(x):
+        return normal(x, scale)
+
+    z = fun(2.2)
+
+    assert z.op == ir.Composite(2, [ir.Normal()], [[0,1]])
+    assert z.parents[0].op == ir.Constant(2.2)
+    assert z.parents[1].op == ir.Constant(3.3)
+
+def test_composite_normal_const_rv_reversed():
+    loc = makerv(3.3)
+
+    @composite
+    def fun(x):
+        return normal(loc, x)
+
+    z = fun(2.2)
+
+    assert z.op == ir.Composite(2, [ir.Normal()], [[1,0]])
+    assert z.parents[0].op == ir.Constant(2.2)
+    assert z.parents[1].op == ir.Constant(3.3)
+
+
 def test_composite_mul_exponential():
     def f(a):
         b = a * a
@@ -309,3 +383,16 @@ def test_composite_complex_inputs():
     z = f((0, (1, 2)))
 
     assert z.op == ir.Composite(3, (ir.Add(), ir.Div(), ir.Mul()), ((0, 2), (1, 2), (3, 4)))
+
+def test_composite_norm():
+    x = makerv(0.5)
+    noise = makerv(1e-3)
+
+    @composite
+    def f(last):
+        return normal(last, noise)  # +1
+
+    y = f(x)
+
+    assert y.op == Composite(2, [ir.Normal()], [[0,1]] )
+    assert y.parents == (x, noise)

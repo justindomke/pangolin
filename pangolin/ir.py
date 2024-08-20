@@ -724,17 +724,17 @@ class Autoregressive(CondDist):
         else:
             my_length = self.length
 
-        print(f"{my_length=}")
+        #print(f"{my_length=}")
 
         for s in other_shapes:
             assert s[0] == my_length
         base_other_shapes = tuple(s[1:] for s in other_shapes)
 
         base_input_shapes = (start_shape,) + const_shapes + base_other_shapes
-        print(f"{start_shape=}")
-        print(f"{const_shapes=}")
-        print(f"{base_other_shapes=}")
-        print(f"{base_input_shapes=}")
+        #print(f"{start_shape=}")
+        #print(f"{const_shapes=}")
+        #print(f"{base_other_shapes=}")
+        #print(f"{base_input_shapes=}")
         base_output_shape = self.base_cond_dist.get_shape(*base_input_shapes)
         output_shape = (my_length,) + base_output_shape
         return output_shape
