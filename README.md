@@ -1,83 +1,94 @@
-Pangolin is a probabilistic inference research project. To get a quick feel for how 
-it works, see these examples:
+# Pangolin
 
-* [8 schools](demos/demo-8-schools.ipynb)
-* [logistic regression](demos/demo-logistic-regression.ipynb)
-* [GP regression](demos/demo-GP-regression.ipynb)
-* [Item-response theory models](demos/demo-IRT.ipynb)
+Pangolin is an early-stage probabilistic inference research project. The focus is to make probabilistic inference **fun**.
 
-It has the following goals:
+![pangolin](pangolin.jpg)
 
-* **Feel like numpy.** Provide an interface for interacting with probability 
-  distributions that feels natural to anyone who's played around with 
-  numpy. As much as possible, using Pangolin should feel like a natural extension of 
-  that ecosystem rather than a new language.
-* **Look like math.** Where possible, calculations should resemble mathematical 
-  notation. Exceptions are allowed when algorithmic limitations make this impossible or 
-  where accepted mathematical notation is bad.
-* **Gradual enhancement.** There should be no barrier between using it as a 
-  "calculator" for simple one-liner probabilistic calculations and building full 
-  custom Bayesian models.
-* **Multiple Backends.** We have used lots of different PPLs. Some of our favorites are:
-  * [BUGS](https://www.mrc-bsu.cam.ac.uk/software/bugs/openbugs)
-  * [JAGS](https://mcmc-jags.sourceforge.io/)
-  * [Stan](https://mc-stan.org/)
-  * [NumPyro](https://num.pyro.ai/)
-  * [PyMC](https://www.pymc.io/)
-  * [Tensorflow Probability](https://www.tensorflow.org/probability)  
-   We want users to be able to write a model *once* and then seamlessly use any of 
-    these to actually do inference.  
-* **Support program transformations.** Often, users of different PPLs need to 
-  manually "transform" their model to get good results. (E.g. manually integrating out 
-  discrete latent variables, using non-centered transformations, etc.) We want to 
-  provide an "intermediate representation" to make such transformations as easy to 
-  define as possible.
-* **Support inference algorithm developers.** Existing probabilistic programming 
-  languages are often quite "opinionated" about how inference should proceed. This 
-  can make it difficult to apply certain kinds of inference algorithms.
-  We want to provide a representation that makes it as easy as possible for people 
-  to create "new" backends with new inference algorithms.
-* **No passing strings as variable names.** We love [NumPyro](https://num.pyro.ai/) 
-  and [PyMC](https://www.pymc.io/). But we don't love writing `mean = sample('mean',
-  Normal(0, 1))` or `mean = Normal('mean', 0, 1)`. And we *really* don't love 
-  programmatically generating variable name strings inside of a for loop. We 
-  appreciate that Tensorflow Probability made this mostly optional, but we feel this 
-  idea was a mistake and we aren't going to be so compromising.
+## Installation
 
-It remains to be seen to what degree all these goals can be accomplished at the same 
-time. (That's what makes this a research project!)
+```commandline
+pip install pangolin
+```
 
-Here are some design principles which we think serve the above goals:
+## API Docs
 
-* **Unopinionated.** Probabilistic inference is an open research question. We don't 
-  know the best way to do it. So, where possible, we should avoid making assumptions 
-  about how inference will be done. It should be easy to write a new program 
-  transformation or create a new inference backend without having to conform to some 
-  API we invented. 
-* **Immutability.** Pangolin enforces that all random variables and distributions 
-  are frozen after creation. This is crucial for how much of the code works. We also 
-  think it makes it easier to reason about what's happening under the hood and makes 
-  it easier to extend.
-  * All the *current* inference methods and transformations are also immutable. (You 
-    do `xs = sample(x)` rather than something like `mcmc.run(); xs = mcmc.
-    get_samples()`.) However, in keeping with being *unopinionated*, there's nothing 
-    stopping you from writing an inference method that works in a different way 
-    including being mutable.
-* **Follow existing conventions.** Wherever possible, we borrow syntax from our 
-  favorite libraries:
-  * Distribution names and arguments are borrowed from Stan.
-  * Random variables are (with great effort) indexed exactly as in NumPy (including 
-    full support for advanced indexing with slices and multi-dimensional indices, etc.)
-  * For array-valued random variables, the `@` matrix-multiplication operator behaves 
-    exactly as in NumPy. 
-  * Array operations also behave as in NumPy. For example if `x` is a random 
-    variable with `x.shape=(7,2)` you can do `y=pangolin.sum(x,axis=1)` to 
-   get a new random variable with `y.shape=(7,)`. (Currently only few operations 
-   are supported)
-  * Random variables can be placed in PyTrees and manipulated as in Jax.
-  * `pangolin.vmap` has exactly the same syntax as `jax.vmap`.
+All user-facing functions are documented [here](API.md), with examples, in a single 250-ish line file.
 
-At the moment, we **do not advise** trying to use this code. However, an earlier 
-version of Pangolin is available and based on much the same ideas, except only 
-supporting JAGS as a backend. It can be found with documentation, in the 
+## Examples
+
+Simple "probabilistic calculator":
+
+```python
+import pangolin as pg
+x = pg.normal(0,2)  # x ~ normal(0,2)
+y = pg.normal(x,6)  # y ~ normal(x,6)
+print(pg.var(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
+```
+
+Bayesian inference on the 8-schools model:
+
+```python
+import pangolin as pg
+
+# data for 8 schools model
+num_schools = 8
+observed_effects = [28, 8, -3, 7, -1, 1, 18, 12]
+stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
+
+# define model
+mu = pg.normal(0,10)
+tau = pg.exp(pg.normal(5,1))
+theta = [pg.normal(mu,tau) for i in range(num_schools)]
+y = [pg.normal(theta[i],stddevs[i]) for i in range(num_schools)]
+
+# do inference
+theta_samps = pg.inference.numpyro.sample_flat(theta, y, observed_effects)
+
+# plot results (no pangolin here!)
+import numpy as np
+import seaborn as sns
+from matplotlib import pyplot as plt
+sns.swarmplot(np.array(theta_samps)[:,::50].T,s=2,zorder=0)
+plt.xlabel('school')
+plt.ylabel('treatment effect')
+```
+
+![](8schools_plot.png)
+
+If you're in the market for a PPL, you might want to compare the above to the same (or close) model implemented in other PPLs:
+
+
+| PPL | Comment                                                                                                                                                                                           |
+|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Pyro](https://forum.pyro.ai/t/hierarchical-models-and-eight-schools-example/362) | Requires "sample" statements, passing variable names as strings and uses slightly mysterious `plate` construct.                                                                                   |
+| [NumPyro](https://github.com/pyro-ppl/numpyro?tab=readme-ov-file#a-simple-example---8-schools) | Requires "sample" statements, passing variable names as strings and uses slightly mysterious `plate` construct.                                                                                   |
+| [PyMC](https://github.com/stan-dev/posteriordb/issues/117#issuecomment-567552694) | Pretty good, though requires creating a "model" function and passing variables names as strings. (PyMC is attemptint                                                                              | 
+| [JAGS](https://rstudio-pubs-static.s3.amazonaws.com/15236_9bc0cd0966924b139c5162d7d61a2436.html)  | Pretty good, both simple and explicit. We had this in 1991! Requires using a separate language.                                                                                                  |
+| [Stan](https://www.maths.usyd.edu.au/u/jormerod/Workshop/Example1/Example1.html#:~:text=school_model3)  | Looks very simple, but uses somewhat subtle batching semantics. Could be written similarly to the JAGS model, just with mandatory declarations of all types/shapes. Requires a separate language. |
+| [Tensorflow probability](https://www.tensorflow.org/probability/examples/Eight_Schools) | Legend has it that some find this a wee bit complicated.                                                                                                                                          |
+
+For more examples, take a look at the [demos](demos/).
+
+## Values
+
+(For the current Python interface)
+
+* **Gradual enhancement.** Easy things should be *really* easy. More complex features should be easily discoverable. Steep learning curves should be avoided.
+* **Small API surface.** The set of abstractions the user needs to learn should be as small as possible.
+* **Graceful interop.** As much as possible, the system should feel lke a natural part of the broader Python NumPy ecosystem, rather than a "new language".
+* **Look like math.** As much as possible, calculations should resemble mathematical notation. Exceptions are allowed when algorithmic limitations make this impossible or where standard mathematical notation is ambiguous or bad.
+
+## Long-term goals
+
+Long-term, Pangolin has the following goals:
+
+1. To "decouple" probabilistic models from inference algorithms. It should be possible to write a model *once*, and then perform inference using many inference "backends". (Among other things, this should facilitate benchmarks)
+2. To make it easier to experiment with novel inference algorithms that inspect the target distribution. 
+3. To support different possible interfaces, in different languages.
+4. To be "unopinionated" about how users might specify models, and how inference might be done.
+
+
+## See also
+
+An earlier version of Pangolin is available and based on much the same ideas, except only supporting JAGS as a backend. It can be found with documentation, in the 
 [`pangolin-jags`](pangolin-jags) directory.

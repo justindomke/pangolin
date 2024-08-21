@@ -2,6 +2,7 @@ from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import Sequence
+import collections
 
 
 def comma_separated(stuff, fun=None, parens=True):
@@ -53,6 +54,23 @@ class WriteOnceDict(dict):
         if key in self:
             raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDict")
         super().__setitem__(key, value)
+
+
+class WriteOnceDefaultDict(dict):
+    def __init__(self, default_factory):
+        self.default_factory = default_factory
+        super().__init__()
+
+    def __setitem__(self, key, value):
+        if key in self:
+            raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDefaultDict")
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        else:
+            return self.default_factory(key)
 
 
 def is_leaf_with_none(xi):
@@ -323,147 +341,29 @@ def replace_in_sequence(seq, i, new):
     return seq[:i] + s([new]) + seq[i + 1 :]
 
 
-def most_specific_class(*x):
+def camel_case_to_snake_case(name):
+    # from https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
+    import re
+
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def most_specific_class(*args, base_classes=()):
+    classes = base_classes + tuple(type(a) for a in args)
+    print(f"{classes=}")
+    for c in classes:
+        if all(issubclass(c, d) for d in classes):
+            return c
+    raise ValueError("no single most-specific argument type")
+
+
+def is_numeric_numpy_array(x):
+    return np.issubdtype(x.dtype, np.integer) or np.issubdtype(x.dtype, np.floating)
+
+
+def unzip(source: Sequence[tuple], strict=False):
     """
-    If either x or y is a subclass of the other, return the most specific class.
-    If neither is a subclass, raise a ValueError.
+    Reverses zip
     """
-    t = tuple(type(xi) for xi in x)
-    for ti in t:
-        if all(issubclass(ti, tj) for tj in t):
-            return ti
-    else:
-        raise ValueError(f"no argument is a subclass of all: {t}")
+    return zip(*source, strict=strict)
 
-
-def remove_indices(sequence, indices):
-    return type(sequence)(x for (n, x) in enumerate(sequence) if n not in indices)
-
-
-################################################################################
-# nicer dict
-################################################################################
-
-# class TwoDict:
-#     def __init__(self):
-#         self.d = {}
-#
-#     def __setitem__(self, key, value):
-#         print(f"{key=}")
-#         print(f"{value=}")
-#         assert len(key) == 2
-#         self.d[key] = value
-#
-#     def clear_keys(self, key0):
-#         to_del = []
-#         for key in self.d:
-#             if key[0] == key0:
-#                 to_del.append(key)
-#         for key in to_del:
-#             del self.d[key]
-#
-#     def keys(self):
-#         return self.d.keys()
-#
-#     def __contains__(self,item):
-#         return item in self.d
-
-class SlowTwoSet:
-    def __init__(self):
-        self.s = set()
-
-    def add(self, i,j):
-        self.s.add((i,j))
-
-    def clear_keys(self, i):
-        to_del = []
-        for pair in self.s:
-            if pair[0] == i or pair[1]==i:
-                to_del.append(pair)
-        #for pair in to_del:
-        #    self.s.remove(pair)
-        self.s.difference_update(to_del)
-
-    @property
-    def items(self):
-        return self.s
-
-    def __contains__(self,pair):
-        return pair in self.s
-
-class TwoSet:
-    def __init__(self):
-        self.s = set()
-        self.where0 = {}
-        self.where1 = {}
-
-    def add(self, i,j):
-        self.s.add((i,j))
-        if i not in self.where0:
-            self.where0[i] = []
-        if j not in self.where1:
-            self.where1[j] = []
-        self.where0[i].append((i,j))
-        self.where1[j].append((i,j))
-
-    def clear_keys(self, i):
-        if i in self.where0:
-            self.s.difference_update(self.where0[i])
-            self.where0[i] = []
-        if i in self.where1:
-            self.s.difference_update(self.where1[i])
-            self.where1[i] = []
-
-    @property
-    def items(self):
-        return self.s
-
-    def __contains__(self,pair):
-        i,j = pair
-        return (i,j) in self.s or (j,i) in self.s
-
-
-
-class TwoDict:
-    def __init__(self):
-        self.d = {}
-        self.where0 = {}
-        self.where1 = {}
-
-    def __setitem__(self, key, value):
-        (i,j) = key
-        if (i,j) in self.d or (j,i) in self.d:
-            raise ValueError("can't overwrite")
-
-        self.d[(i,j)] = value
-        if i not in self.where0:
-            self.where0[i] = []
-        if j not in self.where1:
-            self.where1[j] = []
-        self.where0[i].append((i,j))
-        self.where1[j].append((i,j))
-
-    def clear_keys(self, i):
-        if i in self.where0:
-            for pair in self.where0[i]:
-                del self.d[pair]
-            self.where0[i] = []
-        if i in self.where1:
-            for pair in self.where0[1]:
-                del self.d[pair]
-            self.where1[i] = []
-
-    def keys(self):
-        return self.d.keys()
-
-    def __contains__(self,pair):
-        i,j = pair
-        return (i,j) in self.d or (j,i) in self.d
-
-    def __getitem__(self,item):
-        (i,j) = item
-        if (i,j) in self.d:
-            return self.d[i,j]
-        if (j,i) in self.d:
-            return self.d[j,i]
-        raise KeyError(item)

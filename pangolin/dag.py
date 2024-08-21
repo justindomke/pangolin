@@ -14,6 +14,7 @@ class Node:
 
     def __init__(self, *parents):
         self.parents = parents
+        "The parents of this node"
 
 
 def upstream_nodes_flat(nodes_flat, node_block, edge_block, upstream):

@@ -1,27 +1,26 @@
 """
-Pangolin is a library for Bayesian inference, intended to be easy to use.
-
-```python
-from pangolin import *
-x = normal(0,1)
-y = normal(x,1)
-print(E(x,y,1))
-```
-
-Output: `0.48653358`
+Main interface to pangolin. Broadly speaking, there are the following classes of functions:
+- `makerv` will either cast its input to a constant RV or (if it is already an RV) leave it alone
+    (TODO: This is bad)
+- Functions to create new RVs with given distributions: `normal`, `exponential`,
+`multi_normal`, `dirichlet`, etc.
+- Functions to apply deterministic transformations to other RVs: `exp`, `sin`, `pow`, `matmul`, etc.
+- Program transforms: `vmap`
 """
 
+__docformat__ = 'numpy'
 
-from .interface import *
-from . import calculate, inference_numpyro
-from . import *
-from . import transforms
+from pangolin import interface, ir, inference
 
-Calculate = calculate.Calculate
+from pangolin.inference import *
 
-# for convenience, set up inference routines
-calc = Calculate(inference_numpyro, niter=100000)
-sample = calc.sample
-E = calc.E
-var = calc.var
-std = calc.std
+#from pangolin.interface import autoregressive, print_upstream
+from pangolin.interface import *
+#from pangolin.interface.interface import *
+from pangolin.interface.vmap import vmap
+from pangolin.interface.index import index
+
+
+
+__all__ = ['ir','interface','vmap','index','inference']
+#__all__ += interface.interface.for_api
