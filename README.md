@@ -6,6 +6,8 @@ Pangolin is an early-stage probabilistic inference research project. The focus i
 
 ## Installation
 
+See [`INSTALL.md`](INSTALL.md)
+
 ```commandline
 pip install pangolin
 ```
