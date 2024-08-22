@@ -10,7 +10,7 @@ Main interface to pangolin. Broadly speaking, there are the following classes of
 
 __docformat__ = 'numpy'
 
-from pangolin import interface, ir, inference
+#from pangolin import interface, ir, inference
 
 from pangolin.inference import *
 
@@ -24,3 +24,4 @@ from pangolin.interface.index import index
 
 __all__ = ['ir','interface','vmap','index','inference']
 #__all__ += interface.interface.for_api
+
