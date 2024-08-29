@@ -1,43 +1,43 @@
 # How to install pangolin
 
-1. Install Anaconda and create a new environment. (optional but recommended, you can of course use other Python environment tools if you want.)
+**Step 1** (Optional but recommended) Install Anaconda and create a new environment, then activate it.
 
 ```
-conda create -n pangolin-fresh-install-test python=3.12
+conda create -n pangolin-test python=3.12
+conda activate pangolin-test
 ```
 
-2. Activate the environment (optional but recommended)
+(If you are a Python expert, you could also use any other Python virtual environment tools, but Python 3.11 or higher is required.)
 
-```
-conda activate pangolin-fresh-install-test
-```
+**Step 2** Download pangolin source code and extract it. You could do this in either of the following ways:
 
-3. Go to whatever directory you want to store the code and download pangolin source code
+1.  Go to [`https://github.com/justindomke/pangolin`](https://github.com/justindomke/pangolin) in your browser, then click on "Code" and then "Download zip". Then double-click the file to extract it and past the contents wherever you want to store them.
+
+2. Type the following at the command line (assumes you are on Mac or Linux and have `wget` and `unzip` installed):
 
 ```
 cd path/to/wherever/
 wget https://github.com/justindomke/pangolin/archive/refs/heads/main.zip
-```
-
-4. Unzip Pagolin source code
-
-```
 unzip main.zip
 ```
 
-5. Install required packages
+**Step 3**. Install required packages. At the command line, go to wherever you put the pangolin source code, and type the following:
+
+    ```
+    pip install -r pangolin-main/requirements.txt
+    ```
+
+**Step 4.** Install pangolin from local directory. At the command line, go to wherever you put the pangolin source code, and type the following:
 
 ```
-pip install -r pangolin-main/requirements.txt
+python -m pip install pangolin-main/
 ```
 
-6. Install pangolin from local directory
+If this doesn't work, you can also try `pip install pangolin-main/` or `pip install pangolin-main/`.
 
-```
-python3 -m pip install pangolin-main/
-```
+At this point, technically you're done! But let's test to make sure installation worked.
 
-7. Start pangolin and make sure it works.
+**Step 5.** Start Python make sure Pangolin works.
 
 ```
 % python
@@ -58,7 +58,7 @@ shape | statement
 ()    | c ~ normal(a,b)
 ```
 
-8. Make sure that Jax and NumPyro are correctly installed. Start python and do:
+**Step 6.** Make sure that Pangolin's dependencies (Jax and NumPyro) are correctly installed. Start Python and do:
 
 ```python
 import numpyro
