@@ -23,19 +23,17 @@ unzip main.zip
 
 **Step 3**. Install required packages. At the command line, go to wherever you put the pangolin source code, and type the following:
 
-    ```
-    pip install -r pangolin-main/requirements.txt
-    ```
+```
+pip install -r pangolin-main/requirements.txt
+```
 
 **Step 4.** Install pangolin from local directory. At the command line, go to wherever you put the pangolin source code, and type the following:
 
 ```
-python -m pip install pangolin-main/
+pip install pangolin-main/
 ```
 
-If this doesn't work, you can also try `pip install pangolin-main/` or `pip install pangolin-main/`.
-
-At this point, technically you're done! But let's test to make sure installation worked.
+At this point, technically you're done. But let's test to make sure installation worked.
 
 **Step 5.** Start Python make sure Pangolin works.
 
