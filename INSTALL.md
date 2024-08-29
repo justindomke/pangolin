@@ -13,13 +13,13 @@ conda activate pangolin-test
 
 1.  Go to [`https://github.com/justindomke/pangolin`](https://github.com/justindomke/pangolin) in your browser, then click on "Code" and then "Download zip". Then double-click the file to extract it and past the contents wherever you want to store them.
 
-2. Type the following at the command line (assumes you are on Mac or Linux and have `wget` and `unzip` installed):
+2. Type the following at the command line (assumes you have `wget` and `unzip` installed):
 
-```
-cd path/to/wherever/
-wget https://github.com/justindomke/pangolin/archive/refs/heads/main.zip
-unzip main.zip
-```
+    ```
+    cd path/to/wherever/
+    wget https://github.com/justindomke/pangolin/archive/refs/heads/main.zip
+    unzip main.zip
+    ```
 
 **Step 3**. Install required packages. At the command line, go to wherever you put the pangolin source code, and type the following:
 
