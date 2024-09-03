@@ -41,6 +41,9 @@ class OperatorRV(RV):
         OperatorRV.n += 1
         super().__init__(op, *parents)
 
+    def __neg__(self):
+        return mul(self,-1)
+
     def __add__(self, other):
         return add(self, other)
 
