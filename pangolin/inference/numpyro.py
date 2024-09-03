@@ -9,7 +9,7 @@ from jax import lax
 from numpyro.distributions import util as dist_util
 from jax.scipy import special as jspecial
 from jax import nn as jnn
-import numpy as np
+#import numpy as np
 from pangolin.ir.rv import RV
 from pangolin import dag, util, ir
 from pangolin.interface.interface import OperatorRV
@@ -57,7 +57,7 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
     if len(given) != len(vals):
         raise ValueError("length of given does not match length of vals")
 
-    vals = [np.array(a) for a in vals]
+    vals = [jnp.array(a) for a in vals]
 
     for var, val in zip(given, vals):
         if var.shape != val.shape:
@@ -93,7 +93,7 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
                 else:
                     numpyro_rv = numpyro.sample(name, d)
             else:
-                assert isinstance(d, jnp.ndarray), "numpyo handler failed to return jax.numpy array for nonrandom op"
+                assert isinstance(d, jnp.ndarray), f"numpyo handler failed to return jax.numpy array for nonrandom op {var=} {d=}"
                 numpyro_rv = numpyro.deterministic(name, d)
 
             var_to_numpyro_rv[var] = numpyro_rv
@@ -459,12 +459,16 @@ def numpyro_var(op, *numpyro_parents):
     # each ir op type has a unique handler
     op_type = type(op)
     if op_type in simple_handlers:
-        return simple_handlers[op_type](*numpyro_parents)
+        out = simple_handlers[op_type](*numpyro_parents)
     else:
-        return numpyro_handlers[op_type](op, *numpyro_parents)
-
+        out = numpyro_handlers[op_type](op, *numpyro_parents)
+    # print(f"{op=}")
+    # print(f"{[type(p) for p in numpyro_parents]=}")
+    # print(f"{type(out)=}")
+    return out
 
 def generate_seed(size=()):
+    import numpy as np # import here to prevent accidental use elsewhere in a jax shop
     info = np.iinfo(int)
     return np.random.randint(info.min, info.max, size=size)
 
@@ -500,11 +504,14 @@ def sample_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array], *, nit
 
     # TODO: activate ancestor sampling
     if len(given) == 0:
-        print("ancestor sampling")
+        #print("ancestor sampling")
         return ancestor_sample_flat(vars, niter=niter)
 
     # TODO:
     # raise an exception if no random vars
+
+    if any(not v.op.random for v in given):
+       raise ValueError("Cannot condition on RV with non-random op")
 
     vals = [jnp.array(val) for val in vals]
 
