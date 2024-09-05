@@ -117,6 +117,7 @@ simple_handlers = {
     ir.Exponential: dist.Exponential,
     ir.Dirichlet: dist.Dirichlet,
     ir.Gamma: dist.Gamma,
+    ir.LogNormal: dist.LogNormal,
     ir.Multinomial: dist.Multinomial,
     ir.MultiNormal: dist.MultivariateNormal,
     ir.Poisson: dist.Poisson,
@@ -469,7 +470,7 @@ def numpyro_var(op, *numpyro_parents):
 
 def generate_seed(size=()):
     import numpy as np # import here to prevent accidental use elsewhere in a jax shop
-    info = np.iinfo(int)
+    info = np.iinfo(np.int32)
     return np.random.randint(info.min, info.max, size=size)
 
 
