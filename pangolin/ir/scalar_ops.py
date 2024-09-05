@@ -100,6 +100,7 @@ Cauchy = all_scalar_op_factory(2, "Cauchy", True)
 "A Cauchy parameterized by location and scale. Call as `Cauchy()`."
 Normal = all_scalar_op_factory(2, "Normal", True)
 NormalPrec = all_scalar_op_factory(2, "NormalPrec", True)
+LogNormal = all_scalar_op_factory(2, "LogNormal", True)
 Bernoulli = all_scalar_op_factory(1, "Bernoulli", True)
 BernoulliLogit = all_scalar_op_factory(1, "BernoulliLogit", True)
 Binomial = all_scalar_op_factory(2, "Binomial", True)
