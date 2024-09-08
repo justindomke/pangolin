@@ -18,8 +18,8 @@ Simple "probabilistic calculator":
 
 ```python
 import pangolin as pg
-x = pg.normal(0,2)  # x ~ normal(0,2)
-y = pg.normal(x,6)  # y ~ normal(x,6)
+x = pg.normal(0,2)    # x ~ normal(0,2)
+y = pg.normal(x,6)    # y ~ normal(x,6)
 print(pg.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
 
@@ -34,9 +34,9 @@ observed_effects = [28, 8, -3, 7, -1, 1, 18, 12]
 stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
 
 # define model
-mu = pg.normal(0,10) # mu ~ normal(0,10)
-tau = pg.exp(pg.normal(5,1)) # tau ~ lognormal(5,1)
-theta = [pg.normal(mu,tau) for i in range(num_schools)] # theta[i] ~ normal(mu,tau)
+mu = pg.normal(0,10)                                            # mu ~ normal(0,10)
+tau = pg.exp(pg.normal(5,1))                                    # tau ~ lognormal(5,1)
+theta = [pg.normal(mu,tau) for i in range(num_schools)]         # theta[i] ~ normal(mu,tau)
 y = [pg.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(theta[i],stddevs[i])
 
 # do inference / sample from p(theta | y=observed_effects)
