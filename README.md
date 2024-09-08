@@ -34,12 +34,12 @@ observed_effects = [28, 8, -3, 7, -1, 1, 18, 12]
 stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
 
 # define model
-mu = pg.normal(0,10)
-tau = pg.exp(pg.normal(5,1))
-theta = [pg.normal(mu,tau) for i in range(num_schools)]
-y = [pg.normal(theta[i],stddevs[i]) for i in range(num_schools)]
+mu = pg.normal(0,10) # mu ~ normal(0,10)
+tau = pg.exp(pg.normal(5,1)) # tau ~ lognormal(5,1)
+theta = [pg.normal(mu,tau) for i in range(num_schools)] # theta[i] ~ normal(mu,tau)
+y = [pg.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(theta[i],stddevs[i])
 
-# do inference
+# do inference / sample from p(theta | y=observed_effects)
 theta_samps = pg.inference.numpyro.sample_flat(theta, y, observed_effects)
 
 # plot results (no pangolin here!)
@@ -56,14 +56,14 @@ plt.ylabel('treatment effect')
 If you're in the market for a PPL, you might want to compare the above to the same (or close) model implemented in other PPLs:
 
 
-| PPL | Comment                                                                                                                                                                                           |
-|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Pyro](https://forum.pyro.ai/t/hierarchical-models-and-eight-schools-example/362) | Requires "sample" statements, passing variable names as strings, and uses slightly mysterious `plate` construct.                                                                                  |
-| [NumPyro](https://github.com/pyro-ppl/numpyro?tab=readme-ov-file#a-simple-example---8-schools) | Requires "sample" statements, passing variable names as strings, and uses slightly mysterious `plate` construct.                                                                                  |
-| [PyMC](https://github.com/stan-dev/posteriordb/issues/117#issuecomment-567552694) | Pretty good, though requires creating a "model" function and passing variables names as strings.                                                                                                  | 
-| [JAGS](https://rstudio-pubs-static.s3.amazonaws.com/15236_9bc0cd0966924b139c5162d7d61a2436.html)  | Pretty good, both simple and explicit. We had this in 1991! Requires using a separate language.                                                                                                   |
-| [Stan](https://www.maths.usyd.edu.au/u/jormerod/Workshop/Example1/Example1.html#:~:text=school_model3)  | Looks very simple, but uses somewhat subtle batching semantics. Could be written similarly to the JAGS model, just with mandatory declarations of all types/shapes. Requires a separate language. |
-| [Tensorflow probability](https://www.tensorflow.org/probability/examples/Eight_Schools) | Legend has it that some find this a wee bit complicated.                                                                                                                                          |
+| PPL                                                                                                    | Comment                                                                                                                                                                                           |
+|--------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Pyro](https://forum.pyro.ai/t/hierarchical-models-and-eight-schools-example/362)                      | Requires "sample" statements, passing variable names as strings, and uses slightly mysterious `plate` construct.                                                                                  |
+| [NumPyro](https://github.com/pyro-ppl/numpyro?tab=readme-ov-file#a-simple-example---8-schools)         | Requires "sample" statements, passing variable names as strings, and uses slightly mysterious `plate` construct.                                                                                  |
+| [PyMC](https://github.com/stan-dev/posteriordb/issues/117#issuecomment-567552694)                      | Pretty good, though requires creating a "model" function and passing variables names as strings.                                                                                                  | 
+| [JAGS](https://rstudio-pubs-static.s3.amazonaws.com/15236_9bc0cd0966924b139c5162d7d61a2436.html)       | Pretty good, both simple and explicit. We had this in 1991! Requires using a separate language.                                                                                                   |
+| [Stan](https://www.maths.usyd.edu.au/u/jormerod/Workshop/Example1/Example1.html#:~:text=school_model3) | Looks very simple, but uses somewhat subtle batching semantics. Could be written similarly to the JAGS model, just with mandatory declarations of all types/shapes. Requires a separate language. |
+| [Tensorflow probability](https://www.tensorflow.org/probability/examples/Eight_Schools)                | Legend has it that some find this a wee bit complicated.                                                                                                                                          |
 
 For more examples, take a look at the [demos](demos/).
 
