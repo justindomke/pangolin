@@ -13,6 +13,8 @@ from pangolin.inference.numpyro import (
     std,
     var,
     ancestor_sample_flat,
+    numpyro_vmap_var_random,
+    vmap_numpyro_pars,
 )
 from numpyro import distributions as numpyro_dist
 from numpyro import infer as numpyro_infer
@@ -22,6 +24,7 @@ import inspect
 from jax import numpy as jnp
 import pytest
 import scipy.special
+import pangolin as pg
 
 
 def rands_from_ranges(ranges):
@@ -625,3 +628,187 @@ def test_random_index():
 def test_ancestor_sample_flat():
     x = normal(0,1)
     [xs] = ancestor_sample_flat([x],niter=1000)
+
+def test_vmap_normal1():
+    y = vmap(normal, in_axes=None, axis_size=3)(0.5, 1.5)
+
+    def testfun(y_samps):
+        E_y = jnp.mean(y_samps, axis=0)
+        std_y = jnp.std(y_samps, axis=0)
+        return np.max(np.abs(E_y - 0.5)) < 0.1 and np.max(np.abs(std_y - 1.5)) < 0.1
+
+    inf_until_match(sample, y, [], [], testfun)
+
+def test_vmap_normal2():
+    locs = jnp.array([3, 4, 5])
+    std = 1.5
+    y = vmap(normal, in_axes=[0,None], axis_size=3)(locs, std)
+
+    def testfun(y_samps):
+        E_y = jnp.mean(y_samps, axis=0)
+        std_y = jnp.std(y_samps, axis=0)
+        return np.max(np.abs(E_y - locs)) < 0.1 and np.max(np.abs(std_y - std) < 0.1)
+
+    inf_until_match(sample, y, [], [], testfun)
+
+
+def test_vmap_normal3():
+    loc = 3
+    stds = jnp.array([6, 7, 8])
+    y = vmap(normal, in_axes=[None,0], axis_size=3)(loc, stds)
+
+    def testfun(y_samps):
+        E_y = jnp.mean(y_samps, axis=0)
+        std_y = jnp.std(y_samps, axis=0)
+        return np.max(np.abs(E_y - loc)) < 0.1 and np.max(np.abs(std_y - stds)) < 0.1
+
+    inf_until_match(sample, y, [], [], testfun)
+
+
+def test_vmap_normal4():
+    locs = jnp.array([3, 4, 5])
+    stds = jnp.array([6, 7, 8])
+    y = vmap(normal, in_axes=[0,0], axis_size=3)(locs, stds)
+
+    def testfun(y_samps):
+        E_y = jnp.mean(y_samps, axis=0)
+        std_y = jnp.std(y_samps, axis=0)
+        return np.max(np.abs(E_y - locs)) < 0.1 and np.max(np.abs(std_y - stds)) < 0.1
+
+    inf_until_match(sample, y, [], [], testfun)
+
+
+def test_vmap_bernoulli_support():
+    y = vmap(bernoulli,None,5)(0.5)
+    op = y.op
+    numpyro_var = numpyro_vmap_var_random(op, jnp.array(0.5))
+    assert numpyro_var.support == numpyro.distributions.Bernoulli(0.5).support
+    assert numpyro_var.support.is_discrete
+
+def test_bernoulli_logit_inference1():
+    w = normal(0,1)
+    y = bernoulli_logit(w)
+    yp = bernoulli_logit(w)
+    yp_samples = sample(yp,y,0, niter=1000)
+    assert all(yi in [0,1] for yi in yp_samples)
+
+def test_bernoulli_logit_inference2():
+    w = normal(0,1)
+    y = vmap(bernoulli_logit,None,5)(w)
+    yp = bernoulli_logit(w)
+    yp_samples = sample(yp,y,[0,0,1,1,0], niter=1000)
+    print(yp_samples)
+    assert all(yi in [0,1] for yi in yp_samples)
+
+def test_bernoulli_logit_inference3():
+    w = normal(0,1)
+    y = vmap(bernoulli_logit,None,5)(w)
+    yp = vmap(bernoulli_logit,None,5)(w)
+    pg.print_upstream((y,yp))
+    yp_samples = sample(yp,y,[0,0,1,1,0], niter=1000)
+    print(yp_samples)
+    assert all(yi in [0,1] for yi in yp_samples.ravel())
+
+def test_bernoulli_logit_inference4():
+    w = normal(0,1)
+    y = vmap(bernoulli_logit,None,5)(w)
+    yp = vmap(bernoulli_logit,None,5)(w)
+    yp_samples = sample(yp, niter=1000)
+    print(yp_samples)
+    assert all(yi in [0,1] for yi in yp_samples.ravel())
+
+def assert_numpyro_pars_correct(in_axes_list,p1,p2,*,axis_size_list=None):
+    if axis_size_list is None:
+        axis_size_list = [None]*len(in_axes_list)
+
+    # def dummy(*args):
+    #     return args
+    # for in_axes, axis_size in zip(reversed(in_axes_list), reversed(axis_size_list), strict=True):
+    #     dummy = jax.vmap(dummy, in_axes, axis_size=axis_size)
+    # dummy_args = dummy(p1, p2)
+    # #print(f"{dummy_args=}")
+    # print(f"{dummy_args[0].shape=}")
+    # print(f"{dummy_args[1].shape=}")
+
+    fun = jnp.add
+    for in_axes, axis_size in zip(reversed(in_axes_list), reversed(axis_size_list), strict=True):
+        fun = jax.vmap(fun, in_axes, axis_size=axis_size)
+    vmap_sum = fun(p1, p2)
+    print(f"{vmap_sum.shape=}")
+
+    op = ir.Normal()
+    for in_axes, axis_size in zip(reversed(in_axes_list), reversed(axis_size_list), strict=True):
+        op = ir.VMap(op, in_axes, axis_size=axis_size)
+    new_p1, new_p2 = vmap_numpyro_pars(op, p1, p2)
+    print(f"{new_p1.shape=}")
+    print(f"{new_p2.shape=}")
+
+    broadcast_sum = new_p1 + new_p2
+
+    #print(f"{broadcast_sum=}")
+    #print(f"{vmap_sum=}")
+    print(f"{broadcast_sum.shape=}")
+
+
+    np.testing.assert_allclose(broadcast_sum, vmap_sum)
+
+def test_vmap_numpyro_pars_single1():
+    in_axes_list = [[None, None]]
+    axis_size_list = [3]
+    p1 = jnp.array(1)
+    p2 = jnp.array(2)
+    assert_numpyro_pars_correct(in_axes_list, p1, p2, axis_size_list=axis_size_list)
+
+def test_vmap_numpyro_pars_single2():
+    in_axes_list = [[0,None]]
+    p1 = jnp.array([1,2,3])
+    p2 = jnp.array(4)
+    assert_numpyro_pars_correct(in_axes_list,p1,p2)
+
+def test_vmap_numpyro_pars_single3():
+    in_axes_list = [[None,0]]
+    p1 = jnp.array(1.1)
+    p2 = jnp.array([2.2,3.3,4.4])
+    assert_numpyro_pars_correct(in_axes_list,p1,p2)
+
+def test_vmap_numpyro_pars_single4():
+    in_axes_list = [[0, 0]]
+    p1 = jnp.array([1, 2, 3])
+    p2 = jnp.array([4, 4, 6])
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double1():
+    in_axes_list = [[0, 0],[0, 0]]
+    p1 = jnp.array(np.random.randn(4,3))
+    p2 = jnp.array(np.random.randn(4,3))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double2():
+    in_axes_list = [[None, 0],[0, 0]]
+    p1 = jnp.array(np.random.randn(4))
+    p2 = jnp.array(np.random.randn(3,4))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double3():
+    in_axes_list = [[0, None], [0, 0]]
+    p1 = jnp.array(np.random.randn(3, 4))
+    p2 = jnp.array(np.random.randn(4))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double4():
+    in_axes_list = [[0, 0], [None, 0]]
+    p1 = jnp.array(np.random.randn(3))
+    p2 = jnp.array(np.random.randn(3,4))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double5():
+    in_axes_list = [[0, None], [None, 0]]
+    p1 = jnp.array(np.random.randn(3))
+    p2 = jnp.array(np.random.randn(4))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)
+
+def test_vmap_numpyro_pars_double6():
+    in_axes_list = [[None,0], [0,None]]
+    p1 = jnp.array(np.random.randn(3))
+    p2 = jnp.array(np.random.randn(4))
+    assert_numpyro_pars_correct(in_axes_list, p1, p2)

@@ -16,7 +16,7 @@ from pangolin.interface.interface import OperatorRV
 from numpy.typing import ArrayLike
 from pangolin.interface import RV_or_array
 from pangolin.inference import inference_util
-
+import numpy as np
 
 def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
     """
@@ -84,14 +84,19 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
             name = var_to_name[var]
             numpyro_pars = [var_to_numpyro_rv[p] for p in var.parents]
 
-            d = numpyro_var(var.op, *numpyro_pars)
+            if var in given:
+                obs = vals[given.index(var)]
+            else:
+                obs = None
+
+            if isinstance(var.op, ir.VMap):
+                d = deal_with_vmap(var.op, *numpyro_pars, is_observed=obs is not None)
+            else:
+                d = numpyro_var(var.op, *numpyro_pars)
 
             if var.op.random:
                 assert isinstance(d, dist.Distribution), "numpyo handler failed to return distribution for random op"
-                if var in given:
-                    numpyro_rv = numpyro.sample(name, d, obs=vals[given.index(var)])
-                else:
-                    numpyro_rv = numpyro.sample(name, d)
+                numpyro_rv = numpyro.sample(name, d, obs=obs)
             else:
                 assert isinstance(d, jnp.ndarray), f"numpyo handler failed to return jax.numpy array for nonrandom op {var=} {d=}"
                 numpyro_rv = numpyro.deterministic(name, d)
@@ -102,6 +107,7 @@ def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
 
     return model, var_to_name
 
+broadcastable_op_classes = (ir.Normal, ir.NormalPrec, ir.Bernoulli, ir.BernoulliLogit)
 
 # handlers that don't need to look at the op itself, just the type
 simple_handlers = {
@@ -188,12 +194,24 @@ def handle_sum(op: ir.Sum, val):
     return jnp.sum(val, axis=op.axis)
 
 
-@register_handler(ir.VMap)
-def handle_vmap(op: ir.VMap, *numpyro_parents):
-    if op.random:
-        return numpyro_vmap_var_random(op, *numpyro_parents)
-    else:
-        return numpyro_vmap_var_nonrandom(op, *numpyro_parents)
+# @register_handler(ir.VMap)
+# def handle_vmap(op: ir.VMap, *numpyro_parents):
+#     if op.random:
+#         return numpyro_vmap_var_random(op, *numpyro_parents)
+#         # if op in [ir.Bernoulli]:
+#         #     return numpyro_vmap_var_random_discrete_latent(op, *numpyro_parents)
+#         # else:
+#         #     return numpyro_vmap_var_random(op, *numpyro_parents)
+#     else:
+#         return numpyro_vmap_var_nonrandom(op, *numpyro_parents)
+
+
+
+# def is_discrete(op):
+#     if isinstance(op,(ir.VMap,ir.Autoregressive)):
+#         return is_discrete(op.base_op)
+#     if isinstance(op,ir.Bernoulli,ir.BernoulliLogit)
+
 
 
 op_class_to_support = util.WriteOnceDefaultDict(
@@ -201,6 +219,8 @@ op_class_to_support = util.WriteOnceDefaultDict(
 )
 op_class_to_support[ir.Exponential] = dist.constraints.positive
 op_class_to_support[ir.Dirichlet] = dist.constraints.simplex
+op_class_to_support[ir.Bernoulli] = dist.constraints.boolean
+op_class_to_support[ir.BernoulliLogit] = dist.constraints.boolean
 
 
 def get_support(op: ir.Op):
@@ -227,17 +247,48 @@ def get_support(op: ir.Op):
     #         assert False, "should be impossible"
 
 
+
+def get_vmap_dummy(op):
+    if not isinstance(op, ir.VMap):
+        def dummy(*args):
+            return args
+        return dummy
+    else:
+        dummy = get_vmap_dummy(op.base_op)
+        return jax.vmap(dummy, op.in_axes, axis_size=op.axis_size)
+
+def vmap_numpyro_pars(op: ir.VMap, *numpyro_pars):
+    dummy = get_vmap_dummy(op)
+    return dummy(*numpyro_pars)
+
+
+def numpyro_vmap_var_broadcast(op: ir.VMap, *numpyro_pars):
+    assert isinstance(op, ir.VMap)
+    assert op.random
+
+    assert vmap_base_is_broadcastable(op)
+
+    numpyro_pars = vmap_numpyro_pars(op, *numpyro_pars)
+
+    while isinstance(op, ir.VMap):
+        op = op.base_op
+
+    d = numpyro_var(op, *numpyro_pars)
+
+    return d
+
+
 def numpyro_vmap_var_random(op: ir.VMap, *numpyro_parents):
     assert isinstance(op, ir.VMap)
     assert op.random
 
     class NewDist(dist.Distribution):
-        @property
-        def support(self):
-            my_op = op
-            while isinstance(my_op, ir.VMap):
-                my_op = my_op.base_op
-            return get_support(my_op)
+        # @property
+        # def support(self):
+        #     my_op = op
+        #     while isinstance(my_op, ir.VMap):
+        #         my_op = my_op.base_op
+        #     return get_support(my_op)
 
         def __init__(self, *args, validate_args=False):
             self.args = args
@@ -298,6 +349,52 @@ def numpyro_vmap_var_nonrandom(op: ir.VMap, *numpyro_parents):
     axis_size = op.axis_size
     args = numpyro_parents
     return jax.vmap(base_var, in_axes=in_axes, axis_size=axis_size)(*args)
+
+def vmap_base_is_broadcastable(op: ir.VMap):
+    while isinstance(op, ir.VMap):
+        op = op.base_op
+    return isinstance(op, broadcastable_op_classes)
+
+def is_continuous(op: ir.Op):
+    continuous_dists = (ir.Normal, ir.Beta, ir.Cauchy,ir.Exponential, ir.Dirichlet, ir.Gamma, ir.LogNormal, ir.MultiNormal, ir.Poisson, ir.StudentT, ir.Uniform)
+    discrete_dists = (ir.Bernoulli, ir.BernoulliLogit, ir.BetaBinomial, ir.Binomial, ir.Categorical, ir.Multinomial)
+
+    if not op.random:
+        raise ValueError("is_continuous only handles random ops")
+    elif isinstance(op, ir.VMap):
+        return is_continuous(op.base_op)
+    elif isinstance(op, ir.Composite):
+        return is_continuous(op.ops[-1])
+    elif isinstance(op, ir.Autoregressive):
+        return is_continuous(op.base_op)
+    elif isinstance(op, continuous_dists):
+        return True
+    elif isinstance(op, discrete_dists):
+        return False
+    else:
+        raise NotImplementedError(f"is_continuous doesn't not know to handle {op}")
+
+
+def deal_with_vmap(op: ir.VMap, *numpyro_parents, is_observed):
+    # if is simple/broadcastable, use broadcasting vmap
+    # elif is nonrandom, use nonrandom
+    # elif is observed or is non-discrete use class vmap
+    # else, can't handle it
+
+    print(f"{op=}")
+    print(f"{vmap_base_is_broadcastable(op)=}")
+
+    if vmap_base_is_broadcastable(op):
+        print("a")
+        return numpyro_vmap_var_broadcast(op, *numpyro_parents)
+    elif not op.random:
+        print("b")
+        return numpyro_vmap_var_nonrandom(op, *numpyro_parents)
+    elif is_observed or is_continuous(op):
+        print("c")
+        return numpyro_vmap_var_random(op, *numpyro_parents)
+    else:
+        raise ValueError("NumPyro backend can't handle vmaps over ops that are (1) random (2) discrete (3) non-observed and (4) not 'simple' (basic dists)")
 
 
 @register_handler(ir.Composite)
@@ -547,8 +644,12 @@ def sample_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array], *, nit
         kernel = numpyro.infer.DiscreteHMCGibbs(
             numpyro.infer.NUTS(model), modified=True
         )
+        # kernel = numpyro.infer.MixedHMC(
+        #     numpyro.infer.HMC(model), modified=False
+        # )
         samples = infer(kernel)
     except AssertionError as e:
+        #print(f"FALLING BACK TO NUTS: {e}")
         if str(e) != "Cannot detect any discrete latent variables in the model.":
             raise e
         kernel = numpyro.infer.NUTS(model)
