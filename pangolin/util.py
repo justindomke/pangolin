@@ -265,6 +265,13 @@ def flatten_fun(f, *args, is_leaf=None):
 # Cast observed variables to arrays (and check that they have corresponding shapes)
 ################################################################################
 
+def short_pytree_string(treedef):
+    "Get a string for a JAX PyTreeDef without printing PyTreeDef and scaring the noobs"
+    s = str(treedef)
+    assert s[:10] == "PyTreeDef(", "fdjhdj"
+    assert s[-1] == ")"
+    return s[10:-1]
+
 
 def assimilate_vals(vars, vals):
     """
@@ -274,16 +281,25 @@ def assimilate_vals(vars, vals):
     it would be impossible to tell a list of arrays of the same length
     from a big array with one more dimension.)
     """
-    new_vals = jax.tree_map(lambda var, val: jnp.array(val), vars, vals)
+    try:
+        new_vals = jax.tree_map(lambda var, val: jnp.array(val), vars, vals)
+    except ValueError:
+        vars_treedef = jax.tree_util.tree_structure(vars)
+        vals_treedef = jax.tree_util.tree_structure(vals)
+        raise ValueError(f"Not able to find common pytree structure for given vars and vals.\n"
+                         f"For given vars got: {short_pytree_string(vars_treedef)}.\n"
+                         f"For given vals got: {short_pytree_string(vals_treedef)}.")
+
     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
     flat_vals, vals_treedef = jax.tree_util.tree_flatten(new_vals)
     assert (
         vars_treedef == vals_treedef
-    ), "vars and vals must have same structure (after conversion to arrays)"
+    ), (f"vars and vals must have same structure (after conversion to arrays). ({vars_treedef} vs "
+        f"{vals_treedef}")
     for var, val in zip(flat_vars, flat_vals):
-        assert (
-            var.shape == val.shape
-        ), "vars and vals must have matching shape (after conversion to arrays)"
+        if var.shape != val.shape:
+            raise ValueError(f"given var {var} with shape {var.shape} does not match given val"
+                           f" {val} with shape {val.shape}.")
     return new_vals
 
 
