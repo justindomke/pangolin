@@ -4,7 +4,7 @@ Here is the full API for the Python interface, in brief, with examples.
 
 ## Creating random variables (basics)
 
-Turn **constants** into random variables with `makerv`.
+Turn **constants** into constant random variables with `makerv`. (You can pass anything that NumPy could cast into an array, including a NumPy array or a JAX array.)
 
 ```python
 import pangolin as pg
@@ -14,7 +14,7 @@ y = pg.makerv([1,2,3])
 z = pg.makerv(np.eye(3))
 ```
 
-Create random variables using **basic distributions** with `normal`, `normal_prec`, `cauchy`, `bernoulli`, `bernoulli_logit`, `binomial`, `uniform`, `beta`, `beta_binomial`, `exponential`, `gamma`, `poisson`, `student_t`, `multi_normal`, `categorical`, `multinomial`, and `dirichlet`. In all cases, distribution names and arguments are exactly the same as in Stan.
+Create **stochastic random variables** using **basic distributions** with `normal`, `normal_prec`, `cauchy`, `bernoulli`, `bernoulli_logit`, `binomial`, `uniform`, `beta`, `beta_binomial`, `exponential`, `gamma`, `poisson`, `student_t`, `multi_normal`, `categorical`, `multinomial`, and `dirichlet`. In all cases, distribution names and arguments are exactly the same as in Stan.
 
 ```python
 import pangolin as pg
@@ -23,7 +23,7 @@ p = pg.uniform(0,1)
 x = pg.binomial(n, p)
 ```
 
-Create random variables from other random variables using **basic deterministic functions** with `add`, `sub`, `mul`, `div`, `pow`, `sqrt`, `abs`, `arccos`, `arccosh`, `arcsin`, `arcsinh`, `arctan`, `arctanh`, `cos`, `cosh`, `exp`, `inv_logit`/`expit`/`sigmoid` (all three equivalent), `sin`, `sinh`, `step`, `tan`, `tanh`, `matmul`, `inv`, `softmax`, and `sum`.
+Create **deterministic random variables** from other random variables using **basic deterministic functions** with `add`, `sub`, `mul`, `div`, `pow`, `sqrt`, `abs`, `arccos`, `arccosh`, `arcsin`, `arcsinh`, `arctan`, `arctanh`, `cos`, `cosh`, `exp`, `inv_logit`/`expit`/`sigmoid` (all three equivalent), `sin`, `sinh`, `step`, `tan`, `tanh`, `matmul`, `inv`, `softmax`, and `sum`.
 
 ```python
 import pangolin as pg
@@ -31,13 +31,13 @@ import numpy as np
 x = pg.makerv(1.5)
 y = pg.makerv(2.5)
 z = pg.sin(x)
-z = pg.add(x,y) # see below on operator overloading
-z = pg.pow(x,y) # see below on operator overloading
+z = pg.add(x,y)    # or use operator overloading
+z = pg.pow(x,y)    # or use operator overloading
 
 x = pg.makerv(2*np.eye(3))
 y = pg.makerv([1,2,3])
 z = pg.inv(y)
-z = pg.matmul(x,y) # see below on operator overloading
+z = pg.matmul(x,y) # or use operator overloading
 
 x = pg.makerv(np.eye(3))
 y = pg.sum(x,axis=0)
@@ -50,25 +50,25 @@ import pangolin as pg
 import numpy as np
 x = pg.makerv(1.5)
 y = pg.makerv(2.5)
-z = x+y # same as pg.add(x,y)
-z = x**y # same as pg.pow(x,y)
+z = x+y   # same as pg.add(x,y)
+z = x**y  # same as pg.pow(x,y)
 
-x = pg.makerv(2*np.eye(3))
-y = pg.makerv([1,2,3])
-z = x @ y # same as pg.matmul(x,y)
+a = pg.makerv(2*np.eye(3))
+b = pg.makerv([1,2,3])
+c = a @ b # same as pg.matmul(a,b)
 ```
 
-You can **index** random variables using other random variables.
+You can **index** random variables using other random variables. (Equivalent to calling `pg.index`.)
 
 ```python
 import pangolin as pg
 import numpy as np
 x = pg.makerv([1.5, 5.0, 100.0])
 i = pg.categorical([.1, .2, .7])
-y = x[i] # yes! you can index with a random variable!
+y = x[i]  # yes! you can index with a random variable!
 
-x = pg.makerv(np.eye(5))
-y = x[:,3] # yes! you can slice just like in numpy!
+a = pg.makerv(np.eye(5))
+b = a[:,3] # yes! you can slice just like in numpy!
 ```
 
 ## Inference
@@ -84,7 +84,7 @@ x_samps = pg.sample(x,y,2) # sample from P(x|y==2)
 
 This will return a 1D numpy array of samples.
 
-If you have multiple random variables, you can just put them into a list, or a tuple.
+If you have multiple random variables, you can just put them into a list or a tuple or a dictionary.
 
 ```python
 import pangolin as pg
@@ -94,7 +94,9 @@ z = [pg.normal(x,2), pg.normal(x,3)]
 y_samps = pg.sample(y, z, [10.0, 15.0])
 ```
 
-This will return a dictionary `d` where `d['hi']` and `d['there']` are 1D NumPy arrays. If you like, you can also use any recursive combination, e.g. dicts of lists of tuples of dicts.
+This will return a dictionary `d` where `d['hi']` and `d['there']` are 1D NumPy arrays.
+
+If you like, you can also use any recursive combination, e.g. dicts of lists of tuples of dicts. That is, when you call `sample(vars, given, vals)`, `vars` can be any [Pytree](https://jax.readthedocs.io/en/latest/pytrees.html) of random variables, `given` can be any Pytree of random variables, and `vals` can be any Pytree of constants with the same tree structure as `vals`. 
 
 You can also do inference using `E` (for expectations), `var` (for variances) and `std` (for standard deviations). These are equivalent to drawing samples and taking the mean.
 
@@ -110,7 +112,7 @@ For all the inference methods, you can provide an optional `niter` argument. Lar
 
 ## Advanced random variable creation
 
-Create efficient **loops** using `slot` and `Loop`. These loops never actually execute in Python, but become efficient fully batched operations at inference time. So this is much more efficient than using, e.g., list comprehensions.
+Create efficient **loops** using `slot` and `Loop`. These loops never actually execute in Python, but become efficient fully batched operations at inference time. This is much more efficient than using, e.g., list comprehensions.
 
 ```python
 import pangolin as pg
@@ -124,13 +126,13 @@ with pg.Loop(5) as i:
         z[i,j] = pg.normal(x[i] * y[i,j], 1+i+j) # OK to use i,j as numbers
 ```
 
-Equivalently, you can create **vmapped** random variables using `vmap(fun, in_axes, axis_size)`. This function works exactly the same way as [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) (although without offering as many optional arguments). Under the hood, this is what the loops above do.
+We expect that most users will prefer to use loops. However, if you like, you can alternatively create **vmapped** random variables using `vmap(fun, in_axes, axis_size)`. This function works exactly the same way as [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) (although without some optional arguments). Under the hood, loops become vmapped operations.
 
 ```python
 import pangolin as pg
 # similar to [normal(0,3), normal(1,4), normal(2,5)] but more efficient
 x = pg.vmap(pg.normal)([0,1,2],[3,4,5])
-x = pg.vmap(pg.normal,0)([0,1,2],[3,4,5]) # equivalent
+x = pg.vmap(pg.normal,0)([0,1,2],[3,4,5])     # equivalent
 x = pg.vmap(pg.normal,[0,0])([0,1,2],[3,4,5]) # equivalent
 
 # similar to [normal(0,3), normal(1,3), normal(2,3)] but more efficient
@@ -141,19 +143,35 @@ x = pg.vmap(pg.normal,None)(0,3)
 x = pg.vmap(pg.normal,[None,None])(0,3)
 ```
 
-Create **autoregressive** random variables using `autoregressive(fun, length, in_axes=None)`, where `fun` is some function that takes the "previous" value of a random variable (and possibly some other mapped arguments) and returns a new value.
+Create **autoregressive** random variables using `autoregressive(fun, length, in_axes=0)`, where `fun` is some function that takes the "previous" value of a random variable (and possibly some other mapped arguments) and returns a new value. Here `in_axes` is the axis along which to map the optional arguments.
 
 ```python
 import pangolin as pg
-fun = pg.autoregressive(lambda last: pg.normal(last, 1), 10)
-x = fun(0.0) # gaussian random walk starting at 0.0
 
+# gaussian random walk starting at 0.0
+fun = pg.autoregressive(lambda last: pg.normal(last, 1), 10)
+x = fun(0.0) 
+
+# gaussian random walk starting at 0.0 with varying noise
 fun = pg.autoregressive(lambda last, scale: pg.normal(last, scale), 10)
 scales = range(10)
-x = fun(0.0, scales) # gaussian random walk starting at 0.0 with variable noise 
+x = fun(0.0, scales) 
 ```
 
-Note that `fun` can only have a single distribution, which must right before the return.
+The function `fun` is any function that returns a new random variable. It can create "temporary" random variables, but can only create a single *stochastic* random variable, which must be right before the return.
+
+```python
+import pangolin as pg
+# ok for use in autoregressive
+def fun1(x):
+    y=x+2
+    return pg.exponential(y)
+
+# NOT ok for use in autoregressive
+def fun2(x):
+    y=pg.exponential(x)
+    return pg.exponential(y)
+```
 
 ## Inspecting models
 
@@ -206,7 +224,7 @@ This *usually* works, but Pangolin can't do it if the constant is "on the outsid
 import pangolin as pg
 x = [1.5,2.5]
 i = pg.bernoulli(0.7)
-y = x[i] # BAD. DO NOT DO. WILL NOT WORK.
+y = x[i] # BAD. DO NOT DO.
 ```
 
 _this will not work_, because `x` is a list and doesn't know what to do with a random variable. The solution is to make an explicit call, i.e. do
@@ -236,7 +254,7 @@ This won't work because `locs` is a list and doesn't know what to do with a `Loo
 
 ```python
 import pangolin as pg
-locs = pg.makerv([0, 1, 5]) # fix
+locs = pg.makerv([0, 1, 5])      # fix
 x = pg.slot()
 with pg.Loop(3) as i:
     x[i] = pg.normal(locs[i], 1) # now OK
@@ -249,13 +267,13 @@ For somewhat complex reasons `vmap` does not convert lists of scalars to arrays 
 ```python
 import pangolin as pg
 scales = [1,2,3]
-x = pg.vmap(pg.exponential)(scales) # BAD. DO NOT DO. WILL NOT WORK.
+x = pg.vmap(pg.exponential)(scales) # BAD. DO NOT DO.
 ```
 
 For this to work, you need to explicitly convert the list to a random variable:
 
 ```python
 import pangolin as pg
-scales = pg.makerv([1,2,3]) # fix
+scales = pg.makerv([1,2,3])         # fix
 x = pg.vmap(pg.exponential)(scales) # now OK
 ```
