@@ -1,0 +1,1 @@
+* **2024.10.15:** Revamped NumPyro backend to try to deal better with discrete variables. Now, vmap uses `numpyro.plate` where possible. (Which it often isn't due to limitations in how NumPyro works.)  
