@@ -52,18 +52,18 @@ def test_index_class(start_shape, idx):
     if len(start_shape) != len(idx):
         raise Exception("invalid test case! idx must have same length as array shape")
 
-    print(f"{start_shape=}")
-    print(f"{idx=}")
+    #print(f"{start_shape=}")
+    #print(f"{idx=}")
 
     x = np.random.randn(*start_shape)
     expected_shape = x[idx].shape
-    print(f"{expected_shape=}")
+    #print(f"{expected_shape=}")
 
     slices = [s if isinstance(s, slice) else None for s in idx]
     d = Index(*slices)
     non_slice_idx = [i for i in idx if not isinstance(i, slice)]
     non_slice_shapes = [np.array(i).shape for i in non_slice_idx]
     shape = d.get_shape(x.shape, *non_slice_shapes)
-    print(f"{shape=}")
+    #print(f"{shape=}")
     assert expected_shape == shape
 

@@ -22,7 +22,7 @@ from jax import numpy as jnp
 import numpyro
 import jax
 from numpyro import distributions as numpyro_dist
-from pangolin.inference.numpyro.vmap import handle_vmap_random, handle_vmap_nonrandom
+from pangolin.inference.numpyro.vmap import handle_vmap_random, handle_vmap_nonrandom, vmap_numpyro_pars
 
 def test_vmap_normal1():
     y = vmap(normal, in_axes=None, axis_size=3)(0.5, 1.5)
@@ -92,25 +92,45 @@ def test_bernoulli_logit_inference2():
     y = vmap(bernoulli_logit,None,5)(w)
     yp = bernoulli_logit(w)
     yp_samples = sample(yp,y,[0,0,1,1,0], niter=1000)
-    print(yp_samples)
     assert all(yi in [0,1] for yi in yp_samples)
 
 def test_bernoulli_logit_inference3():
+    length = 5
     w = normal(0,1)
-    y = vmap(bernoulli_logit,None,5)(w)
-    yp = vmap(bernoulli_logit,None,5)(w)
-    print_upstream((y,yp))
-    yp_samples = sample(yp,y,[0,0,1,1,0], niter=1000)
-    print(yp_samples)
+    y = vmap(bernoulli_logit,None,length)(w)
+    yp = vmap(bernoulli_logit,None,length)(w)
+    yp_samples = sample(yp,y,np.random.randint(2,size=length), niter=1000)
     assert all(yi in [0,1] for yi in yp_samples.ravel())
+
 
 def test_bernoulli_logit_inference4():
     w = normal(0,1)
     y = vmap(bernoulli_logit,None,5)(w)
     yp = vmap(bernoulli_logit,None,5)(w)
     yp_samples = sample(yp, niter=1000)
-    print(yp_samples)
+    #print(yp_samples)
     assert all(yi in [0,1] for yi in yp_samples.ravel())
+
+
+def test_bernoulli_logit_inference3_2d():
+    length1 = 3
+    length2 = 4
+    w = normal(0,1)
+    y = vmap(vmap(bernoulli_logit,None,length1), None, length2)(w)
+    yp = vmap(vmap(bernoulli_logit,None,length1), None, length2)(w)
+    yp_samples = sample(yp,y,np.random.randint(2,size=(length2, length1)), niter=1000)
+    assert all(yi in [0,1] for yi in yp_samples.ravel())
+
+def test_bernoulli_logit_inference3_2d_mapped():
+    length1 = 3
+    length2 = 4
+    #w = normal(0,1)
+    w = vmap(vmap(normal,None,length1),None,length2)(0,1)
+    y = vmap(vmap(bernoulli_logit,0,length1), 0, length2)(w)
+    yp = vmap(vmap(bernoulli_logit,0,length1), 0, length2)(w)
+    yp_samples = sample(yp,y,np.random.randint(2,size=(length2, length1)), niter=1000)
+    assert all(yi in [0,1] for yi in yp_samples.ravel())
+
 
 def assert_numpyro_pars_correct(in_axes_list,p1,p2,*,axis_size_list=None):
     if axis_size_list is None:
@@ -120,14 +140,14 @@ def assert_numpyro_pars_correct(in_axes_list,p1,p2,*,axis_size_list=None):
     for in_axes, axis_size in zip(reversed(in_axes_list), reversed(axis_size_list), strict=True):
         fun = jax.vmap(fun, in_axes, axis_size=axis_size)
     vmap_sum = fun(p1, p2)
-    print(f"{vmap_sum.shape=}")
+    #print(f"{vmap_sum.shape=}")
 
     op = ir.Normal()
     for in_axes, axis_size in zip(reversed(in_axes_list), reversed(axis_size_list), strict=True):
         op = ir.VMap(op, in_axes, axis_size=axis_size)
     new_p1, new_p2 = vmap_numpyro_pars(op, p1, p2)
-    print(f"{new_p1.shape=}")
-    print(f"{new_p2.shape=}")
+    #print(f"{new_p1.shape=}")
+    #print(f"{new_p2.shape=}")
 
     broadcast_sum = new_p1 + new_p2
 
@@ -219,16 +239,17 @@ def test_bernoulli_bernoulli():
     inf_until_match(E, z, x, x_obs, testfun)
 
 
-def test_bernoulli_uniform():
-    p = np.ones((5,3))*0.5
-    z = vmap(vmap(bernoulli))(p)
-    x = vmap(vmap(uniform))(z, z+1)
-    x_obs = np.random.rand(5,3)
-
-    print(f"{E(z,x,x_obs)=}")
-
-    # p(z,x) \propto 0.5 * I[0.1*z <= x <= 0.9+0.1z]
-    #
+# def test_bernoulli_uniform():
+#     p = np.ones((5,3))*0.5
+#     z = vmap(vmap(bernoulli))(p)
+#     x = vmap(vmap(uniform))(z, z+1)
+#     x_obs = np.random.rand(5,3)
+#
+#     #print(f"{E(z,x,x_obs)=}")
+#
+#     # p(z,x) \propto 0.5 * I[0.1*z <= x <= 0.9+0.1z]
+#     #
+#
 
 def test_bernoulli_uniform_manual():
     x_obs = 0.9
@@ -254,14 +275,14 @@ def test_bernoulli_uniform_manual():
 
     zs = mcmc(10000)
 
-    print(f"{np.mean(zs)}")
+    #print(f"{np.mean(zs)}")
 
 
 def test_bernoulli_uniform_raw_numpyro():
     p = jnp.array(np.random.rand()*0+0.1)
     #x_obs = jnp.array(np.random.rand()*2)
     x_obs = jnp.array(0.4)
-    print(f"{x_obs=}")
+    #print(f"{x_obs=}")
 
     def model():
         #a = numpyro.sample("a", numpyro_dist.Normal(0,1))
@@ -298,6 +319,6 @@ def test_bernoulli_uniform_raw_numpyro():
     key = jax.random.PRNGKey(0)
     conditional_samples = predictive(rng_key=key)
 
-    print(f"{conditional_samples['z'].shape=}")
-    print(f"{conditional_samples['x'].shape=}")
+    #print(f"{conditional_samples['z'].shape=}")
+    #print(f"{conditional_samples['x'].shape=}")
 

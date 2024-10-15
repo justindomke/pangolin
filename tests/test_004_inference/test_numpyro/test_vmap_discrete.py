@@ -25,7 +25,7 @@ import numpyro
 import jax
 from numpyro import distributions as numpyro_dist
 from pangolin.inference.numpyro.vmap import handle_vmap_random, handle_vmap_nonrandom
-from pangolin.inference.numpyro.vmap import get_numpyro_rv_discrete_latent
+from pangolin.inference.numpyro.vmap import vmap_rv_plate
 
 thresh = 0.05
 
@@ -33,7 +33,6 @@ def test_vmap_bernoulli_iid():
     x = vmap(bernoulli, None, 3)(0.5)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - 0.5) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -44,7 +43,6 @@ def test_vmap_bernoulli_0():
     x = vmap(bernoulli)(p)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - p) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -56,7 +54,6 @@ def test_vmap_poisson_iid():
     expected = numpyro_dist.Poisson(l).mean
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - expected) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -68,7 +65,6 @@ def test_vmap_poisson_0():
     expected = numpyro_dist.Poisson(l).mean
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - expected) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -81,7 +77,6 @@ def test_vmap_categorical_iid():
     expected = p @ np.arange(3)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - expected) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -95,7 +90,6 @@ def test_vmap_categorical_0():
     expected = p @ np.arange(3)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - expected) < thresh)
 
     inf_until_match(E, x, [], [], testfun)
@@ -109,7 +103,6 @@ def test_vmap_categorical_1():
     expected = np.arange(3) @ p
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.all(np.abs(Ex - expected) < thresh)
 
     inf_until_match(E, x, [], [], testfun)

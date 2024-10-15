@@ -28,15 +28,11 @@ def test_autoregressive_simple():
     length = 12
     y = autoregressive(lambda last: normal(last + 1, 1e-4), length)(x)
 
-    print_upstream(y)
-
     assert isinstance(y.op, ir.Autoregressive)
 
     def testfun(ys):
         last_y = ys[-1, :]
         expected = 0.5 + np.arange(1, length + 1)
-        print(f"{last_y=}")
-        print(f"{expected=}")
         return np.max(np.abs(last_y - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
@@ -50,7 +46,7 @@ def test_autoregressive_const_rv_mapped():
     op = ir.Autoregressive(ir.Normal(), length, (0,), 0)
     y = ir.RV(op, x, noises)
     ys = sample(y)
-    print(f"{ys=}")
+    #print(f"{ys=}")
 
 def test_autoregressive_const_rv_unmapped():
     x = makerv(0.5)
@@ -60,7 +56,7 @@ def test_autoregressive_const_rv_unmapped():
     y = ir.RV(op, x, noise)
 
     ys = sample(y)
-    print(f"{ys=}")
+    #print(f"{ys=}")
 
 
 def test_autoregressive_simple_const_rv():
@@ -75,13 +71,11 @@ def test_autoregressive_simple_const_rv():
     assert base_op == ir.Composite(2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]])
     assert y.op == ir.Autoregressive(base_op, length, [None], 0)
 
-    print_upstream(y)
+    #print_upstream(y)
 
     def testfun(ys):
         last_y = ys[-1, :]
         expected = 0.5 + np.arange(1, length + 1)
-        print(f"{last_y=}")
-        print(f"{expected=}")
         return np.max(np.abs(last_y - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
@@ -98,8 +92,6 @@ def test_autoregressive_nonrandom():
     def testfun(ys):
         last_y = ys[-1, :]
         expected = np.arange(1, length + 1)
-        print(f"{last_y=}")
-        print(f"{expected=}")
         return np.max(np.abs(last_y - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
@@ -117,8 +109,6 @@ def test_autoregressive_varying_increments():
     def testfun(ys):
         last_y = ys[-1, :]
         expected = np.cumsum(increment)
-        print(f"{last_y=}")
-        print(f"{expected=}")
         return np.max(np.abs(last_y - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
@@ -132,7 +122,6 @@ def test_autoregressive_matmul():
     x = vmap(normal, [0, None], ndim)(x0, 1e-5)
     A = np.random.randn(ndim, ndim)
     y = autoregressive(lambda last: A @ last, length)(x)
-    print_upstream(y)
 
     def testfun(ys):
         last_y = ys[-1, :]
@@ -141,8 +130,6 @@ def test_autoregressive_matmul():
         expected = x0
         for i in range(length):
             expected = A @ expected
-        print(f"{out=}")
-        print(f"{expected=}")
         return np.max(np.abs(out - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
@@ -157,7 +144,6 @@ def test_autoregressive_matmul_A_rv():
     A = np.random.randn(ndim, ndim)
     A_rv = makerv(A)
     y = autoregressive(lambda last: A_rv @ last, length)(x)
-    print_upstream(y)
 
     def testfun(ys):
         last_y = ys[-1, :]
@@ -166,13 +152,10 @@ def test_autoregressive_matmul_A_rv():
         expected = x0
         for i in range(length):
             expected = A @ expected
-        print(f"{out=}")
-        print(f"{expected=}")
         return np.max(np.abs(out - expected)) < 0.1
 
     sample_flat_until_match([y], [], [], testfun)
     sample_until_match(y, None, None, testfun)
-
 
 
 def long_bernoulli_chain_expected(p,length,x_obs):
@@ -198,9 +181,6 @@ def long_bernoulli_chain_expected(p,length,x_obs):
             q = .05 * n[-1][0] + .95 * n[-1][1]
             n.append(np.array([1 - q, q]))
         n = np.array(list(reversed(n)))
-
-    print(f"{m=}")
-    print(f"{n=}")
 
     probs = m*n
     probs = probs / np.sum(probs, axis=1, keepdims=True)

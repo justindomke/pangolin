@@ -21,30 +21,28 @@ from pangolin.inference import inference_util
 import numpy as np
 
 from .handler_registry import numpyro_handlers, register_handler
-from .vmap import get_numpyro_rv_discrete_latent
+from .vmap import vmap_rv_plate
 
 def get_numpyro_val(op: ir.Op, *numpyro_pars, is_observed):
     fun = numpyro_handlers[type(op)]
     return fun(op,*numpyro_pars, is_observed=is_observed)
 
 def get_numpyro_rv(op: ir.Op, name: str, obs, *numpyro_pars):
-    #handler = numpyro_handlers[type(op)]
-    #return handler(op, name, obs, *numpyro_pars)
+    from .vmap import plate_vmap_compatible
+
     is_observed = obs is not None
 
-    # special case for RANDOM+DISCRETE+LATENT VMAP
-    if isinstance(op, ir.VMap) and op.random and not is_continuous(op) and not is_observed:
-       return get_numpyro_rv_discrete_latent(op, name, obs, *numpyro_pars)
+    if plate_vmap_compatible(op):
+        return vmap_rv_plate(op, name, obs, *numpyro_pars)
 
     numpyro_val = get_numpyro_val(op, *numpyro_pars, is_observed = is_observed)
 
     if op.random:
-        if obs is None:
-            return numpyro.sample(name, numpyro_val)
-        else:
-            # TODO: Why doesn't this check always work?
-            # assert obs.shape == numpyro_var.shape, f"{obs.shape} vs {numpyro_var.shape}"
-            return numpyro.sample(name, numpyro_val, obs=obs)
+        # TODO: Why doesn't this check always work?
+        # if obs is not None:
+        #     assert obs.shape == numpyro_val.shape, f"{obs.shape} vs {numpyro_val.shape}"
+
+        return numpyro.sample(name, numpyro_val, obs=obs)
     else:
         if obs is not None:
             raise ValueError("Can't have observation for non-random op {op}")

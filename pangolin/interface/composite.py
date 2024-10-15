@@ -75,8 +75,8 @@ def composite(fun):
 
         flat_inputs = flatten_input(*inputs)
 
-        test_out = new_flat_fun(*flat_inputs)
-        print(f"{test_out=}")
+        #test_out = new_flat_fun(*flat_inputs)
+        #print(f"{test_out=}")
 
         flat_input_shapes = [x.shape for x in flat_inputs]
         op, consts = make_composite(new_flat_fun, *flat_input_shapes)

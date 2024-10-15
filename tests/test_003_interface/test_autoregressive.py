@@ -258,7 +258,6 @@ def test_autoregressive_inside_vmap():
         return normal(last, 7.5)
 
     y = vmap(f)(np.zeros(5))
-    print(f"{y.op=}")
     base_op = ir.Composite(1, [ir.Constant(7.5), ir.Normal()], [[], [0, 1]])
     assert y.op.base_op.base_op == base_op
     auto_op = ir.Autoregressive(base_op, 10, [], 0)

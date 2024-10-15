@@ -3,6 +3,7 @@ from numpyro import distributions as numpyro_dist
 import pangolin as pg
 import numpyro
 import numpy as np
+from jax import numpy as jnp
 
 from pangolin.inference.numpyro.handlers import get_numpyro_rv, get_numpyro_val
 
@@ -14,14 +15,13 @@ def test_get_numpyro_val_constant():
 def test_get_numpyro_rv_constant():
     var = pg.makerv(2)
     x = get_numpyro_rv(var.op, "name", None)
-    print(f"{x=}")
-
+    assert x == jnp.array(2)
 
 def test_get_numpyro_rv_normal():
     with numpyro.handlers.seed(rng_seed=0):
         x = get_numpyro_rv(pg.ir.Normal(), "x", None, 3.3, 1e-10)
 
-    print(f"{x=}")
+    assert jnp.abs(x - 3.3) < 1e-5
 
 
 def test_get_numpyro_val_add():

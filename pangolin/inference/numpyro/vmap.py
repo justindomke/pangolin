@@ -29,8 +29,8 @@ def handle_vmap(op: ir.VMap, *numpyro_parents, is_observed):
     # elif is observed or is non-discrete use class vmap
     # else, can't handle it
 
-    if isinstance(op, ir.VMap) and op.random and not is_continuous(op) and not is_observed:
-        raise ValueError("VMap has limited support in numpy backend for discrete and non-observed")
+    #if isinstance(op, ir.VMap) and op.random and not is_continuous(op) and not is_observed:
+    #    raise ValueError("VMap has limited support in numpy backend for discrete and non-observed")
 
     if op.random:
         return handle_vmap_random(op, *numpyro_parents, is_observed=is_observed)
@@ -52,21 +52,121 @@ def handle_vmap_nonrandom(op: ir.VMap, *numpyro_parents, is_observed):
     return jax.vmap(base_var, in_axes=in_axes, axis_size=axis_size)(*args)
 
 
+# def handle_vmap_random(op: ir.VMap, *numpyro_parents, is_observed):
+#     from pangolin.inference.numpyro.handlers import get_numpyro_val
+#     from .support import get_support
+#
+#     assert isinstance(op, ir.VMap)
+#     assert op.random
+#
+#     class NewDist(numpyro_dist.Distribution):
+#         @property
+#         def support(self):
+#             # TODO:
+#             # should be a more elegant solution here...
+#             my_op = op
+#             while isinstance(my_op, ir.VMap):
+#                 my_op = my_op.base_op
+#             return get_support(my_op)
+#
+#         def __init__(self, *args, validate_args=False):
+#             self.args = args
+#
+#             # TODO: infer correct batch_shape?
+#             batch_shape = ()
+#             parents_shapes = [p.shape for p in args]
+#             event_shape = op.get_shape(*parents_shapes)
+#
+#             super().__init__(
+#                 batch_shape=batch_shape,
+#                 event_shape=event_shape,
+#                 validate_args=validate_args,
+#             )
+#
+#         def sample(self, key, sample_shape=()):
+#             assert numpyro.util.is_prng_key(key)
+#             assert sample_shape == () or sample_shape == (1,)
+#
+#             def base_sample(key, *args):
+#                 var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
+#                 return var.sample(key)
+#
+#             keys = jax.random.split(key, self.event_shape[0])
+#             in_axes = (0,) + op.in_axes
+#             axis_size = op.axis_size
+#             args = (keys,) + self.args
+#             if sample_shape == (1,):
+#                 return jnp.array([jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)])
+#             elif sample_shape == ():
+#                 return jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)
+#             else:
+#                 assert False
+#
+#         @dist_util.validate_sample
+#         def log_prob(self, value):
+#             def base_log_prob(val, *args):
+#                 var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
+#                 return var.log_prob(val)
+#
+#             in_axes = (0,) + op.in_axes
+#             axis_size = op.axis_size
+#             args = (value,) + self.args
+#             ls = jax.vmap(base_log_prob, in_axes, axis_size=axis_size)(*args)
+#             return jnp.sum(ls)
+#
+#     return NewDist(*numpyro_parents)
+
+def get_eg_args(op: ir.VMap, *numpyro_parents):
+    out = []
+    for in_axis, arg in zip(op.in_axes, numpyro_parents, strict=True):
+        if in_axis is None:
+            out.append(arg)
+        else:
+            indices = [slice(None)]*in_axis + [0]
+            out.append(arg[*indices])
+    return out
+
 def handle_vmap_random(op: ir.VMap, *numpyro_parents, is_observed):
     from pangolin.inference.numpyro.handlers import get_numpyro_val
+    #from .support import get_support
 
     assert isinstance(op, ir.VMap)
     assert op.random
 
+    def base_val(*args):
+        return get_numpyro_val(op.base_op, *args, is_observed=is_observed)
+
+    def base_support(*args):
+        return base_val(*args).support
+
+    _support = jax.vmap(base_support, op.in_axes, axis_size=op.axis_size)(*numpyro_parents)
+
+    eg_args = get_eg_args(op, *numpyro_parents)
+    _has_enumerate_support = get_numpyro_val(op.base_op, *eg_args, is_observed=is_observed).has_enumerate_support
+
+
     class NewDist(numpyro_dist.Distribution):
-        # @property
-        # def support(self):
-        #     # TODO:
-        #     # should be a more elegant solution here...
-        #     my_op = op
-        #     while isinstance(my_op, ir.VMap):
-        #         my_op = my_op.base_op
-        #     return get_support(my_op)
+        @property
+        def support(self):
+            return _support
+
+        has_enumerate_support = _has_enumerate_support
+
+        if _has_enumerate_support:
+            def enumerate_support(self, expand=True):
+                print(f"{expand=}")
+
+                def base_enumerate_support(*args):
+                    return base_val(*args).enumerate_support()
+
+                # vmap by default puts batch dims in the FRONT
+                # but numpyro wants batch dims in the BACK
+
+                return jax.vmap(
+                    base_enumerate_support,
+                    op.in_axes,
+                    axis_size=op.axis_size,
+                    out_axes=-1)(*numpyro_parents)  # out_axes=-1 = DANGER
 
         def __init__(self, *args, validate_args=False):
             self.args = args
@@ -87,8 +187,9 @@ def handle_vmap_random(op: ir.VMap, *numpyro_parents, is_observed):
             assert sample_shape == () or sample_shape == (1,)
 
             def base_sample(key, *args):
-                var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
-                return var.sample(key)
+                #var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
+                return base_val(*args).sample(key)
+                #return var.sample(key)
 
             keys = jax.random.split(key, self.event_shape[0])
             in_axes = (0,) + op.in_axes
@@ -99,13 +200,16 @@ def handle_vmap_random(op: ir.VMap, *numpyro_parents, is_observed):
             elif sample_shape == ():
                 return jax.vmap(base_sample, in_axes, axis_size=axis_size)(*args)
             else:
-                assert False
+                assert False, "Can't handle this sample shape (Pangolin bug, please report!)"
 
         @dist_util.validate_sample
         def log_prob(self, value):
+            print(f"log prob called {value.shape=}")
+
             def base_log_prob(val, *args):
-                var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
-                return var.log_prob(val)
+                #var = get_numpyro_val(op.base_op, *args, is_observed=is_observed)
+                return base_val(*args).log_prob(val)
+                #return var.log_prob(val)
 
             in_axes = (0,) + op.in_axes
             axis_size = op.axis_size
@@ -115,25 +219,13 @@ def handle_vmap_random(op: ir.VMap, *numpyro_parents, is_observed):
 
     return NewDist(*numpyro_parents)
 
+
 def vmap_nesting(op):
     n = 0
     while isinstance(op, ir.VMap):
         op = op.base_op
         n += 1
     return n
-
-simple_discrete_classes = {ir.Bernoulli:numpyro_dist.Bernoulli,
-                           ir.Categorical:numpyro_dist.Categorical,
-                           ir.Binomial: numpyro_dist.Binomial,
-                           ir.BetaBinomial: lambda n,a,b: numpyro_dist.BetaBinomial(a,b,n),
-                           ir.Multinomial: numpyro_dist.Multinomial,
-                           ir.Poisson: numpyro_dist.Poisson,
-                           }
-
-# , ir.BernoulliLogit, ir.Beta, ir.BetaBinomial, ir.Binomial,
-# ir.Categorical, ir.Cauchy, ir.Exponential, ir.Gamma, ir.LogNormal, ir.Poisson, ir.StudentT,
-# ir.Uniform)
-
 
 def get_plate_size(op, *numpyro_pars):
     parents_shapes = [p.shape for p in numpyro_pars]
@@ -154,94 +246,65 @@ def get_all_plate_sizes(op, *numpyro_pars):
         op = op.base_op
     return tuple(reversed(sizes))
 
-def update_pars(op, *numpyro_pars):
-    my_numpyro_pars = []
-    for par, in_axis in zip(numpyro_pars, op.in_axes):
-        if in_axis is None:
-            my_numpyro_par = par
-        elif in_axis == 0:
-            my_numpyro_par = par
-        else:
-            my_numpyro_par = jnp.moveaxis(par, in_axis, 0)
-        my_numpyro_pars.append(my_numpyro_par)
-    return my_numpyro_pars
+# def update_pars(op, *numpyro_pars):
+#     my_numpyro_pars = []
+#     for par, in_axis in zip(numpyro_pars, op.in_axes):
+#         if in_axis is None:
+#             my_numpyro_par = par
+#         elif in_axis == 0:
+#             my_numpyro_par = par
+#         else:
+#             my_numpyro_par = jnp.moveaxis(par, in_axis, 0)
+#         my_numpyro_pars.append(my_numpyro_par)
+#     return my_numpyro_pars
 
-# def get_numpyro_rv_discrete_latent(op, name, obs, *numpyro_pars):
-#     print("GET DISCRETE LATENT TRIGGERED")
-#
-#
-#     # TODO: Check base op is in some limited class
-#     num_nested = vmap_nesting(op)
-#     # for loop_num in num_nested:
-#     #    loop_name = f"i_{loop_num}"
-#     #    with numpyro.plate()
-#
-#     if num_nested == 1:
-#         axis_size = get_plate_size(op, *numpyro_pars)
-#
-#         with numpyro.plate("i",axis_size):
-#             base_op_class = type(op.base_op)
-#             d = simple_discrete_classes[base_op_class]
-#             my_numpyro_pars = update_pars(op, *numpyro_pars)
-#
-#             #return numpyro.sample(name, d(*numpyro_pars), obs=obs)
-#             return numpyro.sample(name, d(*my_numpyro_pars), obs=obs)
-#         # TODO
-#         # - start here
-#         # - either implemented num_nested == 2 or just implement the general version
-#         # - should probably be cleverly using vmap to move all the dims around with total reliability
-#
-#     else:
-#         raise ValueError(f"can't handle {num_nested} nesting")
+# plate_compatible_classes = {ir.Bernoulli:numpyro_dist.Bernoulli,
+#                            ir.Categorical:numpyro_dist.Categorical,
+#                            ir.Binomial: numpyro_dist.Binomial,
+#                            ir.BernoulliLogit: numpyro_dist.BernoulliLogits,
+#                            ir.BetaBinomial: lambda n,a,b: numpyro_dist.BetaBinomial(a,b,n),
+#                            ir.Multinomial: numpyro_dist.Multinomial,
+#                            ir.Poisson: numpyro_dist.Poisson,
+#                            ir.Normal: numpyro_dist.Normal,
+#                            ir.Uniform: numpyro_dist.Uniform,
+#                            }
 
+def plate_vmap_compatible(op):
+    from .handlers import simple_dists
+    plate_compatible_classes = simple_dists
 
-def get_numpyro_rv_discrete_latent(op, name, obs, *numpyro_pars):
-    print("GET DISCRETE LATENT TRIGGERED")
+    if isinstance(op, ir.VMap):
+        while isinstance(op, ir.VMap):
+            op = op.base_op
+        op_class = type(op)
+        return op_class in plate_compatible_classes
+    else:
+        return False
 
+def vmap_rv_plate(op, name, obs, *numpyro_pars):
+    from .handlers import simple_dists
+    plate_compatible_classes = simple_dists
 
-    # TODO: Check base op is in some limited class
-    num_nested = vmap_nesting(op)
-    # for loop_num in num_nested:
-    #    loop_name = f"i_{loop_num}"
-    #    with numpyro.plate()
+    assert plate_vmap_compatible(op), "op {op} not compatible with vmap_rv_plate (Pangolin bug)"
 
     my_numpyro_pars = vmap_numpyro_pars(op, *numpyro_pars)
 
-    print(f"{[p.shape for p in my_numpyro_pars]=}")
+    #print(f"{[p.shape for p in my_numpyro_pars]=}")
 
     def get(op, plate_sizes, i=0):
         with numpyro.plate(f"i_{i}",plate_sizes[0]):
             op = op.base_op
-            #op_class = type(op)
             if isinstance(op, ir.VMap):
                 return get(op, plate_sizes[1:], i+1)
             else:
                 op_class = type(op)
-                d = simple_discrete_classes[op_class]
+                if op_class not in plate_compatible_classes:
+                    raise ValueError(f"op_class not (yet) supported: {op_class().name}")
+                d = plate_compatible_classes[op_class]
                 return numpyro.sample(name, d(*my_numpyro_pars), obs=obs)
 
     plate_sizes = get_all_plate_sizes(op, *numpyro_pars)
     return get(op, plate_sizes)
-
-
-    # if num_nested == 1:
-    #     axis_size = get_plate_size(op, *numpyro_pars)
-    #
-    #     with numpyro.plate("i",axis_size):
-    #         base_op_class = type(op.base_op)
-    #         d = simple_discrete_classes[base_op_class]
-    #         return numpyro.sample(name, d(*my_numpyro_pars), obs=obs)
-    # elif num_nested == 2:
-    #     plate_sizes = get_all_plate_sizes(op, *numpyro_pars)
-    #     with numpyro.plate("i",plate_sizes[0]):
-    #         op = op.base_op
-    #         with numpyro.plate("j", plate_sizes[1]):
-    #             base_op_class = type(op.base_op)
-    #             d = simple_discrete_classes[base_op_class]
-    #             return numpyro.sample(name, d(*my_numpyro_pars), obs=obs)
-    # else:
-    #     raise ValueError(f"can't handle {num_nested} nesting")
-
 
 def get_vmap_dummy(op):
     if not isinstance(op, ir.VMap):

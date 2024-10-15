@@ -318,39 +318,27 @@ def test_index_fun6():
 
 
 def test_looped_index0():
-    print(f"{index_funs=}")
-    print()
-    print("creating x")
     x = makerv(np.random.randn(3))
     loop = Loop()
     loops.Loop.loops = [loop]
     x_loop = loops.looped_index(x, loop)
-    print(f"{x_loop=}")
     assert isinstance(x_loop, SlicedRV)
     assert loop == loops.Loop.loops.pop()
 
 
 def test_index_syntax0():
     assert loops.Loop.loops == []
-    print()
-    print("creating x")
     x = makerv(np.random.randn(3))
-    print("entering loop")
     with Loop() as loop:
         x_loop = x[loop]
-    print("loop done")
-    print(f"{x_loop=}")
     assert isinstance(x_loop, SlicedRV)
 
 
 def test_index_syntax1():
     assert loops.Loop.loops == []
     x = makerv(np.random.randn(3, 4, 5))
-    print("STARTING LOOP")
     with Loop() as loop:
         x_loop = x[loop, :, :]
-    print("ENDING LOOP")
-    print(f"{x_loop.shape=}")
     assert isinstance(x_loop, SlicedRV)
     assert x_loop.shape == (4, 5)
     assert x_loop.loop_axes == (0,)
@@ -469,8 +457,6 @@ def test_assignment_inline():
     assert x.op == VMap(ir.Normal(), (None, None), 3)
     assert x.parents == (loc, scale)
     assert isinstance(x, OperatorRV)
-
-    # print_upstream(x)
 
 
 def test_assignment_casting():
@@ -595,10 +581,10 @@ def test_assign_syntax1():
     x = makerv(np.random.randn(2, 3))
     y = slot()
     with Loop() as i:
-        print(f"assigning to y[i] {loops=}")
+        #print(f"assigning to y[i] {loops=}")
         y[i] = x[i, :]
-        print("assigning to y[i] DONE {loops=}")
-        print(f"{y[i]=}")
+        #print("assigning to y[i] DONE {loops=}")
+        #print(f"{y[i]=}")
         assert y[i].shape == (3,)  # TODO: should work
     # assert isinstance(y,SlicedRV)
     assert y.shape == x.shape
@@ -611,7 +597,7 @@ def test_assign_syntax2():
     with Loop() as i:
         with Loop() as j:
             z[i, j] = x[i] * y[j]
-    print(f"{z=}")
+    #print(f"{z=}")
     # print_upstream(z)
     assert z.shape == (2, 3)
 
@@ -757,7 +743,6 @@ def test_loop_index_as_constant1():
     z = slot()
     with Loop(5) as i:
         z[i] = exponential(i)
-    print(f"{z=}")
     assert z.op == VMap(ir.Exponential(), (0,), 5)
     assert z.parents[0].op == Constant(range(5))
 
@@ -917,8 +902,6 @@ def test_logistic_regression_all_variants():
     for reps in range(10):
         ndims = np.random.choice([2, 5, 10])
         ndata = np.random.choice([2, 5, 10])
-        print(f"{ndims=}")
-        print(f"{ndata=}")
 
         X = makerv(np.random.randn(ndata, ndims))
 

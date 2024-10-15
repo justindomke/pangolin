@@ -20,7 +20,6 @@ def test_std():
     x = normal(2.5, 3)
 
     def testfun(std_x):
-        print(f"{std_x=}")
         return np.abs(std_x - 3) < 0.1
 
     inf_until_match(std, x, None, None, testfun)
@@ -33,7 +32,6 @@ def test_E_vector():
     x = vmap(normal)(loc, scale)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.linalg.norm(Ex - loc) < 0.1
 
     inf_until_match(E, x, None, None, testfun)
@@ -58,7 +56,6 @@ def test_E_pytree():
     d["y"] = normal(3.3, 4)
 
     def testfun(E_d):
-        print(f"{E_d=}")
         return np.abs(E_d["x"] - 1.5) + np.abs(E_d["y"] - 3.3) < 0.1
 
     inf_until_match(E, d, None, None, testfun)
@@ -70,7 +67,6 @@ def test_std_pytree():
     d["y"] = normal(3.3, 4)
 
     def testfun(std_d):
-        print(f"{std_d=}")
         return np.abs(std_d["x"] - 2) + np.abs(std_d["y"] - 4) < 0.1
 
     inf_until_match(std, d, None, None, testfun)
@@ -83,7 +79,6 @@ def test_std_vector():
     x = vmap(normal)(loc, scale)
 
     def testfun(Ex):
-        print(f"{Ex=}")
         return np.linalg.norm(Ex - scale) < 0.1
 
     inf_until_match(std, x, None, None, testfun)

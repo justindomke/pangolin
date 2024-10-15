@@ -491,13 +491,13 @@ def plate(*args, size: int | None = None, in_axes=0):
 
     # args, in_axes = util.unzip(args_and_in_axes,strict=True)
 
-    print(f"PLATE CALLED {in_axes=} {args=} {size=}")
+    #print(f"PLATE CALLED {in_axes=} {args=} {size=}")
 
     def get_mapped(fun: Callable):
-        print(f"{fun=}")
-        print(f"{in_axes=}")
-        print(f"{args=}")
-        print(f"{size=}")
+        # print(f"{fun=}")
+        # print(f"{in_axes=}")
+        # print(f"{args=}")
+        # print(f"{size=}")
         return vmap(fun, in_axes, axis_size=size)(*args)
 
     return get_mapped

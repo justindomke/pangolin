@@ -169,8 +169,8 @@ def test_composite_flat_with_loops():
     x = vmap(normal, None, 5)(0, 1)
     y = vmap(normal, None, 5)(0, 1)
 
-    z = f(x, y)
-    print(f"{z=}")
+    # z = f(x, y)
+    # print(f"{z=}")
 
     z = composite_flat(f)(x, y)
 
@@ -193,8 +193,8 @@ def test_composite_flat_decorator():
     x = vmap(normal, None, 5)(0, 1)
     y = vmap(normal, None, 5)(0, 1)
 
-    z = f(x, y)
-    print(f"{z=}")
+    # z = f(x, y)
+    # print(f"{z=}")
 
     z = f(x, y)
 
@@ -336,8 +336,8 @@ def test_composite_with_loops():
     x = vmap(normal, None, 5)(0, 1)
     y = vmap(normal, None, 5)(0, 1)
 
-    z = f(x, y)
-    print(f"{z=}")
+    # z = f(x, y)
+    # print(f"{z=}")
 
     z = composite(f)(x, y)
 
@@ -360,8 +360,8 @@ def test_composite_decorator():
     x = vmap(normal, None, 5)(0, 1)
     y = vmap(normal, None, 5)(0, 1)
 
-    z = f(x, y)
-    print(f"{z=}")
+    # z = f(x, y)
+    # print(f"{z=}")
 
     z = f(x, y)
 

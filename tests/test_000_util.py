@@ -31,20 +31,20 @@ def test_flatten_fun():
         return (x, (y,), {"x": x, "x2": x, "x+y": x + y})
 
     stuff = {"x": 2, "y": 3}
-    print(f"{stuff=}")
+    #print(f"{stuff=}")
     flat_f, flatten_input, unflatten_output = util.flatten_fun(f, stuff)
     flat_stuff = flatten_input(stuff)
-    print(f"{flat_stuff=}")
+    #print(f"{flat_stuff=}")
     flat_out = flat_f(*flat_stuff)
-    print(f"{flat_out=}")
+    #print(f"{flat_out=}")
     out = unflatten_output(flat_out)
 
     expected = f(stuff)
 
     # print(f"{flat_f(flat_stuff)=}")
-    print(f"{flat_out=}")
-    print(f"{out=}")
-    print(f"{expected=}")
+    # print(f"{flat_out=}")
+    # print(f"{out=}")
+    # print(f"{expected=}")
 
     assert out == expected
 

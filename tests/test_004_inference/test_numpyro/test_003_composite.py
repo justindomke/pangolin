@@ -87,7 +87,6 @@ def test_composite_random():
     expected = (1.5 + 2) ** (1.5**2)
 
     [ys] = sample_flat([y], [], [], niter=100)
-    print(f"{ys=}")
     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
 
     ys = sample(y, None, None, niter=100)
@@ -104,10 +103,7 @@ def test_composite_simple_const_rv():
 
     y = f(x)
 
-    print_upstream(y)
-
     def testfun(E_y):
-        print(f"{E_y=}")
         return np.abs(E_y - 0.5) < 0.1
 
     inf_until_match(E, y, [], [], testfun)

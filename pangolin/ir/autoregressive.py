@@ -44,10 +44,8 @@ class Autoregressive(Op):
 
         for n, (s, ax) in enumerate(zip(other_shapes,self.in_axes,strict=True)):
             if ax is None:
-                #print('NONE')
                 base_input_shapes.append(s)
             else:
-                print('NOT')
                 assert isinstance(ax,int)
                 base_input_shapes.append(s[:ax] + s[ax + 1 :])
 

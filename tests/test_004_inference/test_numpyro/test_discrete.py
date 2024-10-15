@@ -49,7 +49,7 @@ def test_bernoulli_normal_numpyro():
     conditional_samples = predictive(rng_key=key)
     E_z = np.mean(conditional_samples['z'])
     expected = bernoulli_normal_expected(p, x_obs, scale)
-    print(f"{E_z=} {expected=}")
+    #print(f"{E_z=} {expected=}")
     assert np.abs(E_z-expected) < .05
 
 def test_bernoulli_normal_numpyro_batched():
@@ -79,7 +79,7 @@ def test_bernoulli_normal_numpyro_batched():
     conditional_samples = predictive(rng_key=key)
     E_z = np.mean(conditional_samples['z'], axis=0)
     expected = bernoulli_normal_expected(p, x_obs, scale)
-    print(f"{E_z=} {expected=}")
+    #print(f"{E_z=} {expected=}")
     assert np.all(np.abs(E_z-expected) < .05)
 
 def test_bernoulli_normal():
@@ -95,8 +95,6 @@ def test_bernoulli_normal():
     expected = bernoulli_normal_expected(p, x_obs, scale)
 
     def testfun(Ez):
-        print(f"{Ez=}")
-        print(f"{expected=}")
         return np.abs(Ez-expected)<.01
 
     inf_until_match(E, z, x, x_obs, testfun)
@@ -117,10 +115,6 @@ def test_bernoulli_normal_with_distraction():
 
     def testfun(expectations):
         Ez, Eu = expectations
-        print(f"{Ez=}")
-        print(f"{expected_Ez=}")
-        print(f"{Eu=}")
-        print(f"{expected_Eu=}")
         return np.abs(Ez - expected_Ez) < .01 and np.abs(Eu - expected_Eu) < .01
 
     inf_until_match(E, (z,u), x, x_obs, testfun)
@@ -141,7 +135,6 @@ def test_bernoulli_normal_with_downstream():
 
     def testfun(expectations):
         Ez, Eu = expectations
-        print(f"{Ez=} {expected_Ez=} {Eu=} {expected_Eu=}")
         return np.abs(Ez - expected_Ez) < .01 and np.abs(Eu - expected_Eu) < .01
 
     inf_until_match(E, (z,u), x, x_obs, testfun)
@@ -162,7 +155,6 @@ def test_bernoulli_bernoulli():
     expected = bernoulli_bernoulli_expected(p, x_obs)
 
     def testfun(Ez):
-        print(f"{Ez=} {expected=} {x_obs=} {p=}")
         return np.abs(Ez - expected) < .01
 
     inf_until_match(E, z, x, x_obs, testfun)
@@ -180,7 +172,6 @@ def test_bernoulli_bernoulli_with_downstream():
 
     def testfun(expectations):
         Ez, Eu = expectations
-        print(f"{Ez=} {expected_Ez=} {Eu=} {expected_Eu=} {x_obs=} {p=}")
         return np.abs(Ez - expected_Ez) < .01 and np.abs(Eu - expected_Eu) < .01
 
     inf_until_match(E, (z,u), x, x_obs, testfun)
@@ -208,7 +199,6 @@ def test_categorical_categorical():
     expected_Ez = categorical_categorical_expected(p,M,x_obs)
 
     def testfun(Ez):
-        print(f"{Ez=} {expected_Ez=}")
         return np.abs(Ez - expected_Ez) < .01
 
     inf_until_match(E, z, x, x_obs, testfun)
@@ -237,14 +227,11 @@ def test_triple_bernoulli():
 
     x_obs = np.random.randint(2)
 
-    Ez = E(z,x,x_obs)
-    print(f"{Ez=}")
-
     expected_Ez, expected_Ey = triple_bernoulli_bernoulli_expected(p,x_obs)
 
     def testfun(expectations):
         Ez, Ey = expectations
-        print(f"{Ez=} {expected_Ez=} {Ey=} {expected_Ey=}")
+        #print(f"{Ez=} {expected_Ez=} {Ey=} {expected_Ey=}")
         return np.abs(Ez - expected_Ez) < .01 and np.abs(Ey - expected_Ey) < .01
 
     inf_until_match(E, (z,y), x, x_obs, testfun)
@@ -269,9 +256,6 @@ def long_bernoulli_chain_expected(p,length,x_obs):
         n.append(np.array([1 - q, q]))
     n = np.array(list(reversed(n)))
 
-    print(f"{m=}")
-    print(f"{n=}")
-
     probs = m*n
     probs = probs / np.sum(probs, axis=1, keepdims=True)
     return probs[:,1]
@@ -291,18 +275,10 @@ def test_long_bernoulli_chain():
 
     def testfun(Ez):
         Ez = np.array(Ez)
-        print(f"         {Ez=}")
-        print(f"{expected_Ez=}")
         return np.all(np.abs(Ez - expected_Ez) < .05)
 
     inf_until_match(E, z, x, x_obs, testfun)
 
-
-    #Ez = E(z,x,x_obs, niter=100000)
-    #Ez = np.array(Ez)
-    #print(f"{x_obs=}")
-    #print(f"         {Ez=}")
-    #print(f"{expected_Ez=}")
 
 def disabled_test_long_bernoulli_chain_raw_numpyro():
     """

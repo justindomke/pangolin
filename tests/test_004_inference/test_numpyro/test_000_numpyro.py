@@ -48,7 +48,6 @@ def test_sample_flat():
     x = normal(0, 1)
 
     def testfun(xs):
-        print(f"{np.mean(xs)=} {np.var(xs)=}")
         return np.abs(np.mean(xs)) < 0.05 and np.abs(np.std(xs) - 1) < 0.05
 
     sample_flat_until_match([x], [], [], testfun)

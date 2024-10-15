@@ -14,7 +14,6 @@ def test_simple_add():
     b_dummy = RV(AbstractOp((), False))
     c_dummy = RV(ir.Add(), a_dummy, b_dummy)
     [c] = vmap_subgraph([a, b], [a_dummy, b_dummy], [0, 0], 3, [c_dummy], [c_dummy])
-    print(f"{c=}")
     assert c.op == ir.VMap(ir.Add(), (0, 0), 3)
     assert c.parents == (a, b)
 
@@ -26,7 +25,6 @@ def test_simple_add_non_abstract():
     b_dummy = RV(Constant(0))
     c_dummy = RV(ir.Add(), a_dummy, b_dummy)
     [c] = vmap_subgraph([a, b], [a_dummy, b_dummy], [0, 0], 3, [c_dummy], [c_dummy])
-    print(f"{c=}")
     assert c.op == ir.VMap(ir.Add(), (0, 0), 3)
     assert c.parents == (a, b)
 
@@ -38,7 +36,6 @@ def test_simple_add_indices():
     b_dummy = b[0]
     c_dummy = RV(ir.Add(), a_dummy, b_dummy)
     [c] = vmap_subgraph([a, b], [a_dummy, b_dummy], [0, 0], 3, [c_dummy], [c_dummy])
-    print(f"{c=}")
     assert c.op == ir.VMap(ir.Add(), (0, 0), 3)
     assert c.parents == (a, b)
 
@@ -50,10 +47,7 @@ def test_int_subclass():
 
     x = SubInt(7)
     y = SubInt(9)
-    print(f"{x=}")
-    print(f"{y=}")
     x_plus_y = x + y
-    print(f"{x_plus_y=}")
     assert isinstance(x_plus_y, int)
     assert not isinstance(x_plus_y, SubInt)
 
@@ -78,10 +72,7 @@ def test_int_subclass2():
 
     x = SubInt(7)
     y = SubInt(9)
-    print(f"{x=}")
-    print(f"{y=}")
     x_plus_y = x + y
-    print(f"{x_plus_y=}")
     assert isinstance(x_plus_y, int)
     assert isinstance(x_plus_y, SubInt)
 

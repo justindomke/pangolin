@@ -19,7 +19,6 @@ def test_generated_nodes1():
     x0 = makerv(1)
     y0 = makerv(2)
     generated, out = generated_nodes(fun, x0, y0)
-    print(f"{generated=}")
     assert len(generated) == 4
     assert generated[0].op == ir.Constant(2)
     assert generated[1].op == ir.Mul()
@@ -61,7 +60,6 @@ def test_generated_nodes_closure():
     y0 = makerv(2)
     generated, out = generated_nodes(fun, y0)
     assert len(generated) == 3
-    print(f"{generated=}")
     # c
     c = generated[0]
     assert c.op == ir.Constant(3)

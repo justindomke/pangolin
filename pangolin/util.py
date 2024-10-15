@@ -366,7 +366,6 @@ def camel_case_to_snake_case(name):
 
 def most_specific_class(*args, base_classes=()):
     classes = base_classes + tuple(type(a) for a in args)
-    print(f"{classes=}")
     for c in classes:
         if all(issubclass(c, d) for d in classes):
             return c
