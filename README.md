@@ -8,6 +8,10 @@ Pangolin is an early-stage probabilistic inference research project. The focus i
 
 See [`INSTALL.md`](INSTALL.md)
 
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md)
+
 ## API Docs
 
 All user-facing functions are documented [here](API.md), with examples, in a single 250-ish line file.
