@@ -2,6 +2,7 @@ from pangolin.interface import *
 from pangolin.interface.autoregressive import autoregressive, autoregressive_flat, repeat
 import numpy as np
 from pangolin import ir
+from pangolin import sample
 
 def test_simple_flat():
     def fun(x):
@@ -264,3 +265,34 @@ def test_autoregressive_inside_vmap():
     assert y.op.base_op == auto_op
     op = ir.VMap(auto_op, (0,), 5)
     assert y.op == op
+
+def test_double_autoregressive_cumsum():
+    # use double autoregressive to define cumsum of cumsum
+
+    cumsum = autoregressive(lambda last, input: last + input)
+    vecwalk = autoregressive(lambda last: cumsum(0.0, last), 5)
+
+    a = np.random.randn(10)
+    u = vecwalk(a)
+    u_sample = sample(u,niter=None)
+
+    tmp = np.cumsum(a)
+    for i in range(5):
+        assert np.allclose(u_sample[i],tmp)
+        tmp = np.cumsum(tmp)
+
+
+def test_double_autoregressive_cumsum_random():
+    # use double autoregressive to define cumsum of cumsum, use random dists
+
+    cumsum = autoregressive(lambda last, input: normal(last + input, 1e-7))
+    vecwalk = autoregressive(lambda last: cumsum(0.0,last), 5)
+
+    a = np.random.randn(10)
+    u = vecwalk(a)
+    u_sample = sample(u,niter=None)
+
+    tmp = np.cumsum(a)
+    for i in range(5):
+        assert np.allclose(u_sample[i],tmp, atol=1e-3, rtol=1e-3)
+        tmp = np.cumsum(tmp)

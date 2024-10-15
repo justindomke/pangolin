@@ -21,7 +21,8 @@ class Composite(Op):
         for my_par_nums in par_nums:
             assert all(isinstance(i, int) for i in my_par_nums)
         for d in ops[:-1]:
-            assert not d.random, "all but last op for Composite must be non-random"
+            if d.random:
+                raise ValueError(f"all but last op for Composite must be non-random (got {d})")
         self.num_inputs = num_inputs
         self.ops = tuple(ops)
         #self.par_nums = tuple(par_nums)

@@ -220,3 +220,44 @@ def test_latent_discrete_autoregressive_forbidden():
         assert False
     except ValueError as e:
         assert str(e).startswith("Can't have non-observed autoregressive over discrete variables")
+
+# def test_double_autoregressive():
+#     # def inner_f(last, input):
+#     #     return normal(last+input,1e-7)
+#     #
+#     # def outer_f(last_chain):
+#     #     return autoregressive(inner_f, 10)(jnp.zeros(10), last_chain)
+#
+#     # define random walk over scalars with vector input
+#     randwalk = autoregressive(lambda last, input: normal(last+input,1e-7), 10)
+#     z = randwalk(0.0, np.arange(10))
+#     assert z.shape == (10,)
+#     zs = sample(z,niter=1)
+#     assert zs.shape == (1,10)
+#
+#     vecwalk = autoregressive(lambda last: randwalk(0.0, last), 5)
+#     u = vecwalk(np.zeros(10))
+#     assert u.shape == (5, 10)
+#     us = sample(u,niter=1)
+#     assert us.shape == (1, 5, 10)
+
+def test_double_autoregressive():
+
+    # define random walk over scalars with vector input
+    randwalk = autoregressive(lambda last, input: normal(last+input,1e-7), 10)
+    z = randwalk(0.0, np.arange(10))
+    assert z.shape == (10,)
+    zs = sample(z,niter=1)
+    assert zs.shape == (1,10)
+
+    vecwalk = autoregressive(lambda last: randwalk(0.0, last), 5)
+    u = vecwalk(np.zeros(10))
+    assert u.shape == (5, 10)
+    us = sample(u,niter=1)
+    assert us.shape == (1, 5, 10)
+
+
+
+    #z = autoregressive(outer_f, 5)(0.0)
+
+
