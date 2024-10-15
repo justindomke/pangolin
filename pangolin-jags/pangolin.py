@@ -794,7 +794,7 @@ class t:
 ################################################################################
 
 def I(eq):
-    return t.equals(eq.dist,eq.const)
+    return t.equals(eq.numpyro_dist, eq.const)
 
 ################################################################################
 # Indexing
@@ -1415,7 +1415,7 @@ def sample(var0,given=None,*,init=None,niter=1000):
         given = Given()
     assert isinstance(given,Given)
 
-    nodes = upstream_nodes(var + [e.dist for e in given.eqs])
+    nodes = upstream_nodes(var + [e.numpyro_dist for e in given.eqs])
 
     # create mapping from nodes to variable name strings
     var_str = {node: node.var_name() for i,node in enumerate(nodes)}
@@ -1433,7 +1433,7 @@ def sample(var0,given=None,*,init=None,niter=1000):
     for e in given.eqs:
         # equality is a list of equality objects
         # each equality object has e.dist and e.const
-        cond = e.dist.condition(e.const.value)
+        cond = e.numpyro_dist.condition(e.const.value)
         for node,val_i in cond:
             # need to check/merge multiple observations
             if var_str[node] in evidence:

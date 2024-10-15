@@ -356,39 +356,39 @@ def add(a, b) -> OperatorRV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
     return create_rv(ir.Add(), a, b)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def sub(a, b) -> OperatorRV:
     """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
     b)`."""
     return create_rv(ir.Sub(), a, b)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def mul(a, b) -> OperatorRV:
     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
     return create_rv(ir.Mul(), a, b)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def div(a, b) -> OperatorRV:
     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
     return create_rv(ir.Div(), a, b)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def pow(a, b) -> OperatorRV:
     """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
     a,b)`."""
     return create_rv(ir.Pow(), a, b)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def sqrt(x) -> OperatorRV:
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
-
+@implicit_vectorized_scalar_fun
 @api
 def abs(a) -> OperatorRV:
     return create_rv(ir.Abs(), a)

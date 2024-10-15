@@ -4,8 +4,11 @@ import numpyro
 import pytest
 import jax
 
+from pangolin.inference.numpyro.model import get_model_flat
+
 def inference_numpyro(var):
-    model, names = inference.numpyro.get_model_flat([var],[],[])
+    "Draw a single sample using only get_model_flat"
+    model, names = get_model_flat([var],[],[])
     with numpyro.handlers.seed(rng_seed=0):
         with numpyro.plate("multiple_samples", 10000):
             out = model()

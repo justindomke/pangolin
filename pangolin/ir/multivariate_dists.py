@@ -66,6 +66,7 @@ class Multinomial(Op):
     def __init__(self):
         """
         Create a Multinomial instance. Takes no parameters.
+        Note: parameterization is different from Stan (which doesn't need n to be passed)
         """
         super().__init__(name="multinomial", random=True)
 
