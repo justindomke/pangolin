@@ -289,10 +289,8 @@ def vmap_rv_plate(op, name, obs, *numpyro_pars):
 
     my_numpyro_pars = vmap_numpyro_pars(op, *numpyro_pars)
 
-    #print(f"{[p.shape for p in my_numpyro_pars]=}")
-
     def get(op, plate_sizes, i=0):
-        with numpyro.plate(f"i_{i}",plate_sizes[0]):
+        with numpyro.plate(f"{name}_i_{i}",plate_sizes[0]):
             op = op.base_op
             if isinstance(op, ir.VMap):
                 return get(op, plate_sizes[1:], i+1)
@@ -304,7 +302,10 @@ def vmap_rv_plate(op, name, obs, *numpyro_pars):
                 return numpyro.sample(name, d(*my_numpyro_pars), obs=obs)
 
     plate_sizes = get_all_plate_sizes(op, *numpyro_pars)
-    return get(op, plate_sizes)
+    #return get(op, plate_sizes)
+    out = get(op, plate_sizes)
+    assert out.shape == op.get_shape(*[p.shape for p in numpyro_pars]), "Shape match failed (Pangolin bug)"
+    return out
 
 def get_vmap_dummy(op):
     if not isinstance(op, ir.VMap):
