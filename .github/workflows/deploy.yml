@@ -27,7 +27,7 @@ jobs:
       - run: pip install pdoc
       - run: pip install -r requirements.txt
       - run: pip install -e .
-      - run: pdoc --docformat numpy -n pangolin -o ./docs
+      - run: pdoc --docformat numpy -n pangolin -o ./docs  --logo "https://raw.githubusercontent.com/justindomke/pangolin/main/pangolin.jpg"
 
       - uses: actions/upload-pages-artifact@v3
         with:
