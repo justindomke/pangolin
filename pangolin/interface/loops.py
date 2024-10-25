@@ -10,9 +10,31 @@ import numpy as np
 from pangolin.interface.index import index_funs, standard_index_fun, eliminate_ellipses, pad_with_slices
 from pangolin.interface import index
 
+# Suppose someone does this
+#
+# x = makerv([1,2,3,4,5])
+# y = slot()
+# with Loop(3) as i:
+#     y[i] = x[i:i+2]
+#
+# That would be equivalent to doing
+#
+# x = makerv([1,2,3,4,5])
+# tmp = np.add.outer(np.arange(3), np.arange(2))
+# with Loop(3) as i:
+#   idx = tmp[i]
+#   y[i] = x[idx]
+
 def looped_index(var, *idx):
     idx = eliminate_ellipses(var.ndim, idx)
     idx = pad_with_slices(var.ndim, idx)
+
+    # TODO: what if some indices are *slices* that contain Loop objects?
+
+    if any(isinstance(p,slice) for p in idx):
+        p = next(p for p in idx if isinstance(p,slice))
+        if isinstance(p.start, Loop) or isinstance(p.stop, Loop) or isinstance(p.step, Loop):
+            raise ValueError("Slices with loop start/stop/step not currently supported")
 
     if any(isinstance(p, Loop) for p in idx):
         for p in idx:
