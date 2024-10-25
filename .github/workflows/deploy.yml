@@ -28,6 +28,10 @@ jobs:
         pip install pdoc
         pip install -r requirements.txt
 
+    - name: Test pangolin import
+      run: |
+        python -c "import pangolin"
+
     - name: Generate Documentation
       env:
         PYTHONPATH: ${{ github.workspace }}  # Add this line
