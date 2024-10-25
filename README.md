@@ -14,7 +14,9 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 ## API Docs
 
-All user-facing functions are documented [here](API.md), with examples, in a single 250-ish line file.
+All user-facing functions are concisely documented [here](API.md), with examples, in a single 250-ish line file.
+
+Alternatively, auto-generated docs are available at [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/). (Currently quite chaotic.)
 
 ## Examples
 
