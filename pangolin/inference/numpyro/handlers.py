@@ -10,7 +10,6 @@ from numpyro.distributions import util as dist_util
 from jax.scipy import special as jspecial
 from jax import nn as jnn
 
-from inference.old_numpyro import is_continuous
 # import numpy as np
 from pangolin.ir.rv import RV
 from pangolin import dag, util, ir
