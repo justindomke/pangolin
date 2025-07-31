@@ -1,3 +1,5 @@
+**2025.07.31:** Various cleanup, improve printing.
+
 **2024.10.25:** Deploy auto-generated API docs.
 
 **2024.10.25:** Try to prevent users from using Loop variables are part of slices. (Throw a meaningful exception instead of just failing.)
