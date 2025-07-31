@@ -2,11 +2,21 @@ from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import Sequence
-import collections
 
+def comma_separated(stuff, fun=None, parens=True, spaces=False):
+    """convenience function for printing and such
 
-def comma_separated(stuff, fun=None, parens=True):
-    "convenience function for printing and such"
+    Examples
+    --------
+    >>> comma_separated(['a', 'b', 'c'])
+    '(a,b,c)'
+    >>> comma_separated(['a', 'b', 'c'], lambda s: s + "0")
+    '(a0,b0,c0)'
+    >>> comma_separated(['a', 'b', 'c'], parens=False)
+    'a,b,c'
+    >>> comma_separated(['a', 'b', 'c'], lambda s: s + "0", parens=False)
+    'a0,b0,c0'
+    """
     ret = ""
     if parens:
         ret += "("
@@ -17,12 +27,32 @@ def comma_separated(stuff, fun=None, parens=True):
             ret += fun(thing)
         if i < len(stuff) - 1:
             ret += ","
+            if spaces:
+                ret += ' '
     if parens:
         ret += ")"
     return ret
 
 
 class VarNames:
+    """Convenience class to automatically give unique string names to objects.
+
+    Examples
+    --------
+    >>> var_names = VarNames()
+    >>> var_names['bob']
+    'v0v'
+    >>> var_names['alice']
+    'v1v'
+    >>> var_names['bob']
+    'v0v'
+    >>> var_names['carlos']
+    'v2v'
+    >>> var_names['alice']
+    'v1v'
+    >>> var_names['bob']
+    'v0v'
+    """
     def __init__(self):
         self.num = 0
         self.node_to_name = {}
@@ -38,6 +68,21 @@ class VarNames:
 
 
 def one_not_none(*args):
+    """Is exactly one argument not None?
+
+    Examples
+    --------
+    >>> one_not_none(1)
+    1
+    >>> one_not_none(1,2)
+    2
+    >>> one_not_none(1,None)
+    1
+    >>> one_not_none(None,1,None)
+    1
+    """
+    # TODO: should be num_not_none
+
     num = 0
     for arg in args:
         if arg is not None:
@@ -50,6 +95,21 @@ def all_unique(lst):
 
 
 class WriteOnceDict(dict):
+    """A dict where you can't overwrite entries
+
+    Examples
+    --------
+    >>> d = WriteOnceDict()
+    >>> d['a'] = 2
+    >>> d['a']
+    2
+    >>> d['b'] = 3
+    >>> d['b']
+    3
+    >>> d['a'] = 1
+    Traceback (most recent call last):
+    ValueError: Cannot overwrite existing key a in WriteOnceDict
+    """
     def __setitem__(self, key, value):
         if key in self:
             raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDict")
@@ -57,6 +117,22 @@ class WriteOnceDict(dict):
 
 
 class WriteOnceDefaultDict(dict):
+    """A dict where you can't overwrite entries, with a default value
+
+    Examples
+    --------
+    >>> d = WriteOnceDefaultDict(lambda s : len(s))
+    >>> d['bob']
+    3
+    >>> d['bob'] = 5
+    >>> d['bob']
+    5
+    >>> d['bob'] = 3
+    Traceback (most recent call last):
+    ValueError: Cannot overwrite existing key bob in WriteOnceDefaultDict
+    """
+    # TODO: if an entry is accessed, should we freeze it so it can't be overwritten after that?
+
     def __init__(self, default_factory):
         self.default_factory = default_factory
         super().__init__()
@@ -152,9 +228,9 @@ def map_inside_tree(f, tree):
     >>> def f(t):
     ...     a, (b, c) = t
     ...     return (a + b, c), None
-    ... tree = np.array([1, 2]), (np.array([3, 4]), None)
-    ... map_inside_tree(f, tree)
-    (np.array([4, 6]), None), None
+    >>> tree = np.array([1, 2]), (np.array([3, 4]), None)
+    >>> map_inside_tree(f, tree)
+    ((array([4, 6]), None), None)
     """
     axis_size = tree_map_preserve_none(
         lambda n: n.shape[0],
@@ -232,10 +308,6 @@ def flatten_fun(f, *args, is_leaf=None):
     args_treedef = jax.tree_util.tree_structure(args, is_leaf=is_leaf)
     out_treedef = jax.tree_util.tree_structure(out, is_leaf=is_leaf)
 
-    # print(f"{out=}")
-    # print(f"{args_treedef=}")
-    # print(f"{out_treedef=}")
-
     def flat_f(*flat_args):
         args = jax.tree_util.tree_unflatten(args_treedef, flat_args)
         out = f(*args)
@@ -245,8 +317,6 @@ def flatten_fun(f, *args, is_leaf=None):
 
     def flatten_input(*args):
         flat_args, treedef = jax.tree_util.tree_flatten(args, is_leaf=is_leaf)
-        # print(f"{args_treedef=}")
-        # print(f"{treedef=}")
         assert treedef == args_treedef, "args don't match original"
         return flat_args
 
@@ -254,11 +324,6 @@ def flatten_fun(f, *args, is_leaf=None):
         return jax.tree_util.tree_unflatten(out_treedef, flat_out)
 
     return flat_f, flatten_input, unflatten_output
-
-
-# def replace_item(t,old2new):
-#     assert isinstance(t,tuple), "must be called on tuple"
-#     return (ti if ti not in old2new else old2new[ti] for ti in t)
 
 
 ################################################################################

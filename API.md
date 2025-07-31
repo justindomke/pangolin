@@ -14,7 +14,7 @@ y = pg.makerv([1,2,3])
 z = pg.makerv(np.eye(3))
 ```
 
-Create **stochastic random variables** using **basic distributions** with `normal`, `normal_prec`, `cauchy`, `bernoulli`, `bernoulli_logit`, `binomial`, `uniform`, `beta`, `beta_binomial`, `exponential`, `gamma`, `poisson`, `student_t`, `multi_normal`, `categorical`, `multinomial`, and `dirichlet`. In all cases, distribution names and arguments are exactly the same as in Stan.
+Create **stochastic random variables** using **basic distributions** with `normal`, `lognormal`, `normal_prec`, `cauchy`, `bernoulli`, `bernoulli_logit`, `binomial`, `uniform`, `beta`, `beta_binomial`, `exponential`, `gamma`, `poisson`, `student_t`, `multi_normal`, `categorical`, `multinomial`, and `dirichlet`. In all cases, distribution names and arguments are exactly the same as in Stan.
 
 ```python
 import pangolin as pg

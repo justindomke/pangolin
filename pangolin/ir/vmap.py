@@ -51,9 +51,9 @@ class VMap(Op):
         return (axis_size,) + dummy_shape
 
     def __repr__(self):
-        out = f"VMap({repr(self.base_op)},{repr(self.in_axes)}"
+        out = f"VMap({repr(self.base_op)}, {repr(self.in_axes)}"
         if self.axis_size:
-            out += f",{repr(self.axis_size)}"
+            out += f", {repr(self.axis_size)}"
         out += ")"
         return out
 
@@ -64,14 +64,15 @@ class VMap(Op):
         representing unmapped args
         """
         # this is kind of overkill but whatever...
-        new_in_axes = jax.tree_util.tree_map(
-            lambda x: "∅" if x is None else x,
-            self.in_axes,
-            is_leaf=util.is_leaf_with_none,
-        )
-        out = f"VMap({str(self.base_op)},{str(new_in_axes)}"
+        # new_in_axes = jax.tree_util.tree_map(
+        #     lambda x: "∅" if x is None else x,
+        #     self.in_axes,
+        #     is_leaf=util.is_leaf_with_none,
+        # )
+        # out = f"vmap({str(self.base_op)}, {str(new_in_axes)}"
+        out = f"vmap({str(self.base_op)}, {str(self.in_axes)}"
         if self.axis_size:
-            out += f",{repr(self.axis_size)}"
+            out += f", {repr(self.axis_size)}"
         out += ")"
         return out
 

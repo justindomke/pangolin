@@ -31,7 +31,6 @@ x = pangolin.ir.rv.RV(pangolin.ir.scalar_ops.Normal(),0,1)
 
 But there's no reason to do that.
 
-
 """
 
 __docformat__ = 'numpy'

@@ -201,7 +201,7 @@ def normal_prec(loc, prec) -> OperatorRV:
 
 
 @api
-def log_normal(mu, sigma) -> OperatorRV:
+def lognormal(mu, sigma) -> OperatorRV:
     """Create a [log-normal](https://en.wikipedia.org/wiki/Log-normal_distribution) distributed random
     variable."""
     return create_rv(ir.NormalPrec(), mu, sigma)
