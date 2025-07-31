@@ -21,9 +21,11 @@ from pangolin.ir.index import Index
 from pangolin.ir.vmap import VMap
 from pangolin.ir.composite import Composite
 from pangolin.ir.autoregressive import Autoregressive
+from .printing import print_upstream
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
-           'multivariate_funs','index','VMap','vmap','Add','Index','Composite','Autoregressive']
+           'multivariate_funs','index','VMap','vmap','Add','Index','Composite','Autoregressive',
+           print_upstream]
 
 # force everything to be documented
 # __all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]
