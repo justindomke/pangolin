@@ -2,6 +2,13 @@ from pangolin import dag, util
 from abc import ABC, abstractmethod
 from typing import Self
 
+from typing import TYPE_CHECKING
+
+# type check Op without circular import problems
+if TYPE_CHECKING:
+    from .op import Op
+
+
 class RV(dag.Node):
     """
     A RV is essentially just a tuple of an Op and a set of parent RVs.
@@ -9,7 +16,7 @@ class RV(dag.Node):
     _frozen = False
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op, *parents: Self):
+    def __init__(self, op: 'Op', *parents: Self):
         """
         Initialize an RV with Op `op` and parents `*parents`.
         """
@@ -40,15 +47,18 @@ class RV(dag.Node):
 
     def __repr__(self):
         ret = "RV(" + repr(self.op)
+        #if self.parents:
+        #    ret += ", parents=[" + util.comma_separated(self.parents, repr, False) + "]"
         if self.parents:
-            ret += ", parents=[" + util.comma_separated(self.parents, repr, False) + "]"
+            for p in self.parents:
+                ret += ', ' + repr(p)
         ret += ")"
         return ret
 
     def __str__(self):
         ret = str(self.op)
         if self.parents:
-            ret += util.comma_separated(self.parents, str)
+           ret += util.comma_separated(self.parents, fun=str, parens=True, spaces=True)
         return ret
 
     def __setattr__(self, key, value):

@@ -56,7 +56,7 @@ class Op(ABC):
         return self._get_shape(*parents_shapes)
 
     @abstractmethod
-    def _get_shape(self, *parents_shapes):
+    def _get_shape(self, *parents_shapes) -> tuple[int, ...]:
         pass
 
     def __eq__(self, other):
@@ -73,3 +73,4 @@ class Op(ABC):
 
     def __repr__(self):
         return self.name + "()"
+
