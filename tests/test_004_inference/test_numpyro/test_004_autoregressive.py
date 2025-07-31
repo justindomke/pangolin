@@ -1,4 +1,4 @@
-from pangolin import makerv, normal, autoregressive, print_upstream, ir, sample, vmap
+from pangolin import makerv, normal, autoregressive, ir, sample, vmap
 from util import inf_until_match, sample_until_match, sample_flat_until_match
 import numpy as np
 from pangolin.inference.numpyro.handlers import get_numpyro_val
@@ -70,8 +70,6 @@ def test_autoregressive_simple_const_rv():
     assert isinstance(base_op, ir.Composite)
     assert base_op == ir.Composite(2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]])
     assert y.op == ir.Autoregressive(base_op, length, [None], 0)
-
-    #print_upstream(y)
 
     def testfun(ys):
         last_y = ys[-1, :]

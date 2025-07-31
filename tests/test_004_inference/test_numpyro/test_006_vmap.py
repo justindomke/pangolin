@@ -3,7 +3,6 @@ from numpyro.contrib.funsor import config_enumerate
 from pangolin import (
     makerv,
     normal,
-    print_upstream,
     ir,
     vmap,
     bernoulli,

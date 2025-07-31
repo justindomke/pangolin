@@ -1,6 +1,6 @@
 from numpyro.contrib.funsor import config_enumerate
 
-from pangolin import makerv, normal, print_upstream, ir, sample, vmap, bernoulli, categorical, bernoulli_logit, uniform, exponential
+from pangolin import makerv, normal, ir, sample, vmap, bernoulli, categorical, bernoulli_logit, uniform, exponential
 #from pangolin.inference.numpyro import numpyro_vmap_var_random, vmap_numpyro_pars, E
 from pangolin.inference.numpyro import E
 from pangolin.inference.numpyro.vmap import handle_vmap_random, handle_vmap_nonrandom
