@@ -1,0 +1,15 @@
+[project]
+name = "pangolin"
+version = "0.1.0"
+description = "Probabilistic inference focused on fun"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "jax==0.4.38",
+    "numpy",
+    "scipy",
+    "numpyro",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

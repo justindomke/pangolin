@@ -1,5 +1,0 @@
-jax
-jaxlib
-numpy
-scipy
-numpyro
