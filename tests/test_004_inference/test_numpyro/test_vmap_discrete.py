@@ -1,6 +1,6 @@
 from numpyro.contrib.funsor import config_enumerate
 
-from inference.old_numpyro import vmap_numpyro_pars
+#from inference.old_numpyro import vmap_numpyro_pars
 from pangolin import (
     makerv,
     normal,
@@ -26,6 +26,7 @@ import jax
 from numpyro import distributions as numpyro_dist
 from pangolin.inference.numpyro.vmap import handle_vmap_random, handle_vmap_nonrandom
 from pangolin.inference.numpyro.vmap import vmap_rv_plate
+from pangolin.inference.numpyro.vmap import vmap_numpyro_pars
 
 thresh = 0.05
 
