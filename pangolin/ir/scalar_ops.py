@@ -38,6 +38,7 @@ __docformat__ = 'numpy'
 
 import numpy as np
 from pangolin import util, ir
+from .op import Op
 
 def all_scalar_op_factory(num_parents, name, random):
     """
@@ -60,7 +61,7 @@ def all_scalar_op_factory(num_parents, name, random):
 
     camel_case_name = name[0].upper() + name[1:]
 
-    class AllScalarOp(ir.Op):
+    class AllScalarOp(Op):
         """
         Convenience class to create "all scalar" distributions, where all parents and
         outputs are scalar. Most of the common ops (e.g. `normal`, `add`, `exp`) are
