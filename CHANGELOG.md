@@ -1,3 +1,5 @@
+**2025.08.01:** Add notebooks demonstrating IR and interface.
+
 **2025.07.31:** Various cleanup, improve printing.
 
 **2024.10.25:** Deploy auto-generated API docs.
