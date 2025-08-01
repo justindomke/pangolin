@@ -1,6 +1,6 @@
 # Pangolin
 
-Pangolin is an early-stage probabilistic inference research project. The focus is to make probabilistic inference **fun**.
+Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is still something of an early-stage research project.
 
 ![pangolin](pangolin.jpg)
 
@@ -71,7 +71,21 @@ If you're in the market for a PPL, you might want to compare the above to the sa
 | [Stan](https://www.maths.usyd.edu.au/u/jormerod/Workshop/Example1/Example1.html#:~:text=school_model3) | Looks very simple, but uses somewhat subtle batching semantics. Could be written similarly to the JAGS model, just with mandatory declarations of all types/shapes. Requires a separate language. |
 | [Tensorflow probability](https://www.tensorflow.org/probability/examples/Eight_Schools)                | Legend has it that some find this a wee bit complicated.                                                                                                                                          |
 
-For more examples, take a look at the [demos](demos/).
+For more examples, take a look at the [demos](demos/). Here's a recommended order:
+
+* [IR.ipynb](blob/main/demos/ir.ipynb) demonstrates pangolin's internal representation of probabilistic models.
+* [interface.ipynb](blob/main/demos/interface.ipynb) demonstrates pangolin's friendly interface and what internal representation it produces.
+* [taxicab.ipynb](blob/main/demos/taxicab.ipynb) is the classic taxicab problem.
+* [coins.ipynb](blob/main/demos/coins.ipynb) models the bias of a coin.
+* [8schools.ipynb](blob/main/demos/8schools.ipynb) is the classic 8-schools model.
+* [regression.ipynb](blob/main/demos/regression.ipynb) is Bayesian linear regression.
+* [polling.ipynb](blob/main/demos/polling.ipynb) is a polling model.
+* [GP-regression.ipynb](blob/main/demos/GP-regression.ipynb) is Gaussian Process regression.
+
+
+
+
+
 
 ## Values
 
