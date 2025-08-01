@@ -9,7 +9,9 @@ class VMap(Op):
     Represents a `VMap` Op. That's *one specific* op vectorized over some number of arguments.
     """
 
-    def __init__(self, base_op: Op, in_axes: tuple[int | None, ...] | list[int | None, ...], axis_size: int | None = None):
+    # tuple[int | None, ...] means a tuple of int or None of any length
+    # list[int | None] means a list of any length (... not appropriate)
+    def __init__(self, base_op: Op, in_axes: tuple[int | None, ...] | list[int | None], axis_size: int | None = None):
         """
         Create a `VMap` Op. All arguments here are heavily inspired by [`jax.lax.vmap`](
         https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) although note that
