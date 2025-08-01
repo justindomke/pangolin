@@ -25,7 +25,7 @@ from .printing import print_upstream
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
            'multivariate_funs','index','VMap','vmap','Add','Index','Composite','Autoregressive',
-           print_upstream]
+           'print_upstream']
 
 # force everything to be documented
-# __all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]
+#__all__ = ['Op','RV','Constant'] + [s for s in dir() if not s.startswith('_')]
