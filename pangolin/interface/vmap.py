@@ -4,11 +4,11 @@ from . import OperatorRV
 from pangolin.ir import Op, RV, VMap, Constant
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .interface import makerv, rv_factory
+from .base import makerv, rv_factory
 from typing import Sequence, Type
 import jax.tree_util
-from . import interface
-from .interface import api
+from . import base
+from .base import api
 
 from typing import Protocol
 from numpy.typing import ArrayLike
@@ -25,7 +25,7 @@ def check_tree_consistency(*args):
         assert t == trees[0]
 
 def get_flat_vmap_args_and_axes(in_axes, args):
-    from pangolin.interface.interface import rv_factory
+    from pangolin.interface.base import rv_factory
 
     def get_dummy(i, x):
         if i is None:
@@ -254,7 +254,7 @@ def generated_nodes_old(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV
         pass
 
     # some outputs might be non-abstract if independent of abstract_args
-    with interface.SetRVFactory(TracerRV):
+    with base.SetRVFactory(TracerRV):
         abstract_out = fun(*args)
 
     if not isinstance(abstract_out, list):

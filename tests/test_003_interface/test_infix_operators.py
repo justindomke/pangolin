@@ -1,4 +1,4 @@
-from pangolin.interface.interface import OperatorRV
+from pangolin.interface.base import OperatorRV
 from pangolin import ir
 
 # from pangolin.ir.op import SetAutoRV

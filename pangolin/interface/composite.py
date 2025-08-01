@@ -55,7 +55,7 @@ def make_composite(fun, *input_shapes):
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
 def composite_flat(fun):
-    from pangolin.interface.interface import rv_factory
+    from pangolin.interface.base import rv_factory
     def myfun(*inputs):
         input_shapes = [x.shape for x in inputs]
         op, consts = make_composite(fun,*input_shapes)
@@ -63,7 +63,7 @@ def composite_flat(fun):
     return myfun
 
 def composite(fun):
-    from pangolin.interface.interface import rv_factory
+    from pangolin.interface.base import rv_factory
     def myfun(*inputs):
         # this casts at the SMALLEST level - [0,0,0] becomes three scalars, not a vector
         # can't do more because level of granularity unclear

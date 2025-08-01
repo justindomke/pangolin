@@ -22,6 +22,7 @@ from pangolin.interface.index import index
 from pangolin.ir import print_upstream
 
 
+__all__ = []
 __all__ = ['ir','interface','vmap','index','print_upstream','inference']
-#__all__ += interface.interface.for_api
-
+__all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
+__all__.sort() # pyright: ignore [reportUnsupportedDunderAll]

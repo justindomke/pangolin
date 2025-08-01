@@ -5,7 +5,7 @@ from pangolin.interface.composite import composite_flat, make_composite
 from .vmap import generated_nodes, AbstractOp
 from pangolin import util
 import jax.tree_util
-from pangolin.interface.interface import RV_or_array
+from pangolin.interface.base import RV_or_array
 from pangolin.interface.vmap import get_flat_vmap_args_and_axes
 from typing import Callable
 
@@ -33,7 +33,7 @@ def autoregressive_flat(flat_fun, length=None, in_axes=None):
     """
     next = flat_fun(prev,*args)
     """
-    from pangolin.interface.interface import rv_factory
+    from pangolin.interface.base import rv_factory
 
     def myfun(init: RV_or_array, *args: RV_or_array):
         init = makerv(init)
@@ -107,7 +107,7 @@ def autoregressive(fun: Callable, length:None | int = None, in_axes=0):
     """
     next = flat_fun(prev,*args)
     """
-    from pangolin.interface.interface import rv_factory
+    from pangolin.interface.base import rv_factory
 
 
     def myfun(init: RV_or_array, *args):

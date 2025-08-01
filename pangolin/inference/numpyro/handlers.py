@@ -13,7 +13,7 @@ from jax import nn as jnn
 # import numpy as np
 from pangolin.ir.rv import RV
 from pangolin import dag, util, ir
-from pangolin.interface.interface import OperatorRV
+from pangolin.interface.base import OperatorRV
 from numpy.typing import ArrayLike
 from pangolin.interface import RV_or_array
 from pangolin.inference import inference_util

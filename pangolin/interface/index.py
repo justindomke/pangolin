@@ -1,6 +1,6 @@
 from pangolin.ir import RV, Constant, Index
 from pangolin.util import most_specific_class
-from pangolin.interface import interface
+from pangolin.interface import base
 
 
 # TODO: some day merge "indexes into indexes"
@@ -33,7 +33,7 @@ def pad_with_slices(ndim, idx):
 
 
 def convert_constants(idx):
-    from pangolin.interface.interface import rv_factory  # avoid circular import
+    from pangolin.interface.base import rv_factory  # avoid circular import
 
     return tuple(i if isinstance(i, (slice, RV)) else rv_factory(Constant(i)) for i in idx)
 
@@ -76,7 +76,7 @@ def standard_index_fun(var: RV, *indices: RV | slice):
         The new indexed RV, conceptually equivalent to `var[*indices]`.
     """
 
-    from pangolin.interface.interface import rv_factory  # avoid circular import
+    from pangolin.interface.base import rv_factory  # avoid circular import
 
     indices = simplify_indices(var.ndim, indices)
 
