@@ -1,13 +1,13 @@
-from pangolin.ir import Composite
+from pangolin.ir import Composite, RV
 from pangolin.ir.autoregressive import Autoregressive
 from pangolin.interface import OperatorRV, makerv
 from pangolin.interface.composite import composite_flat, make_composite
 from .vmap import generated_nodes, AbstractOp
 from pangolin import util
 import jax.tree_util
-from pangolin.interface.base import RV_or_array
+from pangolin.interface.base import RV_or_ArrayLike
 from pangolin.interface.vmap import get_flat_vmap_args_and_axes
-from typing import Callable
+from typing import Callable, Sequence
 
 # def autoregressive_flat(length, flat_fun):
 #     """
@@ -29,29 +29,41 @@ from typing import Callable
 #     return myfun
 
 
-def autoregressive_flat(flat_fun, length=None, in_axes=None):
+def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]) -> int:
+    "If length is given, checks that it's compatible with all args. Otherwise, infers from args and chcecks they are compatible."
+
+    my_length = length
+    
+    for ax, arg in zip(my_in_axes, args, strict=True):
+        if ax is not None:
+            if my_length:
+                assert my_length == arg.shape[ax]
+            else:
+                my_length = arg.shape[ax]
+
+    if my_length is None:
+        raise ValueError("Can't create autoregressive with length=None and no mapped axis")
+    
+    return my_length
+
+
+def autoregressive_flat(flat_fun, length=None, in_axes : None | Sequence[int | None] = None):
     """
     next = flat_fun(prev,*args)
     """
     from pangolin.interface.base import rv_factory
 
-    def myfun(init: RV_or_array, *args: RV_or_array):
+    def myfun(init: RV_or_ArrayLike, *args0: RV_or_ArrayLike):
         init = makerv(init)
-        args = tuple(makerv(a) for a in args)
+        args = tuple(makerv(a) for a in args0)
 
         # if no axes given assume all 0
-        my_in_axes = in_axes
-        if my_in_axes is None:
-            my_in_axes = [0 for a in args]
+        if in_axes:
+            my_in_axes = in_axes
+        else:
+            my_in_axes = [0 for _ in args]
 
-        # if no length given, get from axes
-        my_length = length
-        if my_length is None:
-            if all(ax is None for ax in my_in_axes):
-                raise ValueError("Can't create autoregressive with length=None and no mapped axes")
-            for ax, arg in zip(my_in_axes, args, strict=True):
-                if ax is not None:
-                    my_length = arg.shape[ax]
+        my_length = _get_autoregressive_length(length, my_in_axes, args)
 
         # first, get composite op
         init_shape = init.shape
@@ -61,7 +73,7 @@ def autoregressive_flat(flat_fun, length=None, in_axes=None):
         where_self = 0
         #where_self = len(constants) # constants always first in composite
         op = Autoregressive(
-            base_op, my_length, in_axes=[None] * len(constants) + my_in_axes, where_self=where_self
+            base_op, my_length, in_axes=[None] * len(constants) + list(my_in_axes), where_self=where_self
         )
         return rv_factory(op, init, *constants, *args)
 
@@ -110,7 +122,7 @@ def autoregressive(fun: Callable, length:None | int = None, in_axes=0):
     from pangolin.interface.base import rv_factory
 
 
-    def myfun(init: RV_or_array, *args):
+    def myfun(init: RV_or_ArrayLike, *args):
         init = makerv(init)
         args = jax.tree_util.tree_map(makerv, args)
 
