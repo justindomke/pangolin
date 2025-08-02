@@ -16,7 +16,7 @@ from numpy.typing import ArrayLike
 
 # type hint for RVs or things that we will implicitly cast to RVs
 # this will include jax arrays (good) but will also accept strings (bad)
-RV_or_array = ArrayLike | RV
+RV_or_ArrayLike = ArrayLike | RV
 
 for_api = []  # list of all functions to be exported for global API
 
@@ -110,10 +110,10 @@ def rv_factory(op, *args) -> OperatorRV:
     return rv_factories[-1](op, *args)
 
 
-rv_factories = [OperatorRV]
+rv_factories: list[type] = [OperatorRV]
 
 class SetRVFactory:
-    def __init__(self, rv_factory):
+    def __init__(self, rv_factory: type):
         self.rv_factory = rv_factory
 
     def __enter__(self):
@@ -183,7 +183,7 @@ def create_rv(op, *args):
 
 
 @api
-def normal(loc: RV_or_array, scale: RV_or_array) -> OperatorRV:
+def normal(loc: RV_or_ArrayLike, scale: RV_or_ArrayLike) -> OperatorRV:
     """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
     variable.
 

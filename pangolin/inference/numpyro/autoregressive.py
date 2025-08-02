@@ -14,7 +14,7 @@ from pangolin.ir.rv import RV
 from pangolin import dag, util, ir
 from pangolin.interface.base import OperatorRV
 from numpy.typing import ArrayLike
-from pangolin.interface import RV_or_array
+from pangolin.interface import RV_or_ArrayLike
 from pangolin.inference import inference_util
 import numpy as np
 

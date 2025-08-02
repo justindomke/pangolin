@@ -14,11 +14,11 @@ from pangolin.ir.rv import RV
 from pangolin import dag, util, ir
 from pangolin.interface.base import OperatorRV
 from numpy.typing import ArrayLike
-from pangolin.interface import RV_or_array
+from pangolin.interface import RV_or_ArrayLike
 from pangolin.inference import inference_util
 import numpy as np
 
-def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_array]):
+def get_model_flat(vars: list[RV], given: list[RV], vals: list[RV_or_ArrayLike]):
     """
     Given a "flat" specification of an inference problem, get a numpyro model.
 
