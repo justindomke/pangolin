@@ -13,7 +13,8 @@ class Autoregressive(Op):
         self,
         base_op: Op,
         length: int,
-        in_axes: tuple[int | None, ...] | list[int | None],
+        #in_axes: tuple[int | None, ...] | list[int | None],
+        in_axes: Sequence[int | None],
         where_self: int = 0,
     ):
         """

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from .rv import RV
+#from .rv import RV
 from typing import Type
 from collections.abc import Callable
-
+from .types import Shape
 
 class Op(ABC):
     """
@@ -42,7 +42,7 @@ class Op(ABC):
         "True for conditional distributions, False for deterministic functions"
         self._frozen = True  # freeze after init
 
-    def get_shape(self, *parents_shapes):
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         Given the shapes of parents, return the shape of the output of this `Op`. Subclasses
         must provide a `_get_shape(*parents_shapes)` function. This is needed because some `Op`s
@@ -56,7 +56,7 @@ class Op(ABC):
         return self._get_shape(*parents_shapes)
 
     @abstractmethod
-    def _get_shape(self, *parents_shapes) -> tuple[int, ...]:
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
         pass
 
     def __eq__(self, other):

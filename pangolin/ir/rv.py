@@ -1,22 +1,16 @@
 from pangolin import dag, util
-from abc import ABC, abstractmethod
 from typing import Self
+from .types import Shape
+from .op import Op
 
-from typing import TYPE_CHECKING
-
-# type check Op without circular import problems
-if TYPE_CHECKING:
-    from .op import Op
-
-
-class RV(dag.Node):
+class RV(dag.Node):    
     """
     A RV is essentially just a tuple of an Op and a set of parent RVs.
     """
     _frozen = False
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op: 'Op', *parents: Self):
+    def __init__(self, op: Op, *parents: Self):
         """
         Initialize an RV with Op `op` and parents `*parents`.
         """
@@ -29,23 +23,23 @@ class RV(dag.Node):
         self._frozen = True
 
     @property
-    def shape(self):
+    def shape(self) -> Shape:
         """
         The shape of the RV. (A tuple of ints.)
         """
         return self._shape
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """
         The number of dimensions of the RV. Equal to the length of `shape`.
         """
         return len(self._shape)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._shape[0]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         ret = "RV(" + repr(self.op)
         #if self.parents:
         #    ret += ", parents=[" + util.comma_separated(self.parents, repr, False) + "]"
@@ -55,7 +49,7 @@ class RV(dag.Node):
         ret += ")"
         return ret
 
-    def __str__(self):
+    def __str__(self) -> str:
         ret = str(self.op)
         if self.parents:
            ret += util.comma_separated(self.parents, fun=str, parens=True, spaces=True)

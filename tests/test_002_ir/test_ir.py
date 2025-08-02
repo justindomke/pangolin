@@ -1,5 +1,5 @@
 from pangolin.ir.constant import Constant
-from pangolin.ir.op import RV
+from pangolin.ir.rv import RV
 
 def test_constant_RV():
     x = RV(Constant(2))
