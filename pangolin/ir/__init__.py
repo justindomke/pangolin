@@ -22,6 +22,7 @@ from pangolin.ir.vmap import VMap
 from pangolin.ir.composite import Composite
 from pangolin.ir.autoregressive import Autoregressive
 from .printing import print_upstream
+from . import vmap
 
 __all__ = ['Op', 'RV', 'Constant', 'op', 'rv', 'constant', 'scalar_ops', 'multivariate_dists',
            'multivariate_funs','index','VMap','vmap','Add','Index','Composite','Autoregressive',
