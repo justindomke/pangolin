@@ -27,7 +27,7 @@ def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | No
     return my_length
 
 
-def autoregressive_flat(flat_fun, length=None, in_axes : None | Sequence[int | None] = None):
+def autoregressive_flat(flat_fun, length: int | None = None, in_axes0 : None | Sequence[int | None] = None) -> Callable:
     """
     next = flat_fun(prev,*args)
     """
@@ -38,12 +38,12 @@ def autoregressive_flat(flat_fun, length=None, in_axes : None | Sequence[int | N
         args = tuple(makerv(a) for a in args0)
 
         # if no axes given assume all 0
-        if in_axes:
-            my_in_axes = in_axes
+        if in_axes0:
+            in_axes = in_axes0
         else:
-            my_in_axes = [0 for _ in args]
+            in_axes = [0 for _ in args]
 
-        my_length = _get_autoregressive_length(length, my_in_axes, args)
+        my_length = _get_autoregressive_length(length, in_axes, args)
 
         # first, get composite op
         init_shape = init.shape
@@ -53,7 +53,7 @@ def autoregressive_flat(flat_fun, length=None, in_axes : None | Sequence[int | N
         where_self = 0
         #where_self = len(constants) # constants always first in composite
         op = Autoregressive(
-            base_op, my_length, in_axes=[None] * len(constants) + list(my_in_axes), where_self=where_self
+            base_op, my_length, in_axes=[None] * len(constants) + list(in_axes), where_self=where_self
         )
         return rv_factory(op, init, *constants, *args)
 
@@ -65,7 +65,6 @@ def autoregressive(fun: Callable, length:None | int = None, in_axes=0):
     """
     next = flat_fun(prev,*args)
     """
-    from pangolin.interface.base import rv_factory
 
 
     def myfun(init: RV_or_ArrayLike, *args):
