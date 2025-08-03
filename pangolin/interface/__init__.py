@@ -7,4 +7,4 @@ from .autoregressive import autoregressive
 from .loops import Loop, slot
 
 __all__ = ['base','vmap','composite','autoregressive','Loop','slot','OperatorRV']
-__all__ += for_api
+__all__ += for_api # pyright: ignore [reportUnsupportedDunderAll]
