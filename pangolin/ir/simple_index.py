@@ -106,7 +106,7 @@ class SimpleIndex(Op):
             indexed with a RV instead.
         """
         self.slices = slices
-        super().__init__(name="simple_index", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self, *shapes):
         var_shape, *indices_shapes = shapes

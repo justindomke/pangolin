@@ -4,9 +4,9 @@ array.
 """
 
 import numpy as np
-from pangolin import ir
+from pangolin.ir import Op
 
-class Constant(ir.Op):
+class Constant(Op):
     """
     Represents a "constant" distribution. Has no parents. Data is always stored as a
     numpy array. You can switch it to use jax's version of numpy by setting `ir.np =
@@ -25,7 +25,7 @@ class Constant(ir.Op):
         self.value = np.array(value)
         """The actual stored data, stored as an immutable numpy array"""
         self.value.flags.writeable = False
-        super().__init__(name="constant", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self,*parents_shapes):
         """"""

@@ -13,7 +13,7 @@ class MatMul(Op):
     """
 
     def __init__(self):
-        super().__init__(name="MatMul", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self, a_shape, b_shape):
         # could someday generalize to handle more dimensions
@@ -58,7 +58,7 @@ class Inv(Op):
     """
 
     def __init__(self):
-        super().__init__(name="Inv", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self, *parents):
         assert len(parents) == 1
@@ -74,7 +74,7 @@ class Softmax(Op):
     """
 
     def __init__(self):
-        super().__init__(name="Softmax", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self, *parents):
         assert len(parents) == 1
@@ -99,7 +99,7 @@ class Sum(Op):
         if not isinstance(axis, int):
             raise ValueError("axis argument for Sum must be a fixed integer")
         self.axis = axis
-        super().__init__(name="Sum", random=False)
+        super().__init__(random=False)
 
     def _get_shape(self, x_shape):
         if self.axis is None:

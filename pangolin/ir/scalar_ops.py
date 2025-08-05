@@ -38,78 +38,69 @@ import numpy as np
 from pangolin import util, ir
 from .op import Op
 
-def all_scalar_op_factory(num_parents, name, random):
-    """
-    "Factory" to create an "all scalar" op where all parents and inputs are scalars.
+# def all_scalar_op_factory(num_parents, name, random):
+#     """
+#     "Factory" to create an "all scalar" op where all parents and inputs are scalars.
 
-    Parameters
-    ----------
-    num_parents: int
-        The number of parameters for the op
-    name: str
-        The name for the op (used for printing)
-    random: bool
-        Is the op a conditional distribution (True) or a deterministic function (False)
+#     Parameters
+#     ----------
+#     num_parents: int
+#         The number of parameters for the op
+#     name: str
+#         The name for the op (used for printing)
+#     random: bool
+#         Is the op a conditional distribution (True) or a deterministic function (False)
 
-    Returns
-    -------
-    OpClass
-        A new subtype of Op
-    """
+#     Returns
+#     -------
+#     OpClass
+#         A new subtype of Op
+#     """
 
-    camel_case_name = name[0].upper() + name[1:]
+#     camel_case_name = name[0].upper() + name[1:]
 
-    class AllScalarOp(Op):
-        """
-        Convenience class to create "all scalar" distributions, where all parents and
-        outputs are scalar. Most of the common ops (e.g. `normal`, `add`, `exp`) are
-        instances of this Op.
-        """
+#     class AllScalarOp(Op):
+#         """
+#         Convenience class to create "all scalar" distributions, where all parents and
+#         outputs are scalar. Most of the common ops (e.g. `normal`, `add`, `exp`) are
+#         instances of this Op.
+#         """
 
-        def __init__(self):
-            "@public"
-            super().__init__(name=name, random=random)
+#         def __init__(self):
+#             "@public"
+#             super().__init__(name=name, random=random)
 
-        def _get_shape(self, *parents_shapes):
-            if len(parents_shapes) != num_parents:
-                raise ValueError(f"{name} op got {len(parents_shapes)} arguments but expected"
-                                 f" {num_parents}.")
-            for shape in parents_shapes:
-                assert shape == (), "all parents must have shape ()"
-            return ()
+#         def _get_shape(self, *parents_shapes):
+#             if len(parents_shapes) != num_parents:
+#                 raise ValueError(f"{name} op got {len(parents_shapes)} arguments but expected"
+#                                  f" {num_parents}.")
+#             for shape in parents_shapes:
+#                 assert shape == (), "all parents must have shape ()"
+#             return ()
 
-        def __eq__(self,other):
-            return isinstance(other,AllScalarOp)
+#         def __eq__(self,other):
+#             return isinstance(other,AllScalarOp)
 
-        def __hash__(self):
-            return hash((self.name, self.random, num_parents))
+#         def __hash__(self):
+#             return hash((self.name, self.random, num_parents))
 
-        def __str__(self):
-            """
-            Provides a more compact representation, e.g. `normal` instead of `Normal()`
-            """
-            return util.camel_case_to_snake_case(self.name)
+#         def __str__(self):
+#             """
+#             Provides a more compact representation, e.g. `normal` instead of `Normal()`
+#             """
+#             return util.camel_case_to_snake_case(self.name)
 
-    return AllScalarOp
+#     return AllScalarOp
 
 
 class ScalarOp(Op):
     """
     An `Op` expecting scalar inputs and producing a single scalar output.
     """
-    def __init__(self, name, random, num_parents):
-        """Create a new custom Op.
-        >>> new_op = ScalarOp("CoolOp", True, 2)
-        >>> print(repr(new_op))
-        CoolOp()
-        >>> print(new_op)
-        cool_op
-        >>> second_op = ScalarOp("CoolOp", True, 2)
-        >>> new_op == second_op
-        True
-        """
+    def __init__(self, random, num_parents):
+        ""
         self._num_parents = num_parents
-        super().__init__(name=name, random=random)
+        super().__init__(random=random)
 
     def _get_shape(self, *parents_shapes):
         if len(parents_shapes) != self._num_parents:
@@ -126,14 +117,10 @@ class ScalarOp(Op):
     def __hash__(self):
         return hash((self.name, self.random, self._num_parents))
 
-    def __str__(self):
-        """
-        Provides a more compact representation, e.g. `normal` instead of `Normal()`
-        """
-        return util.camel_case_to_snake_case(self.name)
+
 
 class Cauchy(ScalarOp):
-    """A Cauchy.
+    """A Cauchy distribution.
     """
     def __init__(self):
         """Creates a Cauchy, parameterized by location and scale.
@@ -143,54 +130,246 @@ class Cauchy(ScalarOp):
         >>> print(repr(dist))
         Cauchy()
         """
-        super().__init__("Cauchy", True, 2)    
+        super().__init__(True, 2)
 
 
-Normal = all_scalar_op_factory(2, "Normal", True)
-"""
-A [Normal](https://cnn.com) distribution.
-"""
+class Normal(ScalarOp):
+    """A Normal distribution, parameterized by location and scale
+    """
+    def __init__(self):
+        super().__init__(True, 2)
 
-NormalPrec = all_scalar_op_factory(2, "NormalPrec", True)
-LogNormal = all_scalar_op_factory(2, "LogNormal", True)
-Bernoulli = all_scalar_op_factory(1, "Bernoulli", True)
-BernoulliLogit = all_scalar_op_factory(1, "BernoulliLogit", True)
-Binomial = all_scalar_op_factory(2, "Binomial", True)
-Uniform = all_scalar_op_factory(2, "Uniform", True)
-Beta = all_scalar_op_factory(2, "Beta", True)
-Exponential = all_scalar_op_factory(1, "Exponential", True)
-Gamma = all_scalar_op_factory(2, "Gamma", True)
-Poisson = all_scalar_op_factory(1, "Poisson", True)
-BetaBinomial = all_scalar_op_factory(3, "BetaBinomial", True)
-StudentT = all_scalar_op_factory(3, "StudentT", True)
-# basic math operators, typically triggered infix operations
-Add = all_scalar_op_factory(2, "Add", False)
-Sub = all_scalar_op_factory(2, "Sub", False)
-Mul = all_scalar_op_factory(2, "Mul", False)
-Div = all_scalar_op_factory(2, "Div", False)
-Pow = all_scalar_op_factory(2, "Pow", False)
+class NormalPrec(ScalarOp):
+    """A Normal distribution, parameterized by location and precision
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+
+class LogNormal(ScalarOp):
+    """A Log-Normal distribution
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+
+class Bernoulli(ScalarOp):
+    """A Bernoulli distribution
+    """
+    def __init__(self):
+        super().__init__(True, 1)
+
+
+class BernoulliLogit(ScalarOp):
+    """A Bernoulli-Logit distribution
+    """
+    def __init__(self):
+        super().__init__(True, 1)
+
+
+class Binomial(ScalarOp):
+    """A Binomial distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+class Uniform(ScalarOp):
+    """A Uniform distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+class Beta(ScalarOp):
+    """A Beta distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+class Exponential(ScalarOp):
+    """An Exponential distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 1)
+
+class Gamma(ScalarOp):
+    """A Gamma distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 2)
+
+
+class Poisson(ScalarOp):
+    """A Poisson distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 1)
+
+
+class BetaBinomial(ScalarOp):
+    """A Beta Binomial distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 3)
+
+class StudentT(ScalarOp):
+    """A Student-T distribution.
+    """
+    def __init__(self):
+        super().__init__(True, 3)
+
+class Add(ScalarOp):
+    """Addition of two scalars
+    """
+    def __init__(self):
+        super().__init__(False, 2)
+
+class Sub(ScalarOp):
+    """Subtraction of two scalars
+    """
+    def __init__(self):
+        super().__init__(False, 2)
+
+class Mul(ScalarOp):
+    """Multiplication of two scalars
+    """
+    def __init__(self):
+        super().__init__(False, 2)
+
+class Div(ScalarOp):
+    """Division of two scalars
+    """
+    def __init__(self):
+        super().__init__(False, 2)
+
+class Pow(ScalarOp):
+    """One scalar to a scalar power
+    """
+    def __init__(self):
+        super().__init__(False, 2)
+
+
 # all the scalar functions included in JAGS manual
 # in general, try to use numpy / scipy names where possible
-Abs = all_scalar_op_factory(1, "Abs", False)
-Arccos = all_scalar_op_factory(1, "Arccos", False)
-Arccosh = all_scalar_op_factory(1, "Arccosh", False)
-Arcsin = all_scalar_op_factory(1, "Arcsin", False)
-Arcsinh = all_scalar_op_factory(1, "Arcsinh", False)
-Arctan = all_scalar_op_factory(1, "arctan", False)
-Arctanh = all_scalar_op_factory(1, "arctanh", False)
-Cos = all_scalar_op_factory(1, "Cos", False)
-Cosh = all_scalar_op_factory(1, "Cosh", False)
-Exp = all_scalar_op_factory(1, "Exp", False)
-InvLogit = all_scalar_op_factory(1, "InvLogit", False)
-Log = all_scalar_op_factory(1, "Log", False)
-Loggamma = all_scalar_op_factory(1, "Loggamma", False)
-"Log gamma function. TODO: do we want scipy.special.loggamma or scipy.special.gammaln? different!"
-Logit = all_scalar_op_factory(1, "Logit", False)  # logit in JAGS / stan / scipy
-Sin = all_scalar_op_factory(1, "Sin", False)
-Sinh = all_scalar_op_factory(1, "Sinh", False)
-Step = all_scalar_op_factory(1, "Sin", False)  # step in JAGS / stan
-Tan = all_scalar_op_factory(1, "Tan", False)
-Tanh = all_scalar_op_factory(1, "Tanh", False)
+
+class Abs(ScalarOp):
+    """Absolute value of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arccos(ScalarOp):
+    """Arccos of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arccosh(ScalarOp):
+    """Arccosh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arcsin(ScalarOp):
+    """Arcsin of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arcsinh(ScalarOp):
+    """Arcsinh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arctan(ScalarOp):
+    """Arctan of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Arctanh(ScalarOp):
+    """Arctanh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Cos(ScalarOp):
+    """Cos of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Cosh(ScalarOp):
+    """Cosh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Exp(ScalarOp):
+    """Exp of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class InvLogit(ScalarOp):
+    """Inverse logit of a scalar. (AKA sigmoid)
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+
+class Log(ScalarOp):
+    """Natural logarithm of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+
+class Loggamma(ScalarOp):
+    """Log gamma function of a scalar
+    """
+    # TODO: do we want scipy.special.loggamma or scipy.special.gammaln? different!
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Logit(ScalarOp):
+    """Logit of a scalar
+    """
+    # called Logit in JAGS / stan / scipy
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Sin(ScalarOp):
+    """Sin of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Sinh(ScalarOp):
+    """Sinh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Step(ScalarOp):
+    """Step function of a scalar
+    """
+    # step in JAGS / stan
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Tan(ScalarOp):
+    """Tan of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
+class Tanh(ScalarOp):
+    """Tanh of a scalar
+    """
+    def __init__(self):
+        super().__init__(False, 1)
+
 
 # # use evil meta-programming to create convenience instances
 # import re

@@ -8,8 +8,8 @@ class VecMatOp(Op):
     length N, a matrix of size NxN and is a vector of length N
     """
 
-    def __init__(self, name):
-        super().__init__(name=name, random=True)
+    def __init__(self):
+        super().__init__(random=True)
 
     def _get_shape(self, vec_shape, mat_shape):
         if len(vec_shape) != 1:
@@ -30,7 +30,7 @@ class MultiNormal(VecMatOp):
         """
         Create a MultiNormal instance. Takes no parameters.
         """
-        super().__init__(name="MultiNormal")
+        super().__init__()
 
 
 
@@ -44,7 +44,7 @@ class Categorical(Op):
         """
         Create a Categorical instance. Takes no parameters.
         """
-        super().__init__(name="categorical", random=True)
+        super().__init__(random=True)
 
     def _get_shape(self, weights_shape):
         """"""
@@ -66,7 +66,7 @@ class Multinomial(Op):
         Create a Multinomial instance. Takes no parameters.
         Note: parameterization is different from Stan (which doesn't need n to be passed)
         """
-        super().__init__(name="multinomial", random=True)
+        super().__init__(random=True)
 
     def _get_shape(self, n_shape, p_shape):
         if n_shape != ():
@@ -84,7 +84,7 @@ class Dirichlet(Op):
         """
         Create a Dirichlet instance. Takes no parameters.
         """
-        super().__init__(name="dirichlet", random=True)
+        super().__init__(random=True)
 
     def _get_shape(self, concentration_shape):
         if len(concentration_shape) != 1:

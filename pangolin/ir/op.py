@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Type
 from collections.abc import Callable
 from .types import Shape
+from pangolin import util
 
 class Op(ABC):
     """
@@ -23,22 +24,17 @@ class Op(ABC):
     _frozen = False
 
     def __init__(
-        self, name: str, random: bool):
+        self, random: bool):
         """
         Create a new op
 
         Parameters
         ----------
-        name: str
-            name for the operator. used only for printing.
         random: bool
             is this a conditional distribution? (`random==True`) or a deterministic function (
             `random==False`)
         """
-        assert isinstance(name, str)
         assert isinstance(random, bool)
-        self.name: str = name
-        "The name of the Op."
         self.random: bool = random
         "True for conditional distributions, False for deterministic functions"
         self._frozen = True  # freeze after init
@@ -73,6 +69,17 @@ class Op(ABC):
         else:
             self.__dict__[key] = value
 
+    @property
+    def name(self) -> str:
+        "Returns the name of the op class as a string"
+        return type(self).__name__
+
     def __repr__(self):
         return self.name + "()"
+
+    def __str__(self):
+        """
+        Provides a more compact representation, e.g. `normal` instead of `Normal()`
+        """
+        return util.camel_case_to_snake_case(self.name)
 

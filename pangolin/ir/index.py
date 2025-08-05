@@ -111,7 +111,7 @@ class Index(Op):
             indexed with a RV instead.
         """
         self.slices = slices
-        super().__init__(name="index", random=False)
+        super().__init__(random=False)
 
     @property
     def advanced_at_start(self) -> bool:

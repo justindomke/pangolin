@@ -43,7 +43,7 @@ class VMap(Op):
         self.base_op = base_op
         self.in_axes = in_axes
         self.axis_size = axis_size
-        super().__init__(name="Map", random=base_op.random)
+        super().__init__(random=base_op.random)
 
     def _get_shape(self, *parents_shapes):
         remaining_shapes, axis_size = get_sliced_shapes(

@@ -27,7 +27,7 @@ class Autoregressive(Op):
         self.length = length
         self.in_axes = tuple(in_axes)
         self.where_self = where_self
-        super().__init__(name=f"Autoregressive({base_op.name})", random=base_op.random)
+        super().__init__(random=base_op.random)
 
     def _get_shape(self, start_shape, *other_shapes):
         # const_shapes = other_shapes[: self.num_constants]

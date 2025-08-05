@@ -27,7 +27,7 @@ class Composite(Op):
         self.ops = tuple(ops)
         #self.par_nums = tuple(par_nums)
         self.par_nums = tuple(tuple(pp) for pp in par_nums)
-        super().__init__(name=f"Composite({ops[-1].name})", random=ops[-1].random)
+        super().__init__(random=ops[-1].random)
 
     def _get_shape(self, *parents_shapes):
         all_shapes = list(parents_shapes)
@@ -37,6 +37,8 @@ class Composite(Op):
             all_shapes.append(my_shape)
         return all_shapes[-1]
 
+    # TODO: str and repr should be much more descriptive
+    # should this print f"Composite({ops[-1].name})"?
     def __str__(self):
         return f"composite({self.num_inputs},{self.ops},{self.par_nums})"
 
