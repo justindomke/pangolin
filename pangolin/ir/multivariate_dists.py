@@ -1,5 +1,3 @@
-__docformat__ = "numpy"
-
 import numpy as np
 from pangolin.ir import Op
 

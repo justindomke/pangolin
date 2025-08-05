@@ -2,8 +2,6 @@
 Various assorted multivariate deterministic functions
 """
 
-__docformat__ = "numpy"
-
 import numpy as np
 from pangolin.ir import Op
 

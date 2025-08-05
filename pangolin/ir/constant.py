@@ -1,5 +1,3 @@
-__docformat__ = 'numpy'
-
 """The `Constant` class represents constant functions. You can create an *instance* of this class
 with `Constant(value)` where `value` is a numpy array or something that can be cast to a numpy
 array.

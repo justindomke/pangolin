@@ -8,14 +8,13 @@ Main interface to pangolin. Broadly speaking, there are the following classes of
 - Program transforms: `vmap`
 """
 
-__docformat__ = 'numpy'
-
-#from pangolin import interface, ir, inference
+from pangolin import interface, ir, inference, simple_interface
 
 from pangolin.inference import *
+from pangolin.interface import *
 
 #from pangolin.interface import autoregressive, print_upstream
-from pangolin.interface import *
+
 #from pangolin.interface.interface import *
 from pangolin.interface.vmap import vmap
 from pangolin.interface.index import index
@@ -23,6 +22,6 @@ from pangolin.ir import print_upstream
 
 
 __all__ = []
-__all__ = ['ir','interface','vmap','index','print_upstream','inference']
-__all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
-__all__.sort() # pyright: ignore [reportUnsupportedDunderAll]
+__all__ = ['ir','simple_interface','interface','inference','base','vmap','index','print_upstream']
+#__all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
+#__all__.sort() # pyright: ignore [reportUnsupportedDunderAll]

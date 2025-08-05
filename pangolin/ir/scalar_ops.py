@@ -33,8 +33,6 @@ But there's no reason to do that.
 
 """
 
-__docformat__ = 'numpy'
-
 
 import numpy as np
 from pangolin import util, ir
@@ -69,6 +67,7 @@ def all_scalar_op_factory(num_parents, name, random):
         """
 
         def __init__(self):
+            "@public"
             super().__init__(name=name, random=random)
 
         def _get_shape(self, *parents_shapes):
@@ -94,11 +93,64 @@ def all_scalar_op_factory(num_parents, name, random):
     return AllScalarOp
 
 
+class ScalarOp(Op):
+    """
+    An `Op` expecting scalar inputs and producing a single scalar output.
+    """
+    def __init__(self, name, random, num_parents):
+        """Create a new custom Op.
+        >>> new_op = ScalarOp("CoolOp", True, 2)
+        >>> print(repr(new_op))
+        CoolOp()
+        >>> print(new_op)
+        cool_op
+        >>> second_op = ScalarOp("CoolOp", True, 2)
+        >>> new_op == second_op
+        True
+        """
+        self._num_parents = num_parents
+        super().__init__(name=name, random=random)
+
+    def _get_shape(self, *parents_shapes):
+        if len(parents_shapes) != self._num_parents:
+            raise ValueError(f"{self.name} op got {len(parents_shapes)} arguments but expected"
+                                f" {self._num_parents}.")
+        for shape in parents_shapes:
+            assert shape == (), "all parents must have shape ()"
+        return ()
+
+    def __eq__(self, other):
+        "Returns true only if the two classes are exactly the same"
+        return type(self) is type(other) 
+
+    def __hash__(self):
+        return hash((self.name, self.random, self._num_parents))
+
+    def __str__(self):
+        """
+        Provides a more compact representation, e.g. `normal` instead of `Normal()`
+        """
+        return util.camel_case_to_snake_case(self.name)
+
+class Cauchy(ScalarOp):
+    """A Cauchy.
+    """
+    def __init__(self):
+        """Creates a Cauchy, parameterized by location and scale.
+        >>> dist = Cauchy()
+        >>> print(dist)
+        cauchy
+        >>> print(repr(dist))
+        Cauchy()
+        """
+        super().__init__("Cauchy", True, 2)    
 
 
-Cauchy = all_scalar_op_factory(2, "Cauchy", True)
-"A Cauchy parameterized by location and scale. Call as `Cauchy()`."
 Normal = all_scalar_op_factory(2, "Normal", True)
+"""
+A [Normal](https://cnn.com) distribution.
+"""
+
 NormalPrec = all_scalar_op_factory(2, "NormalPrec", True)
 LogNormal = all_scalar_op_factory(2, "LogNormal", True)
 Bernoulli = all_scalar_op_factory(1, "Bernoulli", True)
