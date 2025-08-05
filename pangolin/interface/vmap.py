@@ -314,7 +314,7 @@ class AbstractOp(Op):
             is the op random
         """
         self.shape = shape
-        super().__init__(name="AbstractOp", random=random)
+        super().__init__(random=random)
 
     def _get_shape(self, *parents_shapes):
         return self.shape
