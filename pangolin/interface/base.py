@@ -13,6 +13,7 @@ from .index import index
 from pangolin.util import most_specific_class
 from abc import ABC, abstractmethod
 from numpy.typing import ArrayLike
+import functools
 
 # type hint for RVs or things that we will implicitly cast to RVs
 # this will include jax arrays (good) but will also accept strings (bad)
@@ -347,7 +348,6 @@ def implicit_vectorized_scalar_fun(fun):
                 my_fun = vmap(my_fun, in_axes)
             return my_fun(*args)
     return new_fun
-
 
 
 @implicit_vectorized_scalar_fun

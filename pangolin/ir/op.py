@@ -10,7 +10,7 @@ class Op(ABC):
     distribution.
 
     Notes:
-    * An `Op` *only* represents an operator—all functionality for sampling or density evaluation,
+    * An `Op` only *represents* an operator—all functionality for sampling or density evaluation,
     etc. is left to inference engines.
     * `Op`s must provide an `__eq__` method such that *mathematically equivalent* `Op`s are
     equal, regardless of if they occupy the same place in memory. For example, `d1 = Normal()`
@@ -26,18 +26,19 @@ class Op(ABC):
         self, name: str, random: bool):
         """
         Create a new op
+
         Parameters
         ----------
         name: str
-            name for the operator (used only for printing, not functionality)
+            name for the operator. used only for printing.
         random: bool
-            is this a conditional distribution? (`random=True`) or a deterministic function (
-            `random=False`)?
+            is this a conditional distribution? (`random==True`) or a deterministic function (
+            `random==False`)
         """
         assert isinstance(name, str)
         assert isinstance(random, bool)
         self.name: str = name
-        "The name of the Op"
+        "The name of the Op."
         self.random: bool = random
         "True for conditional distributions, False for deterministic functions"
         self._frozen = True  # freeze after init
@@ -50,7 +51,7 @@ class Op(ABC):
         shapes of the parents.
 
         It is also expected that `Op`s define a `_get_shape` method that does error checking—e.g.
-        verifies that the correct number of arguments are provided and the shapes of the parents
+        verifies that the correct number of parents are provided and the shapes of the parents
         are coherent with each other.
         """
         return self._get_shape(*parents_shapes)
@@ -60,7 +61,8 @@ class Op(ABC):
         pass
 
     def __eq__(self, other):
-        return type(self) == type(other)
+        "Returns true if `self` and `other` have the same type. If subtypes have more structure, should override."
+        return type(self) is type(other)
 
     def __hash__(self):
         return hash(type(self))
