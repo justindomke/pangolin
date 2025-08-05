@@ -82,4 +82,3 @@ class Op(ABC):
         Provides a more compact representation, e.g. `normal` instead of `Normal()`
         """
         return util.camel_case_to_snake_case(self.name)
-

@@ -4,7 +4,7 @@ array.
 """
 
 import numpy as np
-from pangolin.ir import Op
+from pangolin.ir.op import Op
 
 class Constant(Op):
     """

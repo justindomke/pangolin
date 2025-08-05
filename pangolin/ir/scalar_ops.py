@@ -134,14 +134,14 @@ class Cauchy(ScalarOp):
 
 
 class Normal(ScalarOp):
-    """A Normal distribution, parameterized by location and scale
-    """
+    """A [normal](https://en.wikipedia.org/wiki/Normal_distribution) distribution.
+    Expects the first parent to be the location / mean and the second to be the *scale* / standard deviation."""
     def __init__(self):
         super().__init__(True, 2)
 
 class NormalPrec(ScalarOp):
-    """A Normal distribution, parameterized by location and precision
-    """
+    """A [normal](https://en.wikipedia.org/wiki/Normal_distribution) distribution.
+    Expects the first parameter to be the location / mean and the second to be the *precision* / inverse variance."""
     def __init__(self):
         super().__init__(True, 2)
 

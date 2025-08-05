@@ -9,6 +9,8 @@ from pangolin import ir
 # interface can simplify
 
 class Autoregressive(Op):
+    """Represents an autoregressive distribution"""
+
     def __init__(
         self,
         base_op: Op,
@@ -18,9 +20,14 @@ class Autoregressive(Op):
         where_self: int = 0,
     ):
         """
-        base_cond_dist - what distribution to repeat on
-        num_constants - number of constant arguments (default 0)
-        length - the number of times to repeat (optional if there are )
+        Parameters
+        ----------
+        base_cond_dist
+            what distribution to repeat on
+        num_constants
+            number of constant arguments (default 0)
+        length
+            the number of times to repeat (optional if there are )
         """
         self.base_op = base_op
         # self.num_constants = num_constants
