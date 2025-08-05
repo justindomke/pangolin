@@ -31,7 +31,7 @@ from util import inf_until_match, sample_until_match, sample_flat_until_match
 
 
 def test_all_op_types_have_handlers():
-    excluded_op_types = [ir.Op, ir.VecMatOp, ir.VMap]
+    excluded_op_types = [ir.Op, ir.VecMatOp, ir.VMap, ir.ScalarOp]
 
     for name in dir(ir):
         op_type = getattr(ir, name)
