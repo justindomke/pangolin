@@ -104,10 +104,11 @@ class ScalarOp(Op):
 
     def _get_shape(self, *parents_shapes):
         if len(parents_shapes) != self._num_parents:
-            raise ValueError(f"{self.name} op got {len(parents_shapes)} arguments but expected"
+            raise TypeError(f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
                                 f" {self._num_parents}.")
         for shape in parents_shapes:
-            assert shape == (), "all parents must have shape ()"
+            if shape != ():
+                raise TypeError(f"{self.name} op got parent shapes {parents_shapes} not all scalar.")
         return ()
 
     def __eq__(self, other):

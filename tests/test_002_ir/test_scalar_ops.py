@@ -16,5 +16,17 @@ def test_wrong_number_of_args():
             args = tuple(RV(Constant(a)) for a in args) # convert to RVs
             x = RV(d,*args)
             assert False
-        except ValueError as e:
-            assert str(e) == f"Normal op got {len(args)} arguments but expected 2."
+        except TypeError as e:
+            assert str(e) == f"Normal op got {len(args)} parent(s) but expected 2."
+
+
+def test_non_scalar_parent_shapes():
+    for parents_shapes in [((),(2,))]:
+        try:
+            d = Normal()
+            d._get_shape(*parents_shapes)
+            #args = tuple(RV(Constant(a)) for a in args) # convert to RVs
+            #x = RV(d,*args)
+            assert False
+        except TypeError as e:
+            assert str(e) == f"Normal op got parent shapes {parents_shapes} not all scalar."

@@ -51,4 +51,3 @@ def test_normal_scalar_scalar():
     assert z.parents[0].op == ir.Constant(0)
     assert z.parents[1].op == ir.Constant(1)
     assert isinstance(z, OperatorRV)
-
