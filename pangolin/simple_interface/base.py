@@ -1,35 +1,41 @@
 """
 This package defines a special subtype of RV that supports operator overloading
 """
-
 from pangolin.ir import RV, Op, Constant
 
 # from pangolin.ir.scalar_ops import add, mul, sub, div, pow
-import pangolin
 
 # from pangolin.ir.op import SetAutoRV
 from pangolin import ir
 #from .index import index
-from pangolin.util import most_specific_class
-from abc import ABC, abstractmethod
 from numpy.typing import ArrayLike
 
-# type hint for RVs or things that we will implicitly cast to RVs
-# this will include jax arrays (good) but will also accept strings (bad)
 RV_or_ArrayLike = ArrayLike | RV
-
+"""Represents either a `RV` or a value that can be cast to a NumPy array, such as a float or list of floats.
+This will include JAX arrays (which is good) but also unfortunately accepts strings (which is bad)."""
 
 ####################################################################################################
-# The core OperatorRV class. Like an RV except has operator overloading
+# The core InfixRV class. Like an RV except has infix operations
 ####################################################################################################
 
-class OperatorRV(RV):
+class InfixRV(RV):
+    """An Infix RV is exactly like a standard `RV` except it supports infix operations. 2
+
+    Examples
+    --------
+    >>> a = InfixRV(Constant(2))
+    >>> b = InfixRV(Constant(3))
+    >>> a + b
+    InfixRV(Add(), InfixRV(Constant(2)), InfixRV(Constant(3)))
+    >>> a**b
+    InfixRV(Pow(), InfixRV(Constant(2)), InfixRV(Constant(3)))
+    >>> -a
+    InfixRV(Mul(), InfixRV(Constant(2)), InfixRV(Constant(-1)))
+    """
+
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
-    n = 1
 
     def __init__(self, op, *parents):
-        self.n = OperatorRV.n
-        OperatorRV.n += 1
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -72,7 +78,10 @@ class OperatorRV(RV):
         return matmul(other, self)
 
     def __repr__(self):
-        return "Operator" + super().__repr__()
+        return "Infix" + super().__repr__()
+
+    def __str__(self):
+        return super().__str__()
 
     # def __getitem__(self, idx):
     #     if not isinstance(idx, tuple):
@@ -85,64 +94,88 @@ class OperatorRV(RV):
 # makerv
 ####################################################################################################
 
-def non_operator_rv(x):
+def non_infix_rv(x):
     if isinstance(x, RV):
-        if not isinstance(x, OperatorRV):
+        if not isinstance(x, InfixRV):
             return True
     return False
 
-def makerv(x) -> OperatorRV:
+def makerv(x) -> RV:
     """
-    If the input is `OperatorRV`, then it just returns it. Otherwise, creates an OperatorRV
+    If the input is `RV`, then it just returns it. Otherwise, creates an InfixRV.
     """
-    assert not non_operator_rv(x)
 
-    if isinstance(x, OperatorRV):
+    if isinstance(x,RV):
         return x
     else:
-        return Constant(x)
+        return InfixRV(Constant(x))
 
+def make_infix_rv(x) -> InfixRV:
+    """
+    If the input is an `InfixRV`, then it just returns it. Otherwise, creates an InfixRV.
+    Fails is input is RV but not InfixRV
+    """
+    assert not non_infix_rv(x)
 
+    if isinstance(x,RV):
+        assert isinstance(x, InfixRV)
+        return x
+    else:
+        return InfixRV(Constant(x))
 
 ####################################################################################################
 # Scalar ops
 ####################################################################################################
 
 
-def create_rv(op, *args):
+def create_rv(op, *args) -> InfixRV:
     args = tuple(makerv(a) for a in args)
-    return OperatorRV(op, *args)
+    op.get_shape(*[a.shape for a in args]) # checks shapes
+    return InfixRV(op, *args)
 
 
-def normal(loc: RV_or_ArrayLike, scale: RV_or_ArrayLike) -> OperatorRV:
-    """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
-    variable.
+def normal(loc: RV_or_ArrayLike, scale: RV_or_ArrayLike) -> InfixRV:
+    """Creates a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random variable.
 
-    **Note:** The second parameter is the *scale* / standard deviation."""
+    Parameters
+    ----------
+    loc: `RV_or_ArrayLike`
+        mean for the distribution. Should be scalar.
+    scale: `RV_or_ArrayLike`
+        scale / standard deviation. Should be scalar.
+
+    See also
+    --------
+    `pangolin.ir.scalar_ops.Normal`."""
     return create_rv(ir.Normal(), loc, scale)
 
 
-def normal_prec(loc, prec) -> OperatorRV:
-    """Create a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random
-    variable.
+def normal_prec(loc, prec) -> InfixRV:
+    """Creates a normal distribution parameterized by the precision.
 
-    **Note:** The second parameter is the *precision* / inverse variance."""
+    Parameters
+    ----------
+    loc: RV_or_ArrayLike
+        mean
+    scale
+
+    See `pangolin.ir.scalar_ops.NormalPrec`."""
     return create_rv(ir.NormalPrec(), loc, prec)
 
 
-def lognormal(mu, sigma) -> OperatorRV:
+def lognormal(mu, sigma) -> InfixRV:
     """Create a [log-normal](https://en.wikipedia.org/wiki/Log-normal_distribution) distributed random
     variable."""
     return create_rv(ir.NormalPrec(), mu, sigma)
 
 
-def cauchy(loc, scale) -> OperatorRV:
+def cauchy(loc, scale) -> InfixRV:
     """Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random
     variable."""
     return create_rv(ir.Cauchy(), loc, scale)
 
 
-def bernoulli(theta) -> OperatorRV:
+def bernoulli(theta) -> InfixRV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -154,7 +187,7 @@ def bernoulli(theta) -> OperatorRV:
     return create_rv(ir.Bernoulli(), theta)
 
 
-def bernoulli_logit(alpha) -> OperatorRV:
+def bernoulli_logit(alpha) -> InfixRV:
     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
     variable.
 
@@ -167,26 +200,26 @@ def bernoulli_logit(alpha) -> OperatorRV:
     return create_rv(ir.BernoulliLogit(), alpha)
 
 
-def binomial(n, p) -> OperatorRV:
+def binomial(n, p) -> InfixRV:
     """Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random
     variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the
     probability of success for each repetition."""
     return create_rv(ir.Binomial(), n, p)
 
 
-def uniform(low, high) -> OperatorRV:
+def uniform(low, high) -> InfixRV:
     """Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution)
     distributed random variable. `low` must be less than `high`."""
 
     return create_rv(ir.Uniform(), low, high)
 
 
-def beta(alpha, beta) -> OperatorRV:
+def beta(alpha, beta) -> InfixRV:
     """Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable."""
     return create_rv(ir.Beta(), alpha, beta)
 
 
-def beta_binomial(n, alpha, beta) -> OperatorRV:
+def beta_binomial(n, alpha, beta) -> InfixRV:
     """Create a
     [beta-binomial](https://en.wikipedia.org/wiki/Beta-binomial_distribution)
     distributed random variable.
@@ -202,14 +235,14 @@ def beta_binomial(n, alpha, beta) -> OperatorRV:
     return create_rv(ir.BetaBinomial(), n, alpha, beta)
 
 
-def exponential(scale) -> OperatorRV:
+def exponential(scale) -> InfixRV:
     """Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed
     random variable."""
 
     return create_rv(ir.Exponential(), scale)
 
 
-def gamma(alpha, beta) -> OperatorRV:
+def gamma(alpha, beta) -> InfixRV:
     """Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
     random variable.
 
@@ -221,14 +254,14 @@ def gamma(alpha, beta) -> OperatorRV:
     return create_rv(ir.Gamma(), alpha, beta)
 
 
-def poisson(rate) -> OperatorRV:
+def poisson(rate) -> InfixRV:
     """Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
     random variable."""
 
     return create_rv(ir.Poisson(), rate)
 
 
-def student_t(nu, loc, scale) -> OperatorRV:
+def student_t(nu, loc, scale) -> InfixRV:
     """Create a [location-scale student-t](
     https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
     distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
@@ -238,90 +271,90 @@ def student_t(nu, loc, scale) -> OperatorRV:
     return create_rv(ir.StudentT(), nu, loc, scale)
 
 
-def add(a, b) -> OperatorRV:
+def add(a, b) -> InfixRV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
     return create_rv(ir.Add(), a, b)
 
-def sub(a, b) -> OperatorRV:
+def sub(a, b) -> InfixRV:
     """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
     b)`."""
     return create_rv(ir.Sub(), a, b)
 
-def mul(a, b) -> OperatorRV:
+def mul(a, b) -> InfixRV:
     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
     return create_rv(ir.Mul(), a, b)
 
-def div(a, b) -> OperatorRV:
+def div(a, b) -> InfixRV:
     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
     return create_rv(ir.Div(), a, b)
 
-def pow(a, b) -> OperatorRV:
+def pow(a, b) -> InfixRV:
     """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
     a,b)`."""
     return create_rv(ir.Pow(), a, b)
 
-def sqrt(x) -> OperatorRV:
+def sqrt(x) -> InfixRV:
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
-def abs(a) -> OperatorRV:
+def abs(a) -> InfixRV:
     return create_rv(ir.Abs(), a)
 
 
-def arccos(a) -> OperatorRV:
+def arccos(a) -> InfixRV:
     return create_rv(ir.Arccos(), a)
 
 
-def arccosh(a) -> OperatorRV:
+def arccosh(a) -> InfixRV:
     return create_rv(ir.Arccosh(), a)
 
 
-def arcsin(a) -> OperatorRV:
+def arcsin(a) -> InfixRV:
     return create_rv(ir.Arcsin(), a)
 
 
-def arcsinh(a) -> OperatorRV:
+def arcsinh(a) -> InfixRV:
     return create_rv(ir.Arcsinh(), a)
 
 
-def arctan(a) -> OperatorRV:
+def arctan(a) -> InfixRV:
     return create_rv(ir.Arctan(), a)
 
 
-def arctanh(a) -> OperatorRV:
+def arctanh(a) -> InfixRV:
     return create_rv(ir.Arctanh(), a)
 
 
-def cos(a) -> OperatorRV:
+def cos(a) -> InfixRV:
     return create_rv(ir.Cos(), a)
 
 
-def cosh(a) -> OperatorRV:
+def cosh(a) -> InfixRV:
     return create_rv(ir.Cosh(), a)
 
 
-def exp(a) -> OperatorRV:
+def exp(a) -> InfixRV:
     return create_rv(ir.Exp(), a)
 
 
-def inv_logit(a) -> OperatorRV:
+def inv_logit(a) -> InfixRV:
     return create_rv(ir.InvLogit(), a)
 
 
-def expit(a) -> OperatorRV:
+def expit(a) -> InfixRV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
 
-def sigmoid(a) -> OperatorRV:
+def sigmoid(a) -> InfixRV:
     """Equivalent to `inv_logit`"""
     return create_rv(ir.InvLogit(), a)
 
 
-def log(a) -> OperatorRV:
+def log(a) -> InfixRV:
     return create_rv(ir.Log(), a)
 
-def log_gamma(a) -> OperatorRV:
+def log_gamma(a) -> InfixRV:
     """Log gamma function.
 
     **TODO**: do we want
@@ -333,52 +366,52 @@ def log_gamma(a) -> OperatorRV:
     return create_rv(ir.Loggamma(), a)
 
 
-def logit(a) -> OperatorRV:
+def logit(a) -> InfixRV:
     return create_rv(ir.Logit(), a)
 
 
-def sin(a) -> OperatorRV:
+def sin(a) -> InfixRV:
     return create_rv(ir.Sin(), a)
 
 
-def sinh(a) -> OperatorRV:
+def sinh(a) -> InfixRV:
     return create_rv(ir.Sinh(), a)
 
 
-def step(a) -> OperatorRV:
+def step(a) -> InfixRV:
     return create_rv(ir.Step(), a)
 
 
-def tan(a) -> OperatorRV:
+def tan(a) -> InfixRV:
     return create_rv(ir.Tan(), a)
 
 
-def tanh(a) -> OperatorRV:
+def tanh(a) -> InfixRV:
     return create_rv(ir.Tanh(), a)
 
 ####################################################################################################
 # Multivariate dists
 ####################################################################################################
 
-def multi_normal(mean, cov) -> OperatorRV:
+def multi_normal(mean, cov) -> InfixRV:
     """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
     return create_rv(ir.MultiNormal(), mean, cov)
 
 
-def categorical(theta) -> OperatorRV:
+def categorical(theta) -> InfixRV:
     """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
     where `theta` is a vector of non-negative reals that sums to one."""
     return create_rv(ir.Categorical(), theta)
 
 
-def multinomial(n, p) -> OperatorRV:
+def multinomial(n, p) -> InfixRV:
     """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
     random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
     vector of probabilities that sums to one."""
     return create_rv(ir.Multinomial(), n, p)
 
 
-def dirichlet(alpha) -> OperatorRV:
+def dirichlet(alpha) -> InfixRV:
     """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
     random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals."""
     return create_rv(ir.Dirichlet(), alpha)
@@ -389,11 +422,11 @@ def dirichlet(alpha) -> OperatorRV:
 ####################################################################################################
 
 
-def matmul(a, b) -> OperatorRV:
+def matmul(a, b) -> InfixRV:
     """
     Matrix product of two arrays. The behavior follows that of
     [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
-    except that (currently) `a` and `b` must both be 1-D or 2-D arrays. In particular:
+    except that `a` and `b` must both be 1-D or 2-D arrays. In particular:
     * If `a` and `b` are both 1-D then this represents an inner-product.
     * If `a` is 1-D and `b` is 2-D then this represents vector/matrix multiplication
     * If `a` is 2-D and `b` is 1-D then this represents matrix/vector multiplication
@@ -401,14 +434,14 @@ def matmul(a, b) -> OperatorRV:
     """
     return create_rv(ir.MatMul(), a, b)
 
-def inv(a) -> OperatorRV:
+def inv(a) -> InfixRV:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
     return create_rv(ir.Inv(), a)
 
 
-def softmax(a) -> OperatorRV:
+def softmax(a) -> InfixRV:
     """
     Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
     syntax of [scipy.special.softmax](
@@ -422,7 +455,7 @@ def softmax(a) -> OperatorRV:
     return create_rv(ir.Inv(), a)
 
 
-def sum(x: RV, axis: int) -> OperatorRV:
+def sum(x: RV, axis: int) -> InfixRV:
     """
     Take the sum of a random variable along a given axis
 
@@ -438,37 +471,3 @@ def sum(x: RV, axis: int) -> OperatorRV:
     return create_rv(ir.Sum(axis), x)
 
 
-# from functools import wraps
-#
-#
-# def wrap_fun(fun):
-#     """
-#     Given a function that takes some set of arguments and returns an RV, get a new one that is
-#     "safe" in the sense of (1) casting all inputs to RV and (2) returning an RV of the current
-#     type.
-#     """
-#
-#     @wraps(fun)
-#     def new_fun(*args):
-#         args = tuple(makerv(a) for a in args)
-#         rv = fun(*args)
-#         rv_class = current_rv_class()
-#         return rv_class(rv.op, rv.parents)
-#
-#     new_fun.__doc__ = f"{fun.__doc__};\n HI"
-#     return new_fun
-#
-#
-# @wrap_fun
-# def new_normal(loc, scale):
-#     """
-#     Get a normally distributed random variable.
-#
-#     Parameters
-#     ----------
-#     loc
-#         location / mean (scalar)
-#     scale
-#         scale / standard deviation (positive scalar)
-#     """
-#     return RV(ir.Normal(), loc, scale)

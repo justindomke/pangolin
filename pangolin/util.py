@@ -1,7 +1,7 @@
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
-from typing import Sequence
+from typing import Sequence, Any, Callable
 
 def comma_separated(stuff, fun=None, parens=True, spaces=False):
     """convenience function for printing and such
@@ -150,12 +150,19 @@ class WriteOnceDefaultDict(dict):
 
 
 def is_leaf_with_none(xi):
-    return (xi is None) or not isinstance(xi, (list, tuple, dict))
-
+    #return (xi is None) or not isinstance(xi, (list, tuple, dict))
+    return xi is None
 
 def tree_map_with_none_as_leaf(f, tree, *rest):
     """
     Call jax.tree_util.tree_map using a special is_leaf function that preserves None
+
+    Examples
+    --------
+    >>> pytree = [0, (1, None)]
+    >>> tree_map_with_none_as_leaf(lambda x: x, pytree)
+    [0, (1, None)]
+
     """
     return jax.tree_util.tree_map(f, tree, *rest, is_leaf=is_leaf_with_none)
 
@@ -172,12 +179,15 @@ def tree_map_preserve_none(f, tree, *rest):
     return tree_map_with_none_as_leaf(new_f, tree, *rest)
 
 
+def tree_structure_with_none_as_lead(pytree):
+    import jax.tree_util
+    return jax.tree_util.tree_structure(pytree, is_leaf=is_leaf_with_none)
+
+
 def tree_flatten_with_none_as_leaf(x):
     import jax.tree_util
-
     # return jax.tree_util.tree_flatten(x, lambda xi: (xi is None) or not isinstance(x,(list,tuple,dict)) )
-    return jax.tree_util.tree_flatten(x, is_leaf_with_none)
-
+    return jax.tree_util.tree_flatten(x, is_leaf=is_leaf_with_none)
 
 def same(x, y):
     """
@@ -294,11 +304,123 @@ def is_shape_tuple(a):
     return True
 
 
-def tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=None):
-    def mini_eval(leaf, *remaining_subtrees):
-        return jax.tree_map(lambda *leaves: f(leaf, *leaves), *remaining_subtrees)
+# def tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=None):
+#     def mini_eval(leaf, *remaining_subtrees):
+#         return jax.tree_map(lambda *leaves: f(leaf, *leaves), *remaining_subtrees, is_leaf=is_leaf)
 
-    return jax.tree_util.tree_map(mini_eval, tree, *remaining_trees, is_leaf=is_leaf)
+#     return jax.tree_util.tree_map(mini_eval, tree, *remaining_trees, is_leaf=is_leaf)
+
+PyTree = Any
+
+def tree_map_recurse_at_leaf(
+    f: Callable[..., Any],
+    tree: PyTree,
+    *remaining_trees: PyTree,
+    is_leaf: Callable[[Any], bool] | None = None
+) -> PyTree:
+    """
+    Applies a function `f` to corresponding leaves of `tree` and `*remaining_trees`.
+
+    This function implements a "recursive broadcast" behavior. If `tree` has a leaf
+    at a path where any of `remaining_trees` has a subtree, that `tree` leaf is
+    "broadcast" to all leaves of the corresponding subtree in `remaining_trees`.
+
+    Parameters
+    ----------
+    f : Callable[..., Any]
+        The function to apply to the leaves. Its first argument will be a leaf
+        from `tree`, and subsequent arguments will be corresponding leaves from
+        `remaining_trees`. If broadcasting occurs, the first argument (`leaf_from_tree`)
+        will be fixed for all leaves within the broadcasted subtree.
+    tree : PyTree
+        The primary PyTree. Its leaves will trigger the broadcasting behavior.
+        It is expected to be a "prefix" or "smaller" structure compared to
+        `remaining_trees` at corresponding paths.
+    *remaining_trees : PyTree
+        One or more additional PyTrees to map over. These are expected to be
+        "superset" structures relative to `tree` at corresponding paths.
+    is_leaf : Callable[[Any], bool], optional
+        An optional callable that takes a single argument (a node in a PyTree)
+        and returns `True` if that node should be considered a leaf (i.e.,
+        `tree_map` should not recurse into it), and `False` otherwise.
+        This function is applied to both the outer and inner `jax.tree_map` calls.
+        If `None`, JAX's default leaf detection is used.
+
+    Returns
+    -------
+    PyTree
+        A new PyTree with the results of `f` application. Its structure will
+        match that of the first PyTree in `remaining_trees` (or `tree` if
+        `remaining_trees` is empty).
+
+    Notes
+    -----
+    - If `tree` has a subtree at a path where one of `remaining_trees` has a leaf,
+      `jax.tree_map` will raise a `ValueError` due to a structural mismatch.
+    - This function leverages nested `jax.tree_map` calls for conciseness.
+
+
+    Examples
+    --------
+    >>> # No broadcasting (standard tree_map behavior)
+    >>> tree1 = {'c': 5, 'd': 6}
+    >>> tree2 = {'c': 2, 'd': 3}
+    >>> tree_map_recurse_at_leaf(lambda l1, l2: l1 * l2, tree1, tree2)
+    {'c': 10, 'd': 18}
+
+    >>> # Simple broadcasting (multiply first leaf by second)
+    >>> tree1 = {'a': 10, 'b': 20}
+    >>> tree2 = {'a': {'x': 1, 'y': 2}, 'b': 3}
+    >>> tree_map_recurse_at_leaf(lambda l1, l2: l1 * l2, tree1, tree2)
+    {'a': {'x': 10, 'y': 20}, 'b': 60}
+
+    >>> # Custom is_leaf (treating None as a leaf)
+    >>> tree1 = {'data': 100, 'config': None}
+    >>> tree2 = {'data': {'val': 1, 'factor': 2}, 'config': 'default'}
+    >>> tree_map_recurse_at_leaf(
+    ...     lambda l1, l2: f"{l1}_{l2}" if l1 is None else l1 * l2,
+    ...     tree1, tree2, is_leaf=lambda x: x is None
+    ... )
+    {'config': 'None_default', 'data': {'factor': 200, 'val': 100}}
+    """
+    def mini_eval(leaf: Any, *remaining_subtrees: PyTree) -> PyTree:
+        # `leaf` here is a leaf from the `tree` (first argument) as determined
+        # by the outer `jax.tree_map`'s `is_leaf` rule.
+        # `remaining_subtrees` are the corresponding subtrees from `*remaining_trees`.
+        # The inner `jax.tree_map` then broadcasts `leaf` across the leaves
+        # of `remaining_subtrees`.
+        return jax.tree_map(
+            lambda *leaves: f(leaf, *leaves),
+            *remaining_subtrees,
+            is_leaf=is_leaf # Propagate the custom is_leaf to the inner map
+        )
+
+    # The outer `jax.tree_map` traverses `tree` and `*remaining_trees` in parallel.
+    # When it encounters a leaf in `tree`, it calls `mini_eval` with that leaf
+    # and the corresponding subtrees from `*remaining_trees`.
+    return jax.tree_util.tree_map(
+        mini_eval,
+        tree,
+        *remaining_trees,
+        is_leaf=is_leaf # Pass the custom is_leaf to the outer map
+    )
+
+
+def tree_map_recurse_at_leaf_with_none_as_leaf(f, tree, *remaining_trees):
+    """
+    Examples
+    --------
+    >>> pytree1 = (0,[1,2])
+    >>> pytree2 = ("dog", ["cat", None])
+    >>> tree_map_recurse_at_leaf_with_none_as_leaf(lambda a,b: a, pytree1, pytree2)
+    (0, [1, 2])
+
+    >>> pytree1 = 3
+    >>> pytree2 = {"cat": 0, "dog": 2}
+    >>> tree_map_recurse_at_leaf_with_none_as_leaf(lambda a,b: a, pytree1, pytree2)
+    {'cat': 3, 'dog': 3}
+    """
+    return tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=is_leaf_with_none)
 
 
 def flatten_fun(f, *args, is_leaf=None):

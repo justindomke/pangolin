@@ -8,7 +8,7 @@ class RV(dag.Node):
     A RV is essentially just a tuple of an Op and a set of parent RVs.
     """
     _frozen = False
-    __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
+    _n = 1 # convenient to store order all RVs were created
 
     def __init__(self, op: Op, *parents: Self):
         """
@@ -17,6 +17,8 @@ class RV(dag.Node):
 
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)
+        self._n = RV._n
+        RV._n += 1
         self.op = op
         "The Op corresponding to this RV."
         super().__init__(*parents)
