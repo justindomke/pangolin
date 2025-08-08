@@ -304,11 +304,10 @@ def is_shape_tuple(a):
     return True
 
 
-# def tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=None):
-#     def mini_eval(leaf, *remaining_subtrees):
-#         return jax.tree_map(lambda *leaves: f(leaf, *leaves), *remaining_subtrees, is_leaf=is_leaf)
+################################################################################
+# Pytree stuff
+################################################################################
 
-#     return jax.tree_util.tree_map(mini_eval, tree, *remaining_trees, is_leaf=is_leaf)
 
 PyTree = Any
 
@@ -481,7 +480,6 @@ def dual_flatten(pytree1, pytree2):
     flat_tree1, tree1_treedef = tree_flatten_with_none_as_leaf(new_tree1)
     flat_tree2, tree2_treedef = tree_flatten_with_none_as_leaf(pytree2)
     return flat_tree1, flat_tree2
-
 
 ################################################################################
 # Cast observed variables to arrays (and check that they have corresponding shapes)
