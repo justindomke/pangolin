@@ -328,39 +328,6 @@ def vmap_eval_flat(f: FlatCallable, in_axes: Sequence[int | None], axis_size: in
 
     return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size)
 
-def _check_tree_consistency(*args):
-    trees = [jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)]
-    #trees = [tree_structure_with_none(args)]
-    for t in trees:
-        assert t == trees[0]
-
-def dual_flatten(pytree1, pytree2):
-    """
-    Examples
-    --------
-    >>> pytree1 = (0,[1,2])
-    >>> pytree2 = ("dog",["cat", "owl"])
-    >>> dual_flatten(pytree1, pytree2)
-    ([0, 1, 2], ['dog', 'cat', 'owl'])
-
-    >>> pytree1 = (None,[1,2])
-    >>> pytree2 = ("dog", ["cat", None])
-    >>> dual_flatten(pytree1, pytree2)
-    ([None, 1, 2], ['dog', 'cat', None])
-
-    >>> pytree1 = (None, 3)
-    >>> pytree2 = ("dog", ["cat", None])
-    >>> dual_flatten(pytree1, pytree2)
-    ([None, 3, 3], ['dog', 'cat', None])
-    """
-    new_tree1 = util.tree_map_recurse_at_leaf_with_none_as_leaf(
-        lambda a, b: a, pytree1, pytree2
-    )
-    _check_tree_consistency(new_tree1, pytree2)
-
-    flat_tree1, tree1_treedef = util.tree_flatten_with_none_as_leaf(new_tree1)
-    flat_tree2, tree2_treedef = util.tree_flatten_with_none_as_leaf(pytree2)
-    return flat_tree1, flat_tree2
 
 def get_dummy_args(in_axes, args):
     """Converts PyTree args and axes to flat args and axes
@@ -486,7 +453,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
 
         dummy_args = get_dummy_args(my_in_axes, args)
 
-        flat_in_axes, flat_args = dual_flatten(my_in_axes, args)
+        flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
             f, *dummy_args, is_leaf=util.is_leaf_with_none

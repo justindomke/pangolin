@@ -19,7 +19,7 @@ This will include JAX arrays (which is good) but also unfortunately accepts stri
 ####################################################################################################
 
 class InfixRV(RV):
-    """An Infix RV is exactly like a standard `RV` except it supports infix operations. 2
+    """An Infix RV is exactly like a standard `RV` except it supports infix operations.
 
     Examples
     --------

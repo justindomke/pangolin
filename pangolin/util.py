@@ -448,6 +448,41 @@ def flatten_fun(f, *args, is_leaf=None):
     return flat_f, flatten_input, unflatten_output
 
 
+def _check_tree_consistency(*args):
+    trees = [jax.tree_util.tree_structure(args, is_leaf=is_leaf_with_none)]
+    #trees = [tree_structure_with_none(args)]
+    for t in trees:
+        assert t == trees[0]
+
+def dual_flatten(pytree1, pytree2):
+    """
+    Examples
+    --------
+    >>> pytree1 = (0,[1,2])
+    >>> pytree2 = ("dog",["cat", "owl"])
+    >>> dual_flatten(pytree1, pytree2)
+    ([0, 1, 2], ['dog', 'cat', 'owl'])
+
+    >>> pytree1 = (None,[1,2])
+    >>> pytree2 = ("dog", ["cat", None])
+    >>> dual_flatten(pytree1, pytree2)
+    ([None, 1, 2], ['dog', 'cat', None])
+
+    >>> pytree1 = (None, 3)
+    >>> pytree2 = ("dog", ["cat", None])
+    >>> dual_flatten(pytree1, pytree2)
+    ([None, 3, 3], ['dog', 'cat', None])
+    """
+    new_tree1 = tree_map_recurse_at_leaf_with_none_as_leaf(
+        lambda a, b: a, pytree1, pytree2
+    )
+    _check_tree_consistency(new_tree1, pytree2)
+
+    flat_tree1, tree1_treedef = tree_flatten_with_none_as_leaf(new_tree1)
+    flat_tree2, tree2_treedef = tree_flatten_with_none_as_leaf(pytree2)
+    return flat_tree1, flat_tree2
+
+
 ################################################################################
 # Cast observed variables to arrays (and check that they have corresponding shapes)
 ################################################################################
