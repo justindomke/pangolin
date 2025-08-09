@@ -4,7 +4,7 @@ from . import InfixRV
 from pangolin.ir import Op, RV, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RV_or_ArrayLike
+from .base import makerv, create_rv, RV_or_ArrayLike, constant, exp, log
 from typing import Sequence, Type
 import jax.tree_util
 from pangolin.ir.vmap import split_shape
@@ -314,8 +314,8 @@ def vmap_eval_flat(f: FlatCallable, in_axes: Sequence[int | None], axis_size: in
     --------
     >>> def f(a,b):
     ...     return [a+b]
-    >>> A = makerv([0,1])
-    >>> B = makerv([2,3])
+    >>> A = constant([0,1])
+    >>> B = constant([2,3])
     >>> [C] = vmap_eval_flat(f, (0,0), 2, A, B)
     >>> print(repr(C))
     InfixRV(VMap(Add(), (0, 0), 2), InfixRV(Constant([0,1])), InfixRV(Constant([2,3])))
@@ -363,8 +363,8 @@ def get_dummy_args(in_axes, args):
     >>> get_dummy_args({'cat':0, 'dog':None}, {'cat':makerv([0,1,2]), 'dog':makerv(3)})
     {'cat': InfixRV(AbstractOp()), 'dog': InfixRV(AbstractOp())}
     
-    >>> A = makerv([0,1,2])
-    >>> B = makerv([3,4,5])
+    >>> A = constant([0,1,2])
+    >>> B = constant([3,4,5])
     >>> x = {"dog": A, "cat": B}
     >>> in_axes = {"dog": 0, "cat": 0}
     >>> get_dummy_args(in_axes, x)
@@ -390,20 +390,17 @@ def get_dummy_args(in_axes, args):
 
 def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     """@public
-    vmap a function. See also the documentation for
-    [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) which has exactly the same
-    interface (with some extra arguments not supported here).
+    Vectorizing map. Create a function which maps `f` over argument axes. 
+
+    This function matches exactly the interface of [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html), although it doesn't provide some of the optional arguments `jax.vmap` does.
 
     Parameters
     ----------
     f: Callable
         The function to vmap. Should take a pytree of `RV`s as inputs and return a pytree of `RV`s
         as outputs.
-    in_axes:
-        An int, None, or pytree with roots that are insequence of values specifying what input axes to map over. If
-        the positional arguments to `f` are container (pytree) types then `in_axes` must be a
-        sequence with length equal to the number of positional arguments to `f` and each element
-        of `in_axes` must be a container tree prefix of the corresponding positional argument.
+    in_axes: Any
+        An int, None, or pytree with roots that are int or None. Specifies which axis of each RV should be mapped (if int) or that no axis shuld be mapped (if None). Can be a pytree matching the structure of all arguments to `f`. Or, can be a pytree that is a prefix to the pytree representing all arguments. By default, in_axes is zero, meaning all RVs are mapped over the first axis.
     axis_size: int | None
         An integer indicating the size of the axis to be mapped. This is optional unless all
         leaves of `in_axes` are `None`.
@@ -411,27 +408,82 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     Returns
     -------
     vec_f
-        batched/vectorized version of `f`
+        batched/vectorized version of `f` with arguments matching those of `f` with extra axes at positions indicated by `in_axes` and a return value that corresponds to that of `f` but with an extra axis in the first position.
 
     Examples
     --------
+    Here's the simplest possible example.
+    >>> def fun(a):
+    ...     return exp(a)
+    >>> A = constant([0,1,2])
+    >>> vmap(fun)(A)
+    InfixRV(VMap(Exp(), (0,), 3), InfixRV(Constant([0,1,2])))
+    
+    Multiple inputs are OK.
     >>> def fun(a,b):
     ...     return a*b
-    >>> A = makerv([0,1,2])
-    >>> B = makerv([3,4,5])
-    >>> vmap(fun, (0,0), 3)(A, B)
-    InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([3,4,5])))
+    >>> A = constant([1,2,3])
+    >>> B = constant([4,5,6])
+    >>> vmap(fun)(A, B)
+    InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))
 
+    Unmapped inputs are OK.
     >>> def fun(a,b):
-    ...     return {"add": a+b, "mul": a*b}
-    >>> vmap(fun, 0, None)(A, B)
-    {'add': InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([3,4,5]))), 'mul': InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([3,4,5])))}
+    ...     return a*b
+    >>> A = constant([1,2,3])
+    >>> vmap(fun, [0, None])(A, constant(7))
+    InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(7)))
 
-    >>> x = {'cat': makerv([0,1,2]), 'dog': makerv(3)}
+    Multiple outputs are OK.
+    >>> def fun(a):
+    ...     return [exp(a), log(a)]
+    >>> [out1, out2] = vmap(fun)(A)
+    >>> out1
+    InfixRV(VMap(Exp(), (0,), 3), InfixRV(Constant([1,2,3])))
+    >>> out2
+    InfixRV(VMap(Log(), (0,), 3), InfixRV(Constant([1,2,3])))
+
+    Pytree inputs and pytree in_axes are OK
     >>> def fun(x):
     ...     return x['cat']*x['dog']
-    >>> vmap(fun, {'cat': 0, 'dog': None}, None)(x)
-    InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant(3)))
+    >>> x = {'cat': A, 'dog': constant(3)}
+    >>> in_axes = {'cat': 0, 'dog': None}
+    >>> vmap(fun, in_axes)(x)
+    InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(3)))
+
+    Pytree outputs are OK
+    >>> def fun(a, b):
+    ...     return {"add": a+b, "mul": a*b}
+    >>> vmap(fun)(A, B)
+    {'add': InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6]))), 'mul': InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))}
+
+    Pytree in_axis prefixes are OK
+    >>> def fun(x):
+    ...     [a, (b,c)] = x
+    ...     return (a*b)+c
+    >>> x = [A, (constant(7), constant(8))]
+    >>> in_axes1 = [0, (None, None)] # axes for each leaf
+    >>> in_axes2 = [0, None]         # single None for (b,c) tuple!
+    >>> out1 = vmap(fun, in_axes1)(x)
+    >>> out2 = vmap(fun, in_axes2)(x)
+    >>> out1.op == out2.op
+    True
+    >>> print_upstream(out1)
+    shape | statement
+    ----- | ---------
+    (3,)  | a = [1 2 3]
+    ()    | b = 7
+    (3,)  | c = vmap(mul, (0, None), 3)(a,b)
+    ()    | d = 8
+    (3,)  | e = vmap(add, (0, None), 3)(c,d)
+    >>> print_upstream(out2)
+    shape | statement
+    ----- | ---------
+    (3,)  | a = [1 2 3]
+    ()    | b = 7
+    (3,)  | c = vmap(mul, (0, None), 3)(a,b)
+    ()    | d = 8
+    (3,)  | e = vmap(add, (0, None), 3)(c,d)
     """
 
     # TODO: support negative in_axes

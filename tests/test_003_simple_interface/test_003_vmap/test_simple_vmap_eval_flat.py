@@ -18,8 +18,8 @@ def test_vmap_eval_simple():
 
     in_axes = (0, 0)
     axis_size = 3
-    x = makerv([1, 2, 3])
-    y = makerv([4, 5, 6])
+    x = constant([1, 2, 3])
+    y = constant([4, 5, 6])
     [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
 
     assert z.op == ir.VMap(ir.Mul(), (0, 0), 3)
@@ -34,8 +34,8 @@ def test_vmap_eval_more():
 
     in_axes = (0, 0)
     axis_size = 3
-    x = makerv([1, 2, 3])
-    y = makerv([4, 5, 6])
+    x = constant([1, 2, 3])
+    y = constant([4, 5, 6])
     [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
     assert z.op == ir.VMap(ir.Pow(), (0,0), 3)
     assert z.parents == (tmp1, tmp2)
@@ -52,8 +52,8 @@ def test_vmap_eval_half_mapped():
 
     in_axes = (0, None)
     axis_size = 3
-    x = makerv([1, 2, 3])
-    y = makerv(4)
+    x = constant([1, 2, 3])
+    y = constant(4)
     [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
     assert z.op == ir.VMap(ir.Pow(), (0,0), 3)
     assert z.parents == (tmp1, tmp2)
@@ -69,7 +69,7 @@ def test_vmap_eval_closure():
         return [y]
     in_axes = (0,)
     axis_size = 3
-    x = makerv([1,2,3])
+    x = constant([1,2,3])
     [y] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
     assert y.op == ir.VMap(ir.Mul(), (None,None), 3)
     assert y.parents == (z,z)
@@ -78,12 +78,12 @@ def test_vmap_eval_closure():
 def test_vmap_eval_constant():
     # test that constant is not vmapped (used to require a special case)
     def flat_fun(xi):
-        yi = makerv(2)
+        yi = constant(2)
         return [xi * yi]
 
     in_axes = (0,)
     axis_size = 3
-    x = makerv([1, 2, 3])
+    x = constant([1, 2, 3])
     [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
     assert z.op == ir.VMap(ir.Mul(), (0,None), 3)
     assert z.parents[0] == x
@@ -98,7 +98,7 @@ def test_no_redundant_deterministic():
 
     in_axes = (None,)
     axis_size = 3
-    x = makerv(1)
+    x = constant(1)
     [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
     assert z.op == ir.VMap(ir.Add(), (None,None), 3)
     assert z.parents[0].op == ir.Mul()
@@ -112,7 +112,7 @@ def test_double_vmap_eval():
     def flat_fun1(xij):
         return [exp(xij)]
 
-    xij = makerv(2)
+    xij = constant(2)
     [yij] = flat_fun1(xij)
     assert yij.op == ir.Exp()
 
@@ -120,7 +120,7 @@ def test_double_vmap_eval():
         [yi] = vmap_eval_flat(flat_fun1, (0,), None, xi)
         return [yi]
 
-    xi = makerv([1,2,3])
+    xi = constant([1,2,3])
     [yi] = vec_fun1(xi)
     assert yi.op == ir.VMap(ir.Exp(),(0,),3)
 
@@ -128,7 +128,7 @@ def test_double_vmap_eval():
         [y] = vmap_eval_flat(vec_fun1, (0,), None, x)
         return [y]
 
-    x = makerv([[1,2,3],[4,5,6]])
+    x = constant([[1,2,3],[4,5,6]])
     [y] = vec_fun2(x)
     assert y.op == ir.VMap(ir.VMap(ir.Exp(),(0,),3),(0,),2)
 

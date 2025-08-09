@@ -144,7 +144,8 @@ class SimpleIndex(Op):
         def slice_str(s):
             match s:
                 case None:
-                    return "∅"
+                    #return "∅"
+                    return "None"
                 case slice(start=None, stop=None, step=None):
                     return ":"
                 case slice(start=a, stop=b, step=c):

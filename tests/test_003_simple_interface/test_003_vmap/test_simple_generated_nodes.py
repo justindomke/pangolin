@@ -1,7 +1,7 @@
 from pangolin.simple_interface import *
 from pangolin import ir
 from collections.abc import Callable
-from pangolin.simple_interface.base import make_infix_rv
+#from pangolin.simple_interface.base import make_infix_rv
 
 from pangolin.simple_interface.vmapping import (
     convert_args,
@@ -17,8 +17,8 @@ def test_generated_nodes1():
     def fun(x, y):
         return [x * 2, y + 3]
 
-    x0 = makerv(1)
-    y0 = makerv(2)
+    x0 = constant(1)
+    y0 = constant(2)
     generated, out = generated_nodes(fun, x0, y0)
     assert len(generated) == 4
     assert generated[0].op == ir.Constant(2)
@@ -36,8 +36,8 @@ def test_generated_nodes2():
         z = cauchy(tmp, y)
         return [z]
 
-    x0 = makerv(1)
-    y0 = makerv(2)
+    x0 = constant(1)
+    y0 = constant(2)
     generated, out = generated_nodes(fun, x0, y0)
     assert len(generated) == 2
     # tmp
@@ -51,14 +51,14 @@ def test_generated_nodes2():
 
 
 def test_generated_nodes_closure():
-    x = make_infix_rv(1)
+    x = constant(1)
 
     def fun(y):
         tmp = x * 3 # tmp included, 3 not because constant
         z = y + tmp
         return [z]
 
-    y0 = makerv(2)
+    y0 = constant(2)
     generated, out = generated_nodes(fun, y0)
     assert len(generated) == 3
     # c
@@ -77,12 +77,12 @@ def test_generated_nodes_closure():
 
 
 def test_generated_nodes_ignored_input():
-    x = make_infix_rv(1)
+    x = constant(1)
 
     def fun(y):
         return [2 * x]
 
-    y0 = makerv(3)
+    y0 = constant(3)
     generated, out = generated_nodes(fun, y0)
     c = generated[0]
     assert c.op == ir.Constant(2)
@@ -93,7 +93,7 @@ def test_generated_nodes_ignored_input():
 
 
 def test_generated_nodes_passthrough():
-    x = makerv(1)
+    x = constant(1)
 
     def fun(x):
         return [x]
@@ -109,8 +109,8 @@ def test_generated_nodes_switcharoo():
     def fun(x, y):
         return [y, x]
 
-    x0 = makerv(1)
-    y0 = makerv(2)
+    x0 = constant(1)
+    y0 = constant(2)
 
     try:
         generated, out = generated_nodes(fun, x0, y0)
@@ -123,8 +123,8 @@ def test_non_flat():
     def fun(x, y):
         return x
 
-    x0 = makerv(1)
-    y0 = makerv(2)
+    x0 = constant(1)
+    y0 = constant(2)
 
     try:
         generated_nodes(fun, x0, y0)
@@ -135,8 +135,8 @@ def test_non_flat():
 
 def test_vmap_generated_nodes1():
     # both inputs explicitly given
-    a = makerv(0)
-    b = makerv(1)
+    a = constant(0)
+    b = constant(1)
     f = lambda a, b: [normal(a, b)]
     generated, out = generated_nodes(f, a, b)
     assert len(generated) == 1
@@ -145,8 +145,8 @@ def test_vmap_generated_nodes1():
 
 def test_vmap_generated_nodes2():
     # b captured as a closure
-    a = makerv(0)
-    b = makerv(1)
+    a = constant(0)
+    b = constant(1)
     f = lambda a: [normal(a, b)]
     generated, out = generated_nodes(f, a)
     assert len(generated) == 1
@@ -155,8 +155,8 @@ def test_vmap_generated_nodes2():
 
 def test_vmap_generated_nodes3():
     # a captured as a closure
-    a = makerv(0)
-    b = makerv(1)
+    a = constant(0)
+    b = constant(1)
     f = lambda b: [normal(a, b)]
     generated, out = generated_nodes(f, b)
     assert len(generated) == 1
@@ -166,8 +166,8 @@ def test_vmap_generated_nodes3():
 # illegal under current rules
 def test_vmap_generated_nodes4():
     # both a and b captured as a closure
-    a = makerv(0)
-    b = makerv(1)
+    a = constant(0)
+    b = constant(1)
     f = lambda: [normal(a, b)]
     generated, out = generated_nodes(f)
     assert len(generated) == 1
@@ -181,8 +181,8 @@ def test_vmap_generated_nodes5():
         scale = 1
         return [normal(loc, scale)]
 
-    a = makerv(0)
-    b = makerv(1)
+    a = constant(0)
+    b = constant(1)
 
     # both a and b given
     f = lambda a, b: fun(a, b)

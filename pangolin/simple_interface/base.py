@@ -31,6 +31,11 @@ class InfixRV(RV):
     InfixRV(Pow(), InfixRV(Constant(2)), InfixRV(Constant(3)))
     >>> -a
     InfixRV(Mul(), InfixRV(Constant(2)), InfixRV(Constant(-1)))
+
+    See Also
+    --------
+    Pangolin.ir.RV.rv
+
     """
 
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
@@ -94,6 +99,29 @@ class InfixRV(RV):
 # makerv
 ####################################################################################################
 
+def constant(value: ArrayLike) -> InfixRV:
+    """Create a constant RV
+
+    Parameters
+    ----------
+    value: ArrayLike
+        value for the constant. Should be a numpy (or JAX) array or something castable to that, e.g. int / float / list of list of ints/floats.
+    
+    Returns
+    -------
+    InfixRV
+        RV with Constant Op
+
+    Examples
+    --------
+    >>> constant(7)
+    InfixRV(Constant(7))
+    >>> constant([0,1,2])
+    InfixRV(Constant([0,1,2]))
+
+    """
+    return InfixRV(Constant(value))
+
 def non_infix_rv(x):
     if isinstance(x, RV):
         if not isinstance(x, InfixRV):
@@ -103,6 +131,20 @@ def non_infix_rv(x):
 def makerv(x) -> RV:
     """
     If the input is `RV`, then it just returns it. Otherwise, creates an InfixRV.
+
+    Examples
+    --------
+    >>> x = makerv(1)
+    >>> x
+    InfixRV(Constant(1))
+    >>> y = x + x
+    >>> y
+    InfixRV(Add(), InfixRV(Constant(1)), InfixRV(Constant(1)))
+    >>> z = makerv(y)
+    >>> z
+    InfixRV(Add(), InfixRV(Constant(1)), InfixRV(Constant(1)))
+    >>> y==z
+    True
     """
 
     if isinstance(x,RV):

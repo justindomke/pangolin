@@ -40,10 +40,14 @@ class Composite(Op):
     # TODO: str and repr should be much more descriptive
     # should this print f"Composite({ops[-1].name})"?
     def __str__(self):
-        return f"composite({self.num_inputs},{self.ops},{self.par_nums})"
+        if len(self.ops)==1:
+            str_ops = f"({self.ops[0]},)"
+        else:
+            str_ops = f"({', '.join(str(op) for op in self.ops)})"
+        return f"composite({self.num_inputs}, {str_ops}, {self.par_nums})"
 
     def __repr__(self):
-        return f"Composite({self.num_inputs},{self.ops},{self.par_nums})"
+        return f"Composite({self.num_inputs}, {self.ops}, {self.par_nums})"
 
     def __eq__(self, other):
         if isinstance(other, Composite):

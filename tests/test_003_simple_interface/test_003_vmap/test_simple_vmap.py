@@ -17,7 +17,7 @@ def test_square():
     def f(x):
         return x*x
 
-    x = makerv([1,2,3])
+    x = constant([1,2,3])
     y = vmap(f)(x)
 
     assert y.op == ir.VMap(ir.Mul(),(0,0),3)
@@ -28,8 +28,8 @@ def test_add_and_square():
         z = x+y
         return z*z
 
-    x = makerv([1,2,3])
-    y = makerv([4,5,6])
+    x = constant([1,2,3])
+    y = constant([4,5,6])
     u = vmap(f)(x,y)
 
     assert u.op == ir.VMap(ir.Mul(),(0,0),3)
@@ -128,8 +128,8 @@ def test_use_arg_twice_complicated():
     assert y.parents[0].parents[0] == y.parents[1].parents[0]
 
 def test_outside_arg():
-    x = makerv([1,2,3])
-    y = makerv(4)
+    x = constant([1,2,3])
+    y = constant(4)
     def f(xi):
         return normal(xi,y)
     z = vmap(f)(x)
@@ -139,8 +139,8 @@ def test_outside_arg():
 
 def test_deterministic_scalars():
     # notice z is a SCALAR, because + is deterministic
-    x = makerv(1)
-    y = makerv(2)
+    x = constant(1)
+    y = constant(2)
     def f(x,y):
         z = x+y
         return z*z
@@ -155,8 +155,8 @@ def test_deterministic_scalars():
 
 def test_random_scalars():
     # unlike the previous example, notice z is now a VECTOR, because normal is random
-    x = makerv(1)
-    y = makerv(2)
+    x = constant(1)
+    y = constant(2)
     def f(x,y):
         z = normal(x,y)
         return z*z
