@@ -1,7 +1,8 @@
 from pangolin.simple_interface import *
 from pangolin import ir
 from collections.abc import Callable
-#from pangolin.simple_interface.base import make_infix_rv
+
+# from pangolin.simple_interface.base import make_infix_rv
 
 from pangolin.simple_interface.vmapping import (
     convert_args,
@@ -9,9 +10,10 @@ from pangolin.simple_interface.vmapping import (
     vmap_dummy_args,
     AbstractOp,
     vmap_eval_flat,
-    vmap
+    vmap,
 )
 import numpy as np
+
 
 def test_generated_nodes1():
     def fun(x, y):
@@ -54,7 +56,7 @@ def test_generated_nodes_closure():
     x = constant(1)
 
     def fun(y):
-        tmp = x * 3 # tmp included, 3 not because constant
+        tmp = x * 3  # tmp included, 3 not because constant
         z = y + tmp
         return [z]
 
@@ -172,7 +174,7 @@ def test_vmap_generated_nodes4():
     generated, out = generated_nodes(f)
     assert len(generated) == 1
     assert generated[0].op == ir.Normal()
-    assert generated[0].parents == (a,b)
+    assert generated[0].parents == (a, b)
 
 
 def test_vmap_generated_nodes5():
@@ -190,7 +192,7 @@ def test_vmap_generated_nodes5():
     assert len(nodes) == 3
     loc, scale, z = nodes
     assert loc.op == ir.Add()
-    assert loc.parents == (a,b)
+    assert loc.parents == (a, b)
     assert scale.op == ir.Constant(1)
     assert z.op == ir.Normal()
     assert z.parents == (loc, scale)
@@ -216,4 +218,3 @@ def test_vmap_generated_nodes5():
     assert scale.op == ir.Constant(1)
     assert z.op == ir.Normal()
     assert z.parents == (loc, scale)
-

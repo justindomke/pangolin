@@ -1000,7 +1000,7 @@ def test_heirarchical():
 ###############################################################################
 
 def test_generated_nodes_with_loops():
-    from pangolin.interface.vmap import generated_nodes
+    from pangolin.interface.vmapping import generated_nodes
 
     def f(x):
         y = slot()

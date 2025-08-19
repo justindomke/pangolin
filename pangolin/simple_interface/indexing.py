@@ -4,7 +4,7 @@ Interface for fully-orthogonal indexing.
 
 from . import InfixRV
 from pangolin.ir import Op, RV, VMap, Constant, print_upstream
-from pangolin.ir.simple_index import SimpleIndex
+from pangolin.ir import SimpleIndex
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RV_or_ArrayLike, constant, exp, log
@@ -15,6 +15,7 @@ from typing import Protocol, TypeVar, Any
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
+
 
 def eliminate_ellipses(ndim, idx):
     """Given indices, if there is an ellipsis, insert full slices
@@ -43,9 +44,10 @@ def eliminate_ellipses(ndim, idx):
         idx = idx_start + idx_mid + idx_end
     return idx
 
+
 def convert_index(size: int, index: RV_or_ArrayLike | slice):
     """Convert an index which could be RV or ArrayLike or slice to an RV
-    
+
     Parameters
     ----------
     size: int
@@ -74,7 +76,7 @@ def convert_index(size: int, index: RV_or_ArrayLike | slice):
     InfixRV(Constant([9,7,5,3]))
 
     """
-    
+
     if isinstance(index, RV):
         return index
     elif isinstance(index, slice):
@@ -93,12 +95,14 @@ def convert_indices(shape: tuple[int], *indices: RV | slice):
     >>> convert_indices((5,3), slice(None), slice(None))
     (InfixRV(Constant([0,1,2,3,4])), InfixRV(Constant([0,1,2])))
     >>> convert_indices((5,3), [4,0,1], [3,3])
-    (InfixRV(Constant([4,0,1])), InfixRV(Constant([3,3])))    
+    (InfixRV(Constant([4,0,1])), InfixRV(Constant([3,3])))
     """
-    
-    return tuple(convert_index(size, index)
-                 for size, index in zip(shape, indices, strict=True))
-        
+
+    return tuple(
+        convert_index(size, index) for size, index in zip(shape, indices, strict=True)
+    )
+
+
 def index(var: RV, *indices: RV | slice):
     """Index a RV.
 
@@ -112,7 +116,7 @@ def index(var: RV, *indices: RV | slice):
     (2, 3) | a = [[3 0 2] [4 4 4]]
     (2,)   | b = [0 1]
     (2,)   | c = [2 2]
-    (2, 2) | d = simple_index(∅,∅)(a,b,c)
+    (2, 2) | d = simple_index(a,b,c)
     >>> C = index(A, 0, ...)
     >>> print_upstream(C)
     shape  | statement
@@ -120,7 +124,7 @@ def index(var: RV, *indices: RV | slice):
     (2, 3) | a = [[3 0 2] [4 4 4]]
     ()     | b = 0
     (3,)   | c = [0 1 2]
-    (3,)   | d = simple_index(∅,∅)(a,b,c)
+    (3,)   | d = simple_index(a,b,c)
     """
 
     indices = eliminate_ellipses(var.ndim, indices)
@@ -129,5 +133,5 @@ def index(var: RV, *indices: RV | slice):
     if len(var.shape) != len(indices):
         raise ValueError(f"RV has {var.ndim} dims but was given {len(indices)} indices")
 
-    indices = convert_indices(var.shape, *indices)    
-    return InfixRV(SimpleIndex(*[None]*len(indices)), var, *indices)
+    indices = convert_indices(var.shape, *indices)
+    return InfixRV(SimpleIndex(), var, *indices)

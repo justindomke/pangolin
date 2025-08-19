@@ -1,9 +1,12 @@
 import pytest
-from pangolin.ir.vmap import VMap
-#from pangolin.ir.rv import makerv
-from pangolin.ir import Normal, StudentT
+
+# from pangolin.ir.vmap import VMap
+# from pangolin.ir.rv import makerv
+# from pangolin.ir import Normal, StudentT
 import numpy as np
-from pangolin.ir.index import Index
+
+# from pangolin.ir.index import Index
+from pangolin.ir import Normal, StudentT, VMap, Index
 
 
 def test_eq_vmap1():
@@ -126,7 +129,7 @@ def test_vmap_index1():
 def test_vmap_index2():
     base_op = Index(slice(None), None)
     op = VMap(base_op, [None, 0])
-    assert op.get_shape((10, 4), (5,)) == (5, 10) # vmap dim first
+    assert op.get_shape((10, 4), (5,)) == (5, 10)  # vmap dim first
 
 
 def test_repr():

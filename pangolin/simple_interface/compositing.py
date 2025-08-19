@@ -187,3 +187,141 @@ def composite(fun):
 
     return myfun
 
+import functools
+
+def my_decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        "EXTRA INFO"
+        return func(*args, **kwargs)
+    
+    return wrapper
+
+#composite2 = my_decorator(composite)
+#exec('composite5 = my_decorator(composite)')
+#exec('composite5.__doc__ += "HEY"')
+
+composite5 = my_decorator(composite)
+
+
+def function_factory(name, description):
+    """
+    A factory that creates functions with dynamic docstrings.
+    """
+    def generated_function(*args, **kwargs):
+        """
+        This is a placeholder docstring. It will be overwritten.
+        """
+        print(f"Executing {name} with args: {args}, kwargs: {kwargs}")
+        # Add your function's logic here
+        return f"Result from {name}"
+
+    # Set the docstring dynamically
+    generated_function.__doc__ = f"This function is named '{name}'.\n\n{description}"
+
+    # Optionally, set the function name for better introspection and pdoc display
+    generated_function.__name__ = name
+    generated_function.__qualname__ = name # For nested functions or methods
+
+    return generated_function
+
+# Example usage:
+my_func_a = function_factory("my_specific_function_A", "This function performs operation A.")
+my_func_b = function_factory("my_specific_function_B", "This function handles data processing B.")
+
+class MyBaseProcessor:
+    """
+    A base class for processing various types of data.
+
+    Dynamically generated methods will be added to this class.
+    """
+    def __init__(self, data_source):
+        """
+        Initializes the processor with a data source.
+
+        Args:
+            data_source (str): The source of the data to be processed.
+        """
+        self.data_source = data_source
+        print(f"MyBaseProcessor initialized with data source: {self.data_source}")
+
+    def get_data_source(self):
+        """
+        Returns the data source string.
+        """
+        return self.data_source
+
+# --- Factory Function for Dynamic Methods ---
+
+def method_factory(method_name, method_docstring, method_logic_func):
+    """
+    A factory function to create a method (function) with proper attributes
+    for dynamic assignment to a class.
+
+    Args:
+        method_name (str): The name of the method.
+        method_docstring (str): The docstring content for the method.
+        method_logic_func (callable): The actual Python function implementing the method's logic.
+                                      It must accept 'self' as its first argument.
+
+    Returns:
+        callable: The prepared method function.
+    """
+    def generated_method(self, *args, **kwargs):
+        """
+        This is a placeholder docstring. It will be overwritten.
+        """
+        return method_logic_func(self, *args, **kwargs)
+
+    # Set the docstring
+    generated_method.__doc__ = method_docstring
+
+    # Set the name (important for introspection and pdoc)
+    generated_method.__name__ = method_name
+
+    # Crucial for pdoc: Set the __qualname__ to include the class name.
+    # We'll set this *after* we know which class it's being added to.
+    # For now, we'll leave it as just the method_name, and update it later.
+    # Alternatively, you could pass the class name to the factory, but
+    # setting it during assignment is often cleaner.
+    generated_method.__qualname__ = method_name # Will be updated later
+
+    return generated_method
+
+# --- Dynamic Method Assignment ---
+
+# Define specifications for the methods we want to add
+method_specs = [
+    {
+        "name": "process_csv",
+        "doc": "Processes data from a CSV file source.\n\nReturns: bool: True if processing was successful.",
+        "logic": lambda self: f"Processing CSV from {self.data_source}..."
+    },
+    {
+        "name": "process_json",
+        "doc": "Processes data from a JSON API source.\n\nArgs:\n    api_key (str): The API key for authentication.\n\nReturns: dict: The parsed JSON data.",
+        "logic": lambda self, api_key: {"status": "processed", "source": self.data_source, "key_used": api_key}
+    },
+    {
+        "name": "log_activity",
+        "doc": "Logs a specific activity.\n\nArgs:\n    activity (str): The activity to log.\n\nReturns: None",
+        "logic": lambda self, activity: print(f"[{self.data_source}] Logging activity: {activity}")
+    }
+]
+
+# Loop through the specs and add methods to MyBaseProcessor
+for spec in method_specs:
+    method_name = spec["name"]
+    method_doc = spec["doc"]
+    method_logic = spec["logic"]
+
+    # Create the method using the factory
+    dynamic_method = method_factory(method_name, method_doc, method_logic)
+
+    # --- THIS IS THE CRUCIAL STEP FOR ASSIGNING TO THE CLASS ---
+    # Assign the generated method to the class as an attribute.
+    setattr(MyBaseProcessor, method_name, dynamic_method)
+
+    # Update the __qualname__ to reflect its new home (the class)
+    # This is vital for pdoc to show it as MyBaseProcessor.method_name
+    dynamic_method.__qualname__ = f"MyBaseProcessor.{method_name}"

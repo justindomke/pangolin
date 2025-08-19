@@ -1,4 +1,4 @@
-from pangolin.interface.vmap import vmap_subgraph, AbstractOp
+from pangolin.interface.vmapping import vmap_subgraph, AbstractOp
 from pangolin import ir
 from pangolin.ir import RV, Constant
 from pangolin.interface import OperatorRV, makerv
@@ -191,4 +191,3 @@ def test_int_subclass2():
 #         z[i] = LoopVar()
 #         with myloop_j as j:
 #             z[i][j] = x[i]+x[j]
-

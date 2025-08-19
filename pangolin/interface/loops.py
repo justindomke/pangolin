@@ -5,7 +5,7 @@ from pangolin.ir import RV, Op, VMap, Constant, Index
 from typing import Sequence, List, Self
 from pangolin import util
 from pangolin.interface import makerv, rv_factories, rv_factory, makerv_funs, OperatorRV
-from pangolin.interface.vmap import AbstractOp
+from pangolin.interface.vmapping import AbstractOp
 import numpy as np
 from pangolin.interface.index import index_funs, standard_index_fun, eliminate_ellipses, pad_with_slices
 from pangolin.interface import index

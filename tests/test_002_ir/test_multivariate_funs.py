@@ -1,4 +1,4 @@
-from pangolin.ir.multivariate_funs import *
+from pangolin.ir import *
 
 # MatMul
 # Inv

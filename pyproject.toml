@@ -9,6 +9,7 @@ dependencies = [
     "scipy",
     "numpyro",
     "funsor>=0.4.5",
+    "makefun>=1.16.0",
 ]
 
 [build-system]
@@ -17,6 +18,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "black>=25.1.0",
     "pytest>=8.4.1",
 ]
 

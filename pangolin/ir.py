@@ -17,10 +17,9 @@ Types of `Op`s
 | Indexing | `Index` `SimpleIndex` |
 """
 
-
 from abc import ABC, abstractmethod
 
-from typing import Type, Sequence, Self
+from typing import Type, Sequence, Self, Literal
 from collections.abc import Callable
 from pangolin import util, dag
 import numpy as np
@@ -32,7 +31,7 @@ _Shape = tuple[int, ...]
 ################################################################################
 
 
-class Op:
+class Op(ABC):
     """
     Abstract base class for operators. An `Op` represents a deterministic function or conditional
     distribution.
@@ -65,6 +64,7 @@ class Op:
         "True for conditional distributions, False for deterministic functions"
         self._frozen = True  # freeze after init
 
+    @abstractmethod
     def get_shape(self, *parents_shapes: _Shape) -> _Shape:
         """
         Given the shapes of parents, return the shape of the output of this `Op`. Subclasses
@@ -76,11 +76,11 @@ class Op:
         verifies that the correct number of parents are provided and the shapes of the parents
         are coherent with each other.
         """
-        return self._get_shape(*parents_shapes)
-
-    @abstractmethod
-    def _get_shape(self, *parents_shapes: _Shape) -> _Shape:
+        # return self._get_shape(*parents_shapes)
         pass
+
+    # def _get_shape(self, *parents_shapes: _Shape) -> _Shape:
+    #    pass
 
     def __eq__(self, other):
         "Returns true if `self` and `other` have the same type. If subtypes have more structure, should override."
@@ -136,10 +136,12 @@ class Constant(Op):
         self.value.flags.writeable = False  # make value immutable
         super().__init__(random=False)
 
-    def _get_shape(self, *parents_shapes):
+    def get_shape(self, *parents_shapes):
         """"""
         if len(parents_shapes) != 0:
-            raise ValueError(f"Constant got {len(parents_shapes)} arguments but expected 0.")
+            raise ValueError(
+                f"Constant got {len(parents_shapes)} arguments but expected 0."
+            )
         return self.value.shape
 
     def __eq__(self, other):
@@ -149,7 +151,9 @@ class Constant(Op):
                 and np.all(self.value == other.value)
                 and self.value.dtype == other.value.dtype
             ):
-                assert hash(self) == hash(other), "hashes don't match for equal Constant"
+                assert hash(self) == hash(
+                    other
+                ), "hashes don't match for equal Constant"
                 return True
         return False
 
@@ -177,7 +181,11 @@ class Constant(Op):
         # assure regular old numpy in case jax being used
         numpy_value = np.array(self.value)
         with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
-            return np.array2string(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
+            return (
+                np.array2string(numpy_value, precision=3)
+                .replace("\n", "")
+                .replace("  ", " ")
+            )
 
 
 ################################################################################
@@ -195,12 +203,17 @@ class ScalarOp(Op):
         self._num_parents = num_parents
         super().__init__(random=random)
 
-    def _get_shape(self, *parents_shapes):
+    def get_shape(self, *parents_shapes):
         if len(parents_shapes) != self._num_parents:
-            raise TypeError(f"{self.name} op got {len(parents_shapes)} parent(s) but expected" f" {self._num_parents}.")
+            raise TypeError(
+                f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
+                f" {self._num_parents}."
+            )
         for shape in parents_shapes:
             if shape != ():
-                raise TypeError(f"{self.name} op got parent shapes {parents_shapes} not all scalar.")
+                raise TypeError(
+                    f"{self.name} op got parent shapes {parents_shapes} not all scalar."
+                )
         return ()
 
     # TODO: delete?
@@ -227,9 +240,17 @@ def _generate_expected_parents(num_parents: int) -> dict[str, str]:
 
 
 class OpInfo:
-    def __init__(self, name, random, expected_parents: int | dict[str, str], wikipedia=None):
+    def __init__(
+        self,
+        name,
+        random,
+        expected_parents: int | dict[str, str],
+        wikipedia=None,
+        notes=[],
+    ):
         self.name = name
         self.random = random
+        self.notes = notes
 
         if isinstance(expected_parents, int):
             self.expected_parents = _generate_expected_parents(expected_parents)
@@ -238,95 +259,13 @@ class OpInfo:
 
         if random:
             if wikipedia:
-                self.wikipedia = f"https://en.wikipedia.org/wiki/{wikipedia}_distribution"
+                self.wikipedia = (
+                    f"https://en.wikipedia.org/wiki/{wikipedia}_distribution"
+                )
             else:
                 self.wikipedia = f"https://en.wikipedia.org/wiki/{name}_distribution"
         else:
             self.wikipedia = None
-
-
-_op_infos = [
-    {"name": "Normal", "random": True, "expected_parents": {"mu": "location / mean", "sigma": "scale / standard deviation"},},
-    {
-        "name": "NormalPrec",
-        "random": True,
-        "expected_parents": {"mu": "location / mean", "tau": "precision / inverse variance"},
-        "wikipedia": "Normal",
-    },
-    {
-        "name": "LogNormal",
-        "random": True,
-        "expected_parents": {"mu": "logarithm of location", "sigma": "logarithm of scale (not sigma squared!)"},
-        "wikipedia": "Log-normal",
-    },
-    {"name": "Bernoulli", "random": True, "expected_parents": {"theta": "probability (between 0 and 1)"},},
-    {
-        "name": "BernoulliLogit",
-        "random": True,
-        "expected_parents": {"theta": "probability (unbounded)"},
-        "wikipedia": "Bernoulli",
-    },
-    {
-        "name": "Binomial",
-        "random": True,
-        "expected_parents": {"N": "number of trials", "theta": "probability of success for each trial"},
-    },
-    {"name": "Cauchy", "random": True, "expected_parents": {"mu": "location", "sigma": "scale"},},
-    {
-        "name": "Uniform",
-        "random": True,
-        "expected_parents": {"alpha": "lower bound", "beta": "upper bound"},
-        "wikipedia": "Continuous_uniform",
-    },
-    {"name": "Beta", "random": True, "expected_parents": {"alpha": "shape", "beta": "shape"},},
-    {"name": "Exponential", "random": True, "expected_parents": {"beta": "rate / inverse scale"},},
-    {"name": "Gamma", "random": True, "expected_parents": {"alpha": "shape", "beta": "inverse scale"},},
-    {"name": "Poisson", "random": True, "expected_parents": {"lambda": "lambda"}},
-    {
-        "name": "BetaBinomial",
-        "random": True,
-        "expected_parents": {"N": "as in binomial dist", "alpha": "as in beta dist", "beta": "as in beta dist"},
-        "wikipedia": "Beta-binomial",
-    },
-    {
-        "name": "StudentT",
-        "random": True,
-        "expected_parents": {"nu": "degress of freedom", "mu": "location (often 0)", "sigma": "scale (often 1)"},
-        "wikipedia": "Student's_t",
-    },
-]
-
-for fun_name in [
-    "Add",
-    "Sub",
-    "Mul",
-    "Div",
-    "Pow",
-]:
-    _op_infos.append({"name": fun_name, "random": False, "expected_parents": 2})
-
-for fun_name in [
-    "Abs",
-    "Arccos",
-    "Arccosh",
-    "Arcsin",
-    "Arcsinh",
-    "Arctan",
-    "Arctanh",
-    "Cos",
-    "Cosh",
-    "Exp",
-    "InvLogit",
-    "Log",
-    "Loggamma",
-    "Logit",
-    "Sin",
-    "Sinh",
-    "Step",
-    "Tan",
-    "Tanh",
-]:
-    _op_infos.append({"name": fun_name, "random": False, "expected_parents": 1})
 
 
 def _get_scalar_op_docstring(op_info):
@@ -342,16 +281,23 @@ def _get_scalar_op_docstring(op_info):
         s += f"* **{parent_name}**: {parent_description}"
         s += "\n"
 
-    if op_info.wikipedia:
+    if op_info.wikipedia or op_info.notes:
         s += "\nNotes\n---\n"
+        if op_info.notes:
+            for note in op_info.notes:
+                s += note + "\n\n"
         s += f"[wikipedia definition]({op_info.wikipedia})\n"
 
     return s
 
 
-def _scalar_op_factory(op_info):
+def _scalar_op_factory(name, random, expected_parents, **kwargs):
+    op_info = OpInfo(
+        name=name, random=random, expected_parents=expected_parents, **kwargs
+    )
     name = op_info.name
     random = op_info.random
+    notes = op_info.notes
     expected_parents = op_info.expected_parents
     num_parents = len(expected_parents)
 
@@ -365,7 +311,16 @@ def _scalar_op_factory(op_info):
     __doc__ = _get_scalar_op_docstring(op_info)
 
     MyClass = type(
-        name, (ScalarOp,), {"__init__": __init__, "__doc__": __doc__, "_expected_parents": expected_parents, "_random": random}
+        name,
+        (ScalarOp,),
+        {
+            "__init__": __init__,
+            "__doc__": __doc__,
+            "_expected_parents": expected_parents,
+            "_random": random,
+            "_num_parents": num_parents,
+            "_notes": notes,
+        },
     )
 
     # # this also seems to be OK
@@ -378,18 +333,152 @@ def _scalar_op_factory(op_info):
     # MyClass.__name__ = name
     # MyClass.__qualname__ = f"ScalarOp.{name}" # crucial for docs!
     # MyClass.__doc__ = _get_scalar_op_docstring(op_info)
-    
+
     return MyClass
 
 
+Normal = _scalar_op_factory(
+    name="Normal",
+    random=True,
+    expected_parents={
+        "mu": "location / mean",
+        "sigma": "scale / standard deviation",
+    },
+)
+
+NormalPrec = _scalar_op_factory(
+    name="NormalPrec",
+    random=True,
+    expected_parents={
+        "mu": "location / mean",
+        "tau": "precision / inverse variance",
+    },
+    wikipedia="Normal",
+)
+
+LogNormal = _scalar_op_factory(
+    name="LogNormal",
+    random=True,
+    expected_parents={
+        "mu": "logarithm of location",
+        "sigma": "logarithm of scale (not sigma squared!)",
+    },
+    wikipedia="Log-Normal",
+)
+
+Bernoulli = _scalar_op_factory(
+    name="Bernoulli",
+    random=True,
+    expected_parents={"theta": "probability (between 0 and 1)"},
+)
+
+BernoulliLogit = _scalar_op_factory(
+    name="BernoulliLogit",
+    random=True,
+    expected_parents={"theta": "logit of probability (unbounded)"},
+)
+
+Binomial = _scalar_op_factory(
+    name="Binomial",
+    random=True,
+    expected_parents={
+        "N": "number of trials",
+        "theta": "probability of success for each trial",
+    },
+)
+
+Cauchy = _scalar_op_factory(
+    name="Cauchy",
+    random=True,
+    expected_parents={"mu": "location", "sigma": "scale"},
+)
+
+Uniform = _scalar_op_factory(
+    name="Uniform",
+    random=True,
+    expected_parents={"alpha": "lower bound", "beta": "upper bound"},
+    wikipedia="Continuous_uniform",
+)
+
+Beta = _scalar_op_factory(
+    name="Beta",
+    random=True,
+    expected_parents={"alpha": "shape", "beta": "shape"},
+)
+
+Exponential = _scalar_op_factory(
+    name="Exponential",
+    random=True,
+    expected_parents={"beta": "rate / inverse scale"},
+)
+Gamma = _scalar_op_factory(
+    name="Gamma",
+    random=True,
+    expected_parents={"alpha": "shape", "beta": "rate / inverse scale"},
+    notes=[
+        'This follows [stan](https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution)) in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
+    ],
+)
+
+Poisson = _scalar_op_factory(
+    name="Poisson",
+    random=True,
+    expected_parents={"lambd": "lambda"},
+    # TODO: using lambda causes problems with makefun
+)
 
 
-for op_info in _op_infos:
-    name = op_info["name"]
-    globals()[name] = _scalar_op_factory(OpInfo(**op_info))
+BetaBinomial = _scalar_op_factory(
+    name="BetaBinomial",
+    random=True,
+    expected_parents={
+        "N": "as in binomial dist",
+        "alpha": "as in beta dist",
+        "beta": "as in beta dist",
+    },
+    wikipedia="Beta-binomial",
+    notes=[
+        "This follows the (N,alpha,beta) convention of [stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html) (and Wikipedia). Some other systems (e.g. [numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial)) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
+    ],
+)
 
-# Need to repeat the name for pylance
-Normal = _scalar_op_factory(OpInfo(**_op_infos[0]))
+StudentT = _scalar_op_factory(
+    name="StudentT",
+    random=True,
+    expected_parents={
+        "nu": "degress of freedom",
+        "mu": "location (often 0)",
+        "sigma": "scale (often 1)",
+    },
+    wikipedia="Student's_t",
+)
+
+Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)
+Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)
+Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)
+Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)
+Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)
+
+
+Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)
+Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)
+Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)
+Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)
+Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)
+Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)
+Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)
+Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)
+Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)
+Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)
+InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)
+Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)
+Loggamma = _scalar_op_factory(name="Loggamma", random=False, expected_parents=1)
+Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
+Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)
+Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)
+Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)
+Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)
+Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)
 
 ################################################################################
 # Multivariate dists
@@ -405,14 +494,16 @@ class VecMatOp(Op):
     def __init__(self):
         super().__init__(random=True)
 
-    def _get_shape(self, vec_shape, mat_shape):
+    def get_shape(self, vec_shape, mat_shape):
         if len(vec_shape) != 1:
             raise ValueError("first parameter must be a vector.")
         if len(mat_shape) != 2:
             raise ValueError("second parameter must be a matrix.")
         N = vec_shape[0]
         if mat_shape != (N, N):
-            raise ValueError("second parameter must be matrix with size matching first parameter")
+            raise ValueError(
+                "second parameter must be matrix with size matching first parameter"
+            )
         return (N,)
 
 
@@ -439,11 +530,14 @@ class Categorical(Op):
         """
         super().__init__(random=True)
 
-    def _get_shape(self, weights_shape):
+    def get_shape(self, weights_shape):
         """"""
         assert isinstance(weights_shape, tuple)
         if len(weights_shape) != 1:
-            raise ValueError(f"Categorical op got input with {len(weights_shape)} dims but " f"expected 1.")
+            raise ValueError(
+                f"Categorical op got input with {len(weights_shape)} dims but "
+                f"expected 1."
+            )
         return ()
 
 
@@ -460,7 +554,7 @@ class Multinomial(Op):
         """
         super().__init__(random=True)
 
-    def _get_shape(self, n_shape, p_shape):
+    def get_shape(self, n_shape, p_shape):
         if n_shape != ():
             raise ValueError("First input to Multinomial op must be scalar")
         if len(p_shape) != 1:
@@ -477,7 +571,7 @@ class Dirichlet(Op):
         """
         super().__init__(random=True)
 
-    def _get_shape(self, concentration_shape):
+    def get_shape(self, concentration_shape):
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
         return concentration_shape
@@ -497,7 +591,7 @@ class MatMul(Op):
     def __init__(self):
         super().__init__(random=False)
 
-    def _get_shape(self, a_shape, b_shape):
+    def get_shape(self, a_shape, b_shape):
         # could someday generalize to handle more dimensions
         assert len(a_shape) >= 1, "args to @ must have at least 1 dim"
         assert len(b_shape) >= 1, "args to @ must have at least 1 dim"
@@ -542,7 +636,7 @@ class Inv(Op):
     def __init__(self):
         super().__init__(random=False)
 
-    def _get_shape(self, *parents):
+    def get_shape(self, *parents):
         assert len(parents) == 1
         p_shape = parents[0]
         assert len(p_shape) == 2, "inverse only applies to 2d arrays"
@@ -550,9 +644,9 @@ class Inv(Op):
         return p_shape
 
 
-################################################################################
-# Multivariate funs
-################################################################################
+# ################################################################################
+# # Multivariate funs
+# ################################################################################
 
 
 class Softmax(Op):
@@ -563,7 +657,7 @@ class Softmax(Op):
     def __init__(self):
         super().__init__(random=False)
 
-    def _get_shape(self, *parents):
+    def get_shape(self, *parents):
         assert len(parents) == 1
         p_shape = parents[0]
         assert len(p_shape) == 1, "input to softmax would be 1d"
@@ -588,7 +682,7 @@ class Sum(Op):
         self.axis = axis
         super().__init__(random=False)
 
-    def _get_shape(self, x_shape):
+    def get_shape(self, x_shape):
         if self.axis is None:
             return ()
         else:
@@ -645,7 +739,12 @@ class VMap(Op):
 
     # tuple[int | None, ...] means a tuple of int or None of any length
     # list[int | None] means a list of any length (... not appropriate)
-    def __init__(self, base_op: Op, in_axes: tuple[int | None, ...] | list[int | None], axis_size: int | None = None):
+    def __init__(
+        self,
+        base_op: Op,
+        in_axes: tuple[int | None, ...] | list[int | None],
+        axis_size: int | None = None,
+    ):
         """
         Create a `VMap` Op. All arguments here are heavily inspired by [`jax.lax.vmap`](
         https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) although note that
@@ -667,7 +766,9 @@ class VMap(Op):
             in_axes = tuple(in_axes)
         assert isinstance(in_axes, tuple), "in_axes must be tuple"
         if axis_size is None:
-            assert any(axis is not None for axis in in_axes), "if axis_size=None, at least one axis must be mapped"
+            assert any(
+                axis is not None for axis in in_axes
+            ), "if axis_size=None, at least one axis must be mapped"
         else:
             if not isinstance(axis_size, (int, np.integer)):
                 raise Exception(f"axis_size must be None or int was {type(axis_size)}")
@@ -677,8 +778,10 @@ class VMap(Op):
         self.axis_size = axis_size
         super().__init__(random=base_op.random)
 
-    def _get_shape(self, *parents_shapes):
-        remaining_shapes, axis_size = get_sliced_shapes(parents_shapes, self.in_axes, self.axis_size)
+    def get_shape(self, *parents_shapes):
+        remaining_shapes, axis_size = get_sliced_shapes(
+            parents_shapes, self.in_axes, self.axis_size
+        )
         dummy_shape = self.base_op.get_shape(*remaining_shapes)
         return (axis_size,) + dummy_shape
 
@@ -710,7 +813,11 @@ class VMap(Op):
 
     def __eq__(self, other):
         if isinstance(other, VMap):
-            return self.base_op == other.base_op and self.in_axes == other.in_axes and self.axis_size == other.axis_size
+            return (
+                self.base_op == other.base_op
+                and self.in_axes == other.in_axes
+                and self.axis_size == other.axis_size
+            )
         return False
 
     def __hash__(self):
@@ -730,7 +837,10 @@ class Composite(Op):
     """
 
     def __init__(
-        self, num_inputs: int, ops: tuple[Op, ...] | list[Op], par_nums: tuple[tuple[int, ...], ...] | list[list[int]],
+        self,
+        num_inputs: int,
+        ops: tuple[Op, ...] | list[Op],
+        par_nums: tuple[tuple[int, ...], ...] | list[list[int]],
     ):
         assert isinstance(num_inputs, int)
         assert all(isinstance(d, Op) for d in ops)
@@ -738,14 +848,16 @@ class Composite(Op):
             assert all(isinstance(i, int) for i in my_par_nums)
         for d in ops[:-1]:
             if d.random:
-                raise ValueError(f"all but last op for Composite must be non-random (got {d})")
+                raise ValueError(
+                    f"all but last op for Composite must be non-random (got {d})"
+                )
         self.num_inputs = num_inputs
         self.ops = tuple(ops)
         # self.par_nums = tuple(par_nums)
         self.par_nums = tuple(tuple(pp) for pp in par_nums)
         super().__init__(random=ops[-1].random)
 
-    def _get_shape(self, *parents_shapes):
+    def get_shape(self, *parents_shapes):
         all_shapes = list(parents_shapes)
         for my_op, my_par_nums in zip(self.ops, self.par_nums):
             my_parents_shapes = [all_shapes[i] for i in my_par_nums]
@@ -767,7 +879,11 @@ class Composite(Op):
 
     def __eq__(self, other):
         if isinstance(other, Composite):
-            return self.num_inputs == other.num_inputs and self.ops == other.ops and self.par_nums == other.par_nums
+            return (
+                self.num_inputs == other.num_inputs
+                and self.ops == other.ops
+                and self.par_nums == other.par_nums
+            )
         return False
 
     def __hash__(self):
@@ -811,7 +927,7 @@ class Autoregressive(Op):
         self.where_self = where_self
         super().__init__(random=base_op.random)
 
-    def _get_shape(self, start_shape, *other_shapes):
+    def get_shape(self, start_shape, *other_shapes):
         # const_shapes = other_shapes[: self.num_constants]
         # other_shapes = other_shapes[self.num_constants :]
 
@@ -835,7 +951,11 @@ class Autoregressive(Op):
         # insert self
         # if n == self.where_self:
         #    base_input_shapes.append(start_shape)
-        base_input_shapes = base_input_shapes[: self.where_self] + [start_shape] + base_input_shapes[self.where_self :]
+        base_input_shapes = (
+            base_input_shapes[: self.where_self]
+            + [start_shape]
+            + base_input_shapes[self.where_self :]
+        )
 
         # for s in other_shapes:
         #    assert s[0] == my_length
@@ -956,8 +1076,10 @@ shorthand for `x[[3,3,3],[0,1,2]]`. We might change this at some point if there 
 currently, JAGS is the only backend that can actually do inference in these settings.
 """
 
+
 def _slice_length(size, slice):
     return len(np.ones(size)[slice])
+
 
 class Index(Op):
     """
@@ -996,20 +1118,20 @@ class Index(Op):
         if num_advanced <= 1:
             return False
         first_advanced = self.slices.index(None)
-        slice_probe = self.slices[first_advanced: first_advanced + num_advanced]
+        slice_probe = self.slices[first_advanced : first_advanced + num_advanced]
         if all(s is None for s in slice_probe):
             return False  # in place
         else:
             return True
 
-    def _get_shape(self, var_shape, *indices_shapes):
+    def get_shape(self, var_shape, *indices_shapes):
         if len(self.slices) != len(var_shape):
             raise Exception("number of slots doesn't match number of dims of var")
 
         for idx_shape1 in indices_shapes:
             for idx_shape2 in indices_shapes:
                 assert (
-                        idx_shape1 == idx_shape2
+                    idx_shape1 == idx_shape2
                 ), "all indices must have same shape (no broadcasting yet)"
 
         output_shape = ()
@@ -1030,34 +1152,38 @@ class Index(Op):
     def __repr__(self):
         return "Index(slices=" + repr(self.slices) + ")"
 
-    def __str__(self):
-        def slice_str(s):
-            match s:
-                case None:
-                    return "∅"
-                case slice(start=None, stop=None, step=None):
-                    return ":"
-                case slice(start=a, stop=b, step=c):
-                    if a is None:
-                        a = ""
-                    if b is None:
-                        b = ""
-                    if c is None:
-                        c = ""
-                    return f"{a}:{b}:{c}"
-                case _:
-                    raise Exception("not a slice")
 
-        new_slices = tuple(slice_str(s) for s in self.slices)
-        return "index" + util.comma_separated(new_slices)
+def __str__(self):
+    def slice_str(s):
+        match s:
+            case None:
+                return "∅"
+            case slice(start=None, stop=None, step=None):
+                return ":"
+            case slice(start=a, stop=b, step=c):
+                if a is None:
+                    a = ""
+                if b is None:
+                    b = ""
+                if c is None:
+                    c = ""
+                return f"{a}:{b}:{c}"
+            case _:
+                raise Exception("not a slice")
 
-    def __eq__(self, other):
-        if isinstance(other, Index):
-            return self.slices == other.slices
-        return False
+    new_slices = tuple(slice_str(s) for s in self.slices)
+    return "index" + util.comma_separated(new_slices)
 
-    def __hash__(self):
-        return hash(str(self.slices))
+
+def __eq__(self, other):
+    if isinstance(other, Index):
+        return self.slices == other.slices
+    return False
+
+
+def __hash__(self):
+    return hash(str(self.slices))
+
 
 ################################################################################
 # Simple Indexing
@@ -1155,16 +1281,18 @@ class SimpleIndex(Op):
         """
         super().__init__(random=False)
 
-    def _get_shape(self, *shapes):
+    def get_shape(self, *shapes):
         var_shape, *indices_shapes = shapes
 
         num_indexed = len(indices_shapes)
         num_dims = len(var_shape)
         if num_indexed != num_dims:
-            raise ValueError(f"Indexed RV with {num_dims} dims with {num_indexed} indices.")
+            raise ValueError(
+                f"Indexed RV with {num_dims} dims with {num_indexed} indices."
+            )
 
-        #num_non_scalar = len([idx_shape for idx_shape in indices_shapes if idx_shape is not ()])
-        #if num_non_scalar > 1:
+        # num_non_scalar = len([idx_shape for idx_shape in indices_shapes if idx_shape is not ()])
+        # if num_non_scalar > 1:
         #    raise ValueError(f"Only one RV index can be non-scalar, got {num_non_scalar}")
 
         output_shape = ()
@@ -1172,7 +1300,6 @@ class SimpleIndex(Op):
             output_shape += i
 
         return output_shape
-
 
 
 # function to do full orthogonal indexing on regular numpy arrays (for testing)
@@ -1211,20 +1338,54 @@ def index_orthogonal(array, *index_arrays):
 
     return array[*result_arrays]
 
+
 ################################################################################
 # RVs
 ################################################################################
 
-class RV(dag.Node):    
+
+class RV(dag.Node):
     """
-    A RV is essentially just a tuple of an Op and a set of parent RVs.
+    A RV is essentially just an Op and a a tuple of parent RVs.
+
+    Examples
+    --------
+    >>> constant_op = Constant(3)
+    >>> x = RV(constant_op)
+    >>> x
+    RV(Constant(3))
+    >>> x.op
+    Constant(3)
+    >>> x.parents
+    ()
+    >>> y = RV(constant_op)
+    >>> y
+    RV(Constant(3))
+    >>> x == y
+    True
+    >>> normal_op = Normal()
+    >>> z = RV(normal_op, x, y)
+    >>> z
+    RV(Normal(), RV(Constant(3)), RV(Constant(3)))
+    >>> z.parents[0] == x
+    True
+    >>> z.parents[1] == y
+    True
     """
+
     _frozen = False
-    _n = 1 # convenient to store order all RVs were created
+    _n = 1  # convenient to store order all RVs were created
 
     def __init__(self, op: Op, *parents: Self):
         """
         Initialize an RV with Op `op` and parents `*parents`.
+
+        Parameters
+        ----------
+        op: Op
+            The Op defining the RV
+        *parents: RV
+            The parents of the RV
         """
 
         parents_shapes = tuple(p.shape for p in parents)
@@ -1255,18 +1416,18 @@ class RV(dag.Node):
 
     def __repr__(self) -> str:
         ret = "RV(" + repr(self.op)
-        #if self.parents:
+        # if self.parents:
         #    ret += ", parents=[" + util.comma_separated(self.parents, repr, False) + "]"
         if self.parents:
             for p in self.parents:
-                ret += ', ' + repr(p)
+                ret += ", " + repr(p)
         ret += ")"
         return ret
 
     def __str__(self) -> str:
         ret = str(self.op)
         if self.parents:
-           ret += util.comma_separated(self.parents, fun=str, parens=True, spaces=True)
+            ret += util.comma_separated(self.parents, fun=str, parens=True, spaces=True)
         return ret
 
     def __setattr__(self, key, value):
@@ -1278,4 +1439,126 @@ class RV(dag.Node):
         else:
             self.__dict__[key] = value
 
-    __all__ = ['op','shape','parents']
+    # def __eq__(self, other):
+
+    # def __hash__(self):
+    #     if self.op.random:
+    #         return object.__hash__(self)
+    #     else:
+    #         return hash((self.op, self.parents))
+
+
+################################################################################
+# equality
+################################################################################
+
+from functools import lru_cache
+
+
+@lru_cache(maxsize=None)
+def equal(A: RV, B: RV) -> bool:
+    """
+    Are `self` and `other` *distributionally* equal? That is, are they guaranteed to always have the same value. This is defined by the following rules:
+
+    1. If `self.op` is random, then `self` is is equal to `other` if and only if they refer to the same object in memory.
+    2. If `self.op` is non-random, then `self` is equal to `other` if and only if they have the same `op` and the same parents (defined recursively using this function).
+
+    Note that this function is implemented using caching. This doesn't change the results since `RV`s and `Op`s are immutable.
+
+    Parameters
+    ----------
+    self: RV
+    other: RV
+
+    Examples
+    --------
+    >>> Constant(0.5) == Constant(0.7)
+    False
+    >>> Constant(0.5) == Constant(0.5)
+    True
+    >>> a = RV(Constant(0.5))
+    >>> b = RV(Constant(0.5))
+    >>> a is b # different objects
+    False
+    >>> equal(a, b) # non random op, all (nonexistent) parents equal
+    True
+
+    >>> c = RV(Bernoulli(), a)
+    >>> d = RV(Bernoulli(), a)
+    >>> c is d # different objects
+    False
+    >>> equal(c, d) # random op, but different objects
+    False
+
+    >>> equal(RV(Normal(), a, b), RV(Normal(), a, b))
+    False
+    >>> equal(RV(Normal(), c, d), RV(Normal(), c, d))
+    False
+    >>> equal(RV(Add(), a, b), RV(Add(), a, b))
+    True
+    >>> equal(RV(Add(), c, d), RV(Add(), c, d))
+    True
+    """
+    if A.op.random:
+        return A is B
+    else:
+        return (
+            A.op == B.op
+            and len(A.parents) == len(B.parents)
+            and all(equal(a, b) for a, b in zip(A.parents, B.parents))
+        )
+
+
+################################################################################
+# printing
+################################################################################
+
+
+def print_upstream(*vars):
+    import jax.tree_util
+
+    vars = jax.tree_util.tree_leaves(vars)
+    nodes = dag.upstream_nodes(vars)
+
+    if vars == []:
+        print("[empty vars, nothing to print]")
+        return
+
+    # get maximum # parents
+    max_pars = 0
+    max_shape = 5
+    for node in nodes:
+        max_pars = max(max_pars, len(node.parents))
+        max_shape = max(max_shape, len(str(node.shape)))
+
+    if len(nodes) > 1:
+        digits = 1 + int(np.log10(len(nodes) - 1))
+        par_str_len = (digits + 1) * max_pars - 1
+    else:
+        par_str_len = 0
+
+    id = 0
+    node_to_id = {}  # type: ignore
+    print(f"shape{' ' * (max_shape - 5)} | statement")
+    print(f"{'-' * max_shape} | ---------")
+    for node in nodes:
+        assert isinstance(node, RV)
+
+        par_ids = [node_to_id[p] for p in node.parents]
+
+        par_id_str = util.comma_separated(par_ids, util.num2str, False)
+        # par_id_str = par_id_str + " " * (par_str_len - len(par_id_str))
+
+        shape_str = str(node.shape)
+        shape_str += " " * (max_shape - len(shape_str))
+
+        op = "~" if node.op.random else "="
+
+        line = f"{shape_str} | {util.num2str(id)} {op} {str(node.op)}"
+        if node.parents:
+            line += "(" + par_id_str + ")"
+
+        print(line)
+
+        node_to_id[node] = id
+        id += 1

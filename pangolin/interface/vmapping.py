@@ -19,10 +19,12 @@ from numpy.typing import ArrayLike
 
 FlatCallable = Callable[..., list[RV]]
 
+
 def check_tree_consistency(*args):
     trees = [jax.tree_util.tree_structure(args, is_leaf=util.is_leaf_with_none)]
     for t in trees:
         assert t == trees[0]
+
 
 def get_flat_vmap_args_and_axes(in_axes, args):
     from pangolin.interface.base import rv_factory
@@ -46,11 +48,14 @@ def get_flat_vmap_args_and_axes(in_axes, args):
     )
     check_tree_consistency(args, dummy_args, new_in_axes)
 
-    flat_args, args_treedef = jax.tree_util.tree_flatten(args, is_leaf=util.is_leaf_with_none)
+    flat_args, args_treedef = jax.tree_util.tree_flatten(
+        args, is_leaf=util.is_leaf_with_none
+    )
     flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
         new_in_axes, is_leaf=util.is_leaf_with_none
     )
     return dummy_args, new_in_axes, flat_args, flat_in_axes
+
 
 @api
 def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None = None):
@@ -79,7 +84,7 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
         batched/vectorized version of `f`
     """
 
-    if isinstance(in_axes,Sequence):
+    if isinstance(in_axes, Sequence):
         in_axes = tuple(in_axes)
 
     def call(*args):
@@ -117,12 +122,13 @@ def vmap(f: Callable, in_axes: int | None | Sequence = 0, axis_size: int | None 
         # assert tree1 == tree2
         # assert tree1 == tree3
 
-        dummy_args, new_in_axes, flat_args, flat_in_axes = get_flat_vmap_args_and_axes(in_axes,
-                                                                                       args)
+        dummy_args, new_in_axes, flat_args, flat_in_axes = get_flat_vmap_args_and_axes(
+            in_axes, args
+        )
 
-        #flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
+        # flat_in_axes, axes_treedef = jax.tree_util.tree_flatten(
         #    new_in_axes, is_leaf=util.is_leaf_with_none
-        #)
+        # )
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
             f, *dummy_args, is_leaf=util.is_leaf_with_none
         )
@@ -182,6 +188,7 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
 
     # all generated nodes must have higher n
     n_before_call = OperatorRV.n
+
     def is_abstract(rv):
         return rv.n >= n_before_call
 
@@ -195,13 +202,15 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
         if a in args:
             raise ValueError("fun passed to generated_nodes cannot returned inputs.")
         if not isinstance(a, RV):
-            raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
+            raise ValueError(
+                f"fun passed to generated_nodes returned non-RV output (got {type(a)}"
+            )
 
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, block_condition=lambda var: not is_abstract(var)
     )
 
-    all_abstract_vars = sorted(all_abstract_vars, key=lambda node:node.n)
+    all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node.n)
 
     # convert abstract nodes to concrete
     abstract_to_concrete = {}
@@ -218,7 +227,10 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
         abstract_to_concrete[abstract_var] = concrete_var
 
     all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in args]
-    out = [abstract_to_concrete[v] if v in abstract_to_concrete else v for v in abstract_out]
+    out = [
+        abstract_to_concrete[v] if v in abstract_to_concrete else v
+        for v in abstract_out
+    ]
 
     return all_vars, out
 
@@ -265,7 +277,9 @@ def generated_nodes_old(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV
         if a in args:
             raise ValueError("fun passed to generated_nodes cannot returned inputs.")
         if not isinstance(a, RV):
-            raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
+            raise ValueError(
+                f"fun passed to generated_nodes returned non-RV output (got {type(a)}"
+            )
         if not isinstance(a, TracerRV):
             raise ValueError(
                 f"fun passed to generated_nodes returned non-TracedRV type (got"
@@ -292,7 +306,10 @@ def generated_nodes_old(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV
         abstract_to_concrete[abstract_var] = concrete_var
 
     all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in args]
-    out = [abstract_to_concrete[v] if v in abstract_to_concrete else v for v in abstract_out]
+    out = [
+        abstract_to_concrete[v] if v in abstract_to_concrete else v
+        for v in abstract_out
+    ]
 
     return all_vars, out
 
@@ -359,7 +376,9 @@ def vmap_dummy_args(in_axes: Sequence[int | None], axis_size: int | None, *args:
     return tuple(dummy_args), axis_size
 
 
-def vmap_subgraph(roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_outputs):
+def vmap_subgraph(
+    roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_outputs
+):
     """
     Parameters
     ----------
@@ -397,7 +416,11 @@ def vmap_subgraph(roots, dummy_roots, roots_axes, axis_size, dummy_nodes, dummy_
         my_in_axes = [dummy_mapped_axis[p] for p in dummy_parents]
 
         no_mapped_axes = all(axis is None for axis in my_in_axes)
-        if no_mapped_axes and not dummy_node.op.random and dummy_node not in dummy_outputs:
+        if (
+            no_mapped_axes
+            and not dummy_node.op.random
+            and dummy_node not in dummy_outputs
+        ):
             new_op = dummy_node.op
             new_axis = None
         else:
@@ -423,7 +446,9 @@ def vmap_eval(f, in_axes, axis_size, *args):
     dummy_args, axis_size = vmap_dummy_args(in_axes, axis_size, *args)
     dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
 
-    return vmap_subgraph(args, dummy_args, in_axes, axis_size, dummy_nodes, dummy_outputs)
+    return vmap_subgraph(
+        args, dummy_args, in_axes, axis_size, dummy_nodes, dummy_outputs
+    )
 
 
 def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int | None):
@@ -436,7 +461,9 @@ def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int |
         args = list(makerv(a) for a in args)
         dummy_args, my_axis_size = vmap_dummy_args(in_axes, axis_size, *args)
         dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
-        return vmap_subgraph(args, dummy_args, in_axes, my_axis_size, dummy_nodes, dummy_outputs)
+        return vmap_subgraph(
+            args, dummy_args, in_axes, my_axis_size, dummy_nodes, dummy_outputs
+        )
 
     return vec_f
 
@@ -491,7 +518,7 @@ def plate(*args, size: int | None = None, in_axes=0):
 
     # args, in_axes = util.unzip(args_and_in_axes,strict=True)
 
-    #print(f"PLATE CALLED {in_axes=} {args=} {size=}")
+    # print(f"PLATE CALLED {in_axes=} {args=} {size=}")
 
     def get_mapped(fun: Callable):
         # print(f"{fun=}")

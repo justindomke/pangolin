@@ -1,8 +1,9 @@
 from pangolin.ir import Composite
 from pangolin.interface import OperatorRV, makerv
-from .vmap import generated_nodes, AbstractOp
+from .vmapping import generated_nodes, AbstractOp
 from pangolin import util
 import jax.tree_util
+
 
 def make_composite(fun, *input_shapes):
     """
@@ -19,9 +20,9 @@ def make_composite(fun, *input_shapes):
 
     # TODO: take pytree of arguments
     # TODO: don't like passing random=False
-    dummy_args = [OperatorRV(AbstractOp(shape,random=False)) for shape in input_shapes]
+    dummy_args = [OperatorRV(AbstractOp(shape, random=False)) for shape in input_shapes]
 
-    f = lambda *args: [fun(*args)] # vmap_generated_nodes runs on "flat" functions
+    f = lambda *args: [fun(*args)]  # vmap_generated_nodes runs on "flat" functions
     all_vars, [out] = generated_nodes(f, *dummy_args)
     assert isinstance(out, OperatorRV), "output of function must be a single OperatorRV"
 
@@ -54,16 +55,21 @@ def make_composite(fun, *input_shapes):
 
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
+
 def composite_flat(fun):
     from pangolin.interface.base import rv_factory
+
     def myfun(*inputs):
         input_shapes = [x.shape for x in inputs]
-        op, consts = make_composite(fun,*input_shapes)
+        op, consts = make_composite(fun, *input_shapes)
         return rv_factory(op, *consts, *inputs)
+
     return myfun
+
 
 def composite(fun):
     from pangolin.interface.base import rv_factory
+
     def myfun(*inputs):
         # this casts at the SMALLEST level - [0,0,0] becomes three scalars, not a vector
         # can't do more because level of granularity unclear
@@ -75,12 +81,11 @@ def composite(fun):
 
         flat_inputs = flatten_input(*inputs)
 
-        #test_out = new_flat_fun(*flat_inputs)
-        #print(f"{test_out=}")
+        # test_out = new_flat_fun(*flat_inputs)
+        # print(f"{test_out=}")
 
         flat_input_shapes = [x.shape for x in flat_inputs]
         op, consts = make_composite(new_flat_fun, *flat_input_shapes)
         return rv_factory(op, *flat_inputs, *consts)
 
     return myfun
-

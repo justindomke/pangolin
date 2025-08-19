@@ -1,4 +1,4 @@
-from pangolin.ir.multivariate_dists import *
+from pangolin.ir import *
 
 
 def test_equality():
@@ -44,7 +44,7 @@ def test_categorical_shape():
 
 def test_multinomial_shape():
     assert Multinomial().get_shape((), (3,)) == (3,)
-    bad_args = [[()], [(3,)], [(3,),()]]
+    bad_args = [[()], [(3,)], [(3,), ()]]
     for args in bad_args:
         try:
             Multinomial().get_shape(*args)
@@ -55,7 +55,7 @@ def test_multinomial_shape():
 
 def test_dirichlet_shape():
     assert Dirichlet().get_shape((3,)) == (3,)
-    bad_args = [[()], [(3,),(3,)]]
+    bad_args = [[()], [(3,), (3,)]]
     for args in bad_args:
         try:
             Dirichlet().get_shape(*args)

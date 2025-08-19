@@ -1,5 +1,6 @@
 import pytest
-from pangolin.ir.composite import Composite
+from pangolin.ir import Composite
+from pangolin import ir
 
 # from pangolin.ir import *
 from pangolin import ir
@@ -26,9 +27,7 @@ def test_diag_normal():
     #     x3 = x1 * x2
     #     x4 = normal(x0, x3)
     op = Composite(
-        2,
-        (ir.Constant(np.arange(5)), ir.VMap(ir.Mul(), (None, 0)), ir.VMap(ir.Normal(), (0, 0))),
-        ((), (1, 2), (0, 3)),
+        2, (ir.Constant(np.arange(5)), ir.VMap(ir.Mul(), (None, 0)), ir.VMap(ir.Normal(), (0, 0))), ((), (1, 2), (0, 3)),
     )
     assert op.get_shape((5,), ()) == (5,)
     assert op.random
@@ -36,13 +35,14 @@ def test_diag_normal():
 
 def test_multivariate_normal():
     "Multivariate normal with mean zero and cov a*I"
-    scalar_matrix_mul = ir.VMap(ir.VMap(ir.Mul(),(None,0)),(None,0))
+    scalar_matrix_mul = ir.VMap(ir.VMap(ir.Mul(), (None, 0)), (None, 0))
 
-    op = Composite(1,(ir.Constant(np.ones(5)), ir.Constant(np.eye(5)), scalar_matrix_mul,
-                      ir.MultiNormal()),
-                   ((),(),(0,2),(1,3)))
+    op = Composite(
+        1, (ir.Constant(np.ones(5)), ir.Constant(np.eye(5)), scalar_matrix_mul, ir.MultiNormal()), ((), (), (0, 2), (1, 3))
+    )
     assert op.get_shape(()) == (5,)
     assert op.random
+
 
 # def test_composite():
 #     def f(a):

@@ -8,8 +8,11 @@ from pangolin.dag import (
     has_second_path,
     upstream_with_descendent,
 )
-from pangolin import *
+
+# from pangolin import *
 from pangolin.ir import RV, Constant
+from pangolin import ir
+
 
 def same(l1, l2):
     assert {a for a in l1} == {a for a in l2}  # equality of frozen sets
@@ -27,20 +30,21 @@ def test_upstream_empty():
 
 def test_upstream_pair():
     a = RV(Constant(1))
-    b = RV(ir.Exponential(),a)
+    b = RV(ir.Exponential(), a)
     assert upstream_nodes([a]) == [a]
     assert upstream_nodes([b]) == [a, b]
 
+
 def test_upstream_pair2():
     a = RV(Constant(1))
-    b = RV(ir.Exp(),a)
+    b = RV(ir.Exp(), a)
     assert upstream_nodes([a]) == [a]
     assert upstream_nodes([b]) == [a, b]
 
 
 def test_upstream_dupe():
     a = RV(Constant(1))
-    b = RV(ir.Exp(),a)
+    b = RV(ir.Exp(), a)
     assert upstream_nodes([a, b]) == [a, b]
 
 
@@ -75,14 +79,15 @@ def test_upstream_dupe2():
 
 def test_upstream_collider():
     a = RV(Constant(1))
-    b = RV(ir.Exponential(),a)
-    c = RV(ir.Exponential(),a)
-    d = RV(ir.Add(),b, c)
+    b = RV(ir.Exponential(), a)
+    c = RV(ir.Exponential(), a)
+    d = RV(ir.Add(), b, c)
     assert upstream_nodes([d]) == [a, b, c, d]
     assert upstream_nodes([d, b]) == [a, b, c, d]
     assert upstream_nodes([b, d]) == [a, b, c, d]
     assert upstream_nodes([b, d, a]) == [a, b, c, d]
     assert upstream_nodes([b, d, a, d, b, a]) == [a, b, c, d]
+
 
 # Version that tests that tests that equivalent (deterministic) RVs are treated as equal
 # We don't currently use this
@@ -106,28 +111,31 @@ def test_upstream_collider():
 
 def test_upstream_blockers():
     a = RV(Constant(1))
-    b = RV(ir.Exponential(),a)
-    c = RV(ir.Exponential(),b)
-    d = RV(ir.Exponential(),c)
+    b = RV(ir.Exponential(), a)
+    c = RV(ir.Exponential(), b)
+    d = RV(ir.Exponential(), c)
     assert upstream_nodes(d, lambda n: n in [a]) == [b, c, d]
     assert upstream_nodes(d, lambda n: n in [b]) == [c, d]
     assert upstream_nodes(d, lambda n: n in [c]) == [d]
+
+
 #
 #
 def test_collider_blockers2():
     a = RV(Constant(1))
-    b = RV(ir.Exponential(),a)
-    c = RV(ir.Exponential(),a)
+    b = RV(ir.Exponential(), a)
+    c = RV(ir.Exponential(), a)
     d = RV(ir.Add(), b, c)
     assert upstream_nodes(d) == [a, b, c, d]
     assert upstream_nodes(d, lambda n: n in [b]) == [a, c, d]
     assert upstream_nodes(d, lambda n: n in [c]) == [a, b, d]
     assert upstream_nodes(d, lambda n: n in [b, c]) == [d]
 
+
 def test_children1():
     a = RV(Constant(1))
-    b = RV(ir.Exponential(),a)
-    c = RV(ir.Exponential(),a)
+    b = RV(ir.Exponential(), a)
+    c = RV(ir.Exponential(), a)
     d = RV(ir.Add(), b, c)
     children = get_children([d])
     assert set(children[a]) == {b, c}
@@ -135,14 +143,15 @@ def test_children1():
     assert set(children[c]) == {d}
     assert set(children[d]) == set()
 
+
 def test_children2():
     a = RV(Constant(1))
-    b = RV(ir.Exp(),a)
-    c = RV(ir.Exp(),a)
+    b = RV(ir.Exp(), a)
+    c = RV(ir.Exp(), a)
     d = RV(ir.Add(), b, c)
     children = get_children([d])
     assert set(children[a]) == {b, c}
-    #assert set(children[a]) == {b}
+    # assert set(children[a]) == {b}
     assert set(children[b]) == {d}
     assert set(children[c]) == {d}
     assert set(children[d]) == set()

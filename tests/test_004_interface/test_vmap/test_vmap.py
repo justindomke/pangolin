@@ -2,49 +2,51 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.vmap import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
     AbstractOp,
     vmap_eval,
-    vmap
+    vmap,
 )
+from pangolin.interface import vmap
 import numpy as np
 
 
 def test_square():
     def f(x):
-        return x*x
+        return x * x
 
-    x = makerv([1,2,3])
+    x = makerv([1, 2, 3])
     y = vmap(f)(x)
 
-    assert y.op == ir.VMap(ir.Mul(),(0,0),3)
+    assert y.op == ir.VMap(ir.Mul(), (0, 0), 3)
     assert y.parents == (x, x)
 
+
 def test_add_and_square():
-    def f(x,y):
-        z = x+y
-        return z*z
+    def f(x, y):
+        z = x + y
+        return z * z
 
-    x = makerv([1,2,3])
-    y = makerv([4,5,6])
-    u = vmap(f)(x,y)
+    x = makerv([1, 2, 3])
+    y = makerv([4, 5, 6])
+    u = vmap(f)(x, y)
 
-    assert u.op == ir.VMap(ir.Mul(),(0,0),3)
+    assert u.op == ir.VMap(ir.Mul(), (0, 0), 3)
     z = u.parents[0]
-    assert u.parents == (z,z)
-    assert z.op == ir.VMap(ir.Add(),(0,0),3)
-    assert z.parents == (x,y)
+    assert u.parents == (z, z)
+    assert z.op == ir.VMap(ir.Add(), (0, 0), 3)
+    assert z.parents == (x, y)
+
 
 def test_indexing():
     def f(x):
         return x[0] + x[1]
 
-    x = makerv([[1,2],[3,4],[5,6]])
+    x = makerv([[1, 2], [3, 4], [5, 6]])
     z = vmap(f)(x)
-
 
 
 # def test_vmap_partial_mapping():
@@ -57,12 +59,6 @@ def test_indexing():
 #     y = makerv(7)
 #     t = vmap(f,(0,None))(x,y)
 #
-
-
-
-
-
-
 
 
 def test_vmap1():

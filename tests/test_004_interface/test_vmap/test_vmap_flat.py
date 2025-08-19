@@ -2,7 +2,7 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.vmap import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
@@ -167,7 +167,9 @@ def test_1():
 
 
 def test_2():
-    [y] = vmap_flat(lambda loc, scale: [normal(loc, scale)], (0, None), 3)(np.zeros(3), 1)
+    [y] = vmap_flat(lambda loc, scale: [normal(loc, scale)], (0, None), 3)(
+        np.zeros(3), 1
+    )
     assert y.shape == (3,)
 
 

@@ -29,9 +29,11 @@ def api(fun):
     for_api.append(fun.__name__)
     return fun
 
+
 ####################################################################################################
 # The core OperatorRV class. Like an RV except has operator overloading
 ####################################################################################################
+
 
 class OperatorRV(RV):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
@@ -43,7 +45,7 @@ class OperatorRV(RV):
         super().__init__(op, *parents)
 
     def __neg__(self):
-        return mul(self,-1)
+        return mul(self, -1)
 
     def __add__(self, other):
         return add(self, other)
@@ -102,6 +104,7 @@ class OperatorRV(RV):
 # rv_factory
 ####################################################################################################
 
+
 def rv_factory(op, *args) -> OperatorRV:
     """
     Given an op and some args, create an OperatorRV. By default, this just calls `OperatorRV`.
@@ -112,6 +115,7 @@ def rv_factory(op, *args) -> OperatorRV:
 
 
 rv_factories: list[type] = [OperatorRV]
+
 
 class SetRVFactory:
     def __init__(self, rv_factory: type):
@@ -127,6 +131,7 @@ class SetRVFactory:
 ####################################################################################################
 # makerv
 ####################################################################################################
+
 
 def non_operator_rv(x):
     if isinstance(x, RV):
@@ -152,9 +157,11 @@ def makerv(x) -> OperatorRV:
     out = my_makerv(x)
     if not isinstance(out, OperatorRV):
         raise Exception(
-            f"Custom makerv function must return subclass of OperatorRV was " f"{type(out)}"
+            f"Custom makerv function must return subclass of OperatorRV was "
+            f"{type(out)}"
         )
     return out
+
 
 def standard_makerv(x) -> OperatorRV:
     """
@@ -314,7 +321,8 @@ def poisson(rate) -> OperatorRV:
 def student_t(nu, loc, scale) -> OperatorRV:
     """Create a [location-scale student-t](
     https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
-    distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate."""
+    distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate.
+    """
 
     # TODO: make loc and scale optional?
 
@@ -333,7 +341,7 @@ def implicit_vectorized_scalar_fun(fun):
             else:
                 if vec_shape:
                     assert (
-                            p.shape == vec_shape
+                        p.shape == vec_shape
                     ), "can only vectorize scalars + arrays of same shape"
                 else:
                     vec_shape = p.shape
@@ -341,12 +349,14 @@ def implicit_vectorized_scalar_fun(fun):
         if vec_shape is None:
             return fun(*args)
         else:
-            from .vmap import vmap
+            from .vmapping import vmap
+
             vectorized_dims = len(vec_shape)
             my_fun = fun
             for i in range(vectorized_dims):
                 my_fun = vmap(my_fun, in_axes)
             return my_fun(*args)
+
     return new_fun
 
 
@@ -356,6 +366,7 @@ def add(a, b) -> OperatorRV:
     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
     return create_rv(ir.Add(), a, b)
 
+
 @implicit_vectorized_scalar_fun
 @api
 def sub(a, b) -> OperatorRV:
@@ -363,17 +374,20 @@ def sub(a, b) -> OperatorRV:
     b)`."""
     return create_rv(ir.Sub(), a, b)
 
+
 @implicit_vectorized_scalar_fun
 @api
 def mul(a, b) -> OperatorRV:
     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
     return create_rv(ir.Mul(), a, b)
 
+
 @implicit_vectorized_scalar_fun
 @api
 def div(a, b) -> OperatorRV:
     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
     return create_rv(ir.Div(), a, b)
+
 
 @implicit_vectorized_scalar_fun
 @api
@@ -382,11 +396,13 @@ def pow(a, b) -> OperatorRV:
     a,b)`."""
     return create_rv(ir.Pow(), a, b)
 
+
 @implicit_vectorized_scalar_fun
 @api
 def sqrt(x) -> OperatorRV:
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
+
 
 @implicit_vectorized_scalar_fun
 @api
@@ -529,7 +545,8 @@ def multinomial(n, p) -> OperatorRV:
 @api
 def dirichlet(alpha) -> OperatorRV:
     """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
-    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals."""
+    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
+    """
     return create_rv(ir.Dirichlet(), alpha)
 
 

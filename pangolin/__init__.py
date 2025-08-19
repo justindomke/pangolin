@@ -8,20 +8,37 @@ Main interface to pangolin. Broadly speaking, there are the following classes of
 - Program transforms: `vmap`
 """
 
-from pangolin import interface, ir, inference, simple_interface, util
+# from pangolin import interface, ir, inference, simple_interface, util
 
-from pangolin.inference import *
-from pangolin.interface import *
+# from pangolin.inference import *
+# from pangolin.interface import *
 
-#from pangolin.interface import autoregressive, print_upstream
+# # from pangolin.interface import autoregressive, print_upstream
 
-#from pangolin.interface.interface import *
-from pangolin.interface.vmap import vmap
-from pangolin.interface.index import index
-from pangolin.ir import print_upstream
+# # from pangolin.interface.interface import *
+# from pangolin.interface.vmap import vmap
+# from pangolin.interface.index import index
 
+# # from pangolin.ir import print_upstream
+# from . import base_interface
 
-__all__ = []
-__all__ = ['ir','simple_interface','util','interface','inference','base','vmap','index','print_upstream']
-#__all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
-#__all__.sort() # pyright: ignore [reportUnsupportedDunderAll]
+# # import test_imports
+# from . import ir_test
+
+# __all__ = []
+# __all__ = [
+#     "ir",
+#     "base_interface",
+#     "simple_interface",
+#     "util",
+#     "interface",
+#     "inference",
+#     "base",
+#     "vmap",
+#     "index",
+#     "print_upstream",
+#     "ir_test",
+# ]
+# # __all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
+# # __all__.sort() # pyright: ignore [reportUnsupportedDunderAll]
+

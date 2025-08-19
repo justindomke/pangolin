@@ -2,7 +2,7 @@
 Tests to make sure plate is doing the same thing as vmap
 """
 
-from pangolin.interface.vmap import vmap, plate
+from pangolin.interface.vmapping import vmap, plate
 from pangolin import *
 from pangolin.interface import normal, multi_normal
 import numpy as np
