@@ -11,7 +11,7 @@ Types of `Op`s
 | Other scalar functions | `Pow` `Abs` `Exp` `InvLogit` `Log` `Loggamma` `Logit` `Step` |
 | Linear algebra | `MatMul` `Inv` |
 | Other multivariate functions | `Sum` `Softmax` |
-| Scalar distributions | `Normal` `NormalPrec` `LogNormal` `Cauchy` `Bernoulli` `BernoulliLogit` `Beta` `Binomial` `Categorical` `Uniform` `BetaBinomial` `Exponential` `Gamma` `Poisson` `StudentT`|
+| Scalar distributions | `Normal` `NormalPrec` `Lognormal` `Cauchy` `Bernoulli` `BernoulliLogit` `Beta` `Binomial` `Categorical` `Uniform` `BetaBinomial` `Exponential` `Gamma` `Poisson` `StudentT`|
 | Multivariate distributions | `MultiNormal` `Multinomial` `Dirichlet` |
 | Control flow | `VMap` `Composite` `Autoregressive` |
 | Indexing | `Index` `SimpleIndex` |
@@ -199,7 +199,7 @@ class ScalarOp(Op):
     """
 
     def __init__(self, random, num_parents):
-        "Create"
+        """"""
         self._num_parents = num_parents
         super().__init__(random=random)
 
@@ -235,7 +235,7 @@ def _generate_expected_parents(num_parents: int) -> dict[str, str]:
     start_code = ord("a")
     expected_parents = {}
     for n in range(num_parents):
-        expected_parents[str(chr(start_code + n))] = f"argument {n}"
+        expected_parents[str(chr(start_code + n))] = f"parent {n}"
     return expected_parents
 
 
@@ -281,17 +281,35 @@ def _get_scalar_op_docstring(op_info):
         s += f"* **{parent_name}**: {parent_description}"
         s += "\n"
 
+    parent_shapes = ["()"] * len(expected_parents)
+
+    s += f"""
+
+Examples
+--------
+>>> op = {name}()
+>>> op
+{name}()
+>>> print(op)
+{util.camel_case_to_snake_case(name)}
+>>> op.random
+{random}
+>>> op.get_shape{util.comma_separated(parent_shapes, spaces=True)}
+()
+"""
+
     if op_info.wikipedia or op_info.notes:
         s += "\nNotes\n---\n"
         if op_info.notes:
             for note in op_info.notes:
                 s += note + "\n\n"
-        s += f"[wikipedia definition]({op_info.wikipedia})\n"
+        if op_info.wikipedia:
+            s += f"[wikipedia definition]({op_info.wikipedia})\n"
 
     return s
 
 
-def _scalar_op_factory(name, random, expected_parents, **kwargs):
+def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarOp]:
     op_info = OpInfo(
         name=name, random=random, expected_parents=expected_parents, **kwargs
     )
@@ -304,9 +322,9 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs):
     def __init__(self):
         ScalarOp.__init__(self, random, num_parents)
 
-    __init__.__doc__ = f"""
-    Create a {name} op. Takes no arguments.
-    """
+    # __init__.__doc__ = f"""
+    # Create a {name} op. Takes no arguments.
+    # """
 
     __doc__ = _get_scalar_op_docstring(op_info)
 
@@ -320,6 +338,7 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs):
             "_random": random,
             "_num_parents": num_parents,
             "_notes": notes,
+            "__qualname__": f"ScalarOp.{name}",  # crucial for docs?
         },
     )
 
@@ -356,8 +375,8 @@ NormalPrec = _scalar_op_factory(
     wikipedia="Normal",
 )
 
-LogNormal = _scalar_op_factory(
-    name="LogNormal",
+Lognormal = _scalar_op_factory(
+    name="Lognormal",
     random=True,
     expected_parents={
         "mu": "logarithm of location",
@@ -438,7 +457,7 @@ BetaBinomial = _scalar_op_factory(
     },
     wikipedia="Beta-binomial",
     notes=[
-        "This follows the (N,alpha,beta) convention of [stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html) (and Wikipedia). Some other systems (e.g. [numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial)) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
+        "This follows the (N,alpha,beta) convention of [Stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html) (and Wikipedia). Some other systems (e.g. [Numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial)) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
     ],
 )
 
@@ -472,7 +491,14 @@ Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)
 Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)
 InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)
 Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)
-Loggamma = _scalar_op_factory(name="Loggamma", random=False, expected_parents=1)
+Loggamma = _scalar_op_factory(
+    name="Loggamma",
+    random=False,
+    expected_parents=1,
+    notes=[
+        "Do we want [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)? These are different!"
+    ],
+)
 Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
 Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)
 Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)
@@ -1348,30 +1374,31 @@ class RV(dag.Node):
     """
     A RV is essentially just an Op and a a tuple of parent RVs.
 
-    Examples
-    --------
-    >>> constant_op = Constant(3)
-    >>> x = RV(constant_op)
-    >>> x
-    RV(Constant(3))
-    >>> x.op
-    Constant(3)
-    >>> x.parents
-    ()
-    >>> y = RV(constant_op)
-    >>> y
-    RV(Constant(3))
-    >>> x == y
-    True
-    >>> normal_op = Normal()
-    >>> z = RV(normal_op, x, y)
-    >>> z
-    RV(Normal(), RV(Constant(3)), RV(Constant(3)))
-    >>> z.parents[0] == x
-    True
-    >>> z.parents[1] == y
-    True
     """
+
+    # Examples
+    # --------
+    # >>> constant_op = Constant(3)
+    # >>> x = RV(constant_op)
+    # >>> x
+    # RV(Constant(3))
+    # >>> x.op
+    # Constant(3)
+    # >>> x.parents
+    # ()
+    # >>> y = RV(constant_op)
+    # >>> y
+    # RV(Constant(3))
+    # >>> x == y
+    # True
+    # >>> normal_op = Normal()
+    # >>> z = RV(normal_op, x, y)
+    # >>> z
+    # RV(Normal(), RV(Constant(3)), RV(Constant(3)))
+    # >>> z.parents[0] == x
+    # True
+    # >>> z.parents[1] == y
+    # True
 
     _frozen = False
     _n = 1  # convenient to store order all RVs were created
