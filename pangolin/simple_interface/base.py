@@ -197,8 +197,16 @@ def _scalar_op_doc(OpClass):
     op = OpClass
     expected_parents = op._expected_parents
 
-    __doc__ = f"""
-    Creates a {str(OpClass.__name__)} distributed RV.
+    if op._random:
+        __doc__ = f"""
+        Creates a {str(OpClass.__name__)} distributed RV.
+        """
+    else:
+        __doc__ = f"""
+        Creates an RV by applying {str(OpClass.__name__)} to parents.
+        """
+
+    __doc__ += """
     
     Parameters
     ----------
@@ -216,6 +224,20 @@ def _scalar_op_doc(OpClass):
     -------
     z: InfixRV
         Random variable with `z.op` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
+    """
+
+    from .. import util
+
+    # arguments 0.1, 0.2, 0.4, etc. work for *almost* all ops and round correctly
+    args = [0.1 * 2**n for n in range(len(expected_parents))]
+    args_str = [str(a) for a in args]
+    par_args = [f"InfixRV(Constant({a}))" for a in args]
+
+    __doc__ += f"""
+    Examples
+    --------
+    >>> {util.camel_case_to_snake_case(str(OpClass.__name__))}{util.comma_separated(args_str, spaces=True)}
+    InfixRV({str(OpClass.__name__)}(), {util.comma_separated(par_args, parens=False, spaces=True)})
     """
 
     if op._notes:
@@ -283,221 +305,17 @@ def scalar_fun_factory3(
 
 
 ####################################################################################################
-# Scalar ops
+# Arithmetic
 ####################################################################################################
 
-
-# def normal(loc: RV_or_ArrayLike, scale: RV_or_ArrayLike) -> InfixRV:
-#     """Creates a [normal](https://en.wikipedia.org/wiki/Normal_distribution) distributed random variable.
-
-#     Parameters
-#     ----------
-#     loc: `RV_or_ArrayLike`
-#         mean for the distribution. Should be scalar.
-#     scale: `RV_or_ArrayLike`
-#         scale / standard deviation. Should be scalar.
-
-#     See also
-#     --------
-#     `pangolin.ir.scalar_ops.Normal`."""
-#     return create_rv(ir.Normal(), loc, scale)
-
-
-normal = scalar_fun_factory2(ir.Normal)
-
-# def normal_prec(loc, prec) -> InfixRV:
-#     """Creates a normal distribution parameterized by the precision.
-
-#     Parameters
-#     ----------
-#     loc: RV_or_ArrayLike
-#         mean
-#     scale
-
-#     See `pangolin.ir.scalar_ops.NormalPrec`."""
-#     return create_rv(ir.NormalPrec(), loc, prec)
-
-
-normal_prec = scalar_fun_factory2(ir.NormalPrec)
-
-
-# def lognormal(mu, sigma) -> InfixRV:
-#     """Create a [log-normal](https://en.wikipedia.org/wiki/Log-normal_distribution) distributed random
-#     variable."""
-#     return create_rv(ir.NormalPrec(), mu, sigma)
-
-lognormal = scalar_fun_factory2(ir.LogNormal)
-
-
-# def cauchy(loc, scale) -> InfixRV:
-#     """Create a [Cauchy](https://en.wikipedia.org/wiki/Cauchy_distribution) distributed random
-#     variable."""
-#     return create_rv(ir.Cauchy(), loc, scale)
-
-
-cauchy = scalar_fun_factory2(ir.Cauchy)
-
-
-# def bernoulli(theta) -> InfixRV:
-#     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
-#     variable.
-
-#     Parameters
-#     ----------
-#     theta
-#         the mean. must be between 0 and 1
-#     """
-#     return create_rv(ir.Bernoulli(), theta)
-
-
-bernoulli = scalar_fun_factory1(ir.Bernoulli)
-
-
-# def bernoulli_logit(alpha) -> InfixRV:
-#     """Create a [Bernoulli](https://en.wikipedia.org/wiki/Bernoulli_distribution) distributed random
-#     variable.
-
-#     Parameters
-#     ----------
-#     alpha
-#         any real number. determines the mean as mean = `sigmoid(alpha)`
-#     """
-
-#     return create_rv(ir.BernoulliLogit(), alpha)
-
-bernoulli_logit = scalar_fun_factory1(ir.BernoulliLogit)
-
-
-# def binomial(n, p) -> InfixRV:
-#     """Create a [binomial](https://en.wikipedia.org/wiki/Binomial_distribution) distributed random
-#     variable. Call as `binomial(n,p)`, where `n` is the number of repetions and `p` is the
-#     probability of success for each repetition."""
-#     return create_rv(ir.Binomial(), n, p)
-
-binomial = scalar_fun_factory2(ir.Binomial)
-
-# def uniform(low, high) -> InfixRV:
-#     """Create a [uniformly](https://en.wikipedia.org/wiki/Continuous_uniform_distribution)
-#     distributed random variable. `low` must be less than `high`."""
-
-#     return create_rv(ir.Uniform(), low, high)
-
-uniform = scalar_fun_factory2(ir.Uniform)
-
-# def beta(alpha, beta) -> InfixRV:
-#     """Create a [beta](https://en.wikipedia.org/wiki/Beta_distribution) distributed random variable."""
-#     return create_rv(ir.Beta(), alpha, beta)
-
-beta = scalar_fun_factory2(ir.Beta)
-
-# def beta_binomial(n, alpha, beta) -> InfixRV:
-#     """Create a
-#     [beta-binomial](https://en.wikipedia.org/wiki/Beta-binomial_distribution)
-#     distributed random variable.
-
-#     **Note**: This follows the (n,alpha,beta) convention of
-#     [stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html)
-#     (and Wikipedia). Some other systems (e.g.
-#     [numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial))
-#     use alternate variable orderings. This is no problem for you as a user—pangolin does the
-#     re-ordering for you if you call the numpyro backend. But keep it in mind if translating a
-#     model from one system to another.
-#     """
-#     return create_rv(ir.BetaBinomial(), n, alpha, beta)
-
-beta_binomial = scalar_fun_factory3(ir.BetaBinomial)
-
-
-# def exponential(scale) -> InfixRV:
-#     """Create an [exponential](https://en.wikipedia.org/wiki/Exponential_distribution) distributed
-#     random variable."""
-
-#     return create_rv(ir.Exponential(), scale)
-
-
-exponential = scalar_fun_factory1(ir.Exponential)
-
-
-# def gamma(alpha, beta) -> InfixRV:
-#     """Create an [gamma](https://en.wikipedia.org/wiki/Gamma_distribution) distributed
-#     random variable.
-
-#     **Note:** We (like [stan](https://mc-stan.org/docs/2_21/functions-reference/gamma
-#     -distribution.html)) follow the "shape/rate" parameterization, *not* the "shape/scale"
-#     parameterization.
-#     """
-
-#     return create_rv(ir.Gamma(), alpha, beta)
-
-
-gamma = scalar_fun_factory2(ir.Gamma)
-
-# def poisson(rate) -> InfixRV:
-#     """Create an [poisson](https://en.wikipedia.org/wiki/Poisson_distribution) distributed
-#     random variable."""
-
-#     return create_rv(ir.Poisson(), rate)
-
-poisson = scalar_fun_factory1(ir.Poisson)
-
-
-# def student_t(nu, loc, scale) -> InfixRV:
-#     """Create a [location-scale student-t](
-#     https://en.wikipedia.org/wiki/Student\'s_t-distribution#Location-scale_t_distribution)
-#     distributed random variable. Call as `student_t(nu,loc,scale)`, where `nu` is the rate.
-#     """
-
-#     # TODO: make loc and scale optional?
-
-#     return create_rv(ir.StudentT(), nu, loc, scale)
-
-
-student_t = scalar_fun_factory3(ir.StudentT)
-
-
-# def add(a, b) -> InfixRV:
-#     """Add two scalar random variables. Typically one would type `a+b` rather than `add(a,b)`."""
-#     return create_rv(ir.Add(), a, b)
-
 add = scalar_fun_factory2(ir.Add)
-
-
-# def sub(a, b) -> InfixRV:
-#     """Subtract two scalar random variables. Typically one would type `a-b` rather than `sub(a,
-#     b)`."""
-#     return create_rv(ir.Sub(), a, b)
-
 sub = scalar_fun_factory2(ir.Sub)
-
-# def mul(a, b) -> InfixRV:
-#     """Multiply two scalar random variables. Typically one would type `a*b` rather than `mul(a,b)`."""
-#     return create_rv(ir.Mul(), a, b)
-
 mul = scalar_fun_factory2(ir.Mul)
-
-# def div(a, b) -> InfixRV:
-#     """Divide two scalar random variables. Typically one would type `a/b` rather than `div(a,b)`."""
-#     return create_rv(ir.Div(), a, b)
-
 div = scalar_fun_factory2(ir.Div)
 
-# def pow(a, b) -> InfixRV:
-#     """Take one scalar to another scalar power. Typically one would type `a**b` rather than `pow(
-#     a,b)`."""
-#     return create_rv(ir.Pow(), a, b)
-
-pow = scalar_fun_factory2(ir.Pow)
-
-
-def sqrt(x) -> InfixRV:
-    "sqrt(x) is an alias for pow(x,0.5)"
-    return pow(x, 0.5)
-
-
-# def abs(a) -> InfixRV:
-#    return create_rv(ir.Abs(), a)
-
-abs = scalar_fun_factory2(ir.Abs)
+####################################################################################################
+# Trigonometry
+####################################################################################################
 
 arccos = scalar_fun_factory1(ir.Arccos)
 arccosh = scalar_fun_factory1(ir.Arccosh)
@@ -507,129 +325,33 @@ arctan = scalar_fun_factory1(ir.Arctan)
 arctanh = scalar_fun_factory1(ir.Arctanh)
 cos = scalar_fun_factory1(ir.Cos)
 cosh = scalar_fun_factory1(ir.Cosh)
-# = scalar_fun_factory2(ir.)
-# = scalar_fun_factory2(ir.)
-# = scalar_fun_factory2(ir.)
-# = scalar_fun_factory2(ir.)
-
-# def arccos(a) -> InfixRV:
-#     return create_rv(ir.Arccos(), a)
-
-
-# def arccosh(a) -> InfixRV:
-#     return create_rv(ir.Arccosh(), a)
-
-
-# def arcsin(a) -> InfixRV:
-#     return create_rv(ir.Arcsin(), a)
-
-
-# def arcsinh(a) -> InfixRV:
-#     return create_rv(ir.Arcsinh(), a)
-
-
-# def arctan(a) -> InfixRV:
-#     return create_rv(ir.Arctan(), a)
-
-
-# def arctanh(a) -> InfixRV:
-#     return create_rv(ir.Arctanh(), a)
-
-
-# def cos(a) -> InfixRV:
-#     return create_rv(ir.Cos(), a)
-
-
-# def cosh(a) -> InfixRV:
-#     return create_rv(ir.Cosh(), a)
-
-
-def exp(a) -> InfixRV:
-    return create_rv(ir.Exp(), a)
-
-
-def inv_logit(a) -> InfixRV:
-    return create_rv(ir.InvLogit(), a)
-
-
-def expit(a) -> InfixRV:
-    """Equivalent to `inv_logit`"""
-    return create_rv(ir.InvLogit(), a)
-
-
-def sigmoid(a) -> InfixRV:
-    """Equivalent to `inv_logit`"""
-    return create_rv(ir.InvLogit(), a)
-
-
-def log(a) -> InfixRV:
-    return create_rv(ir.Log(), a)
-
-
-def log_gamma(a) -> InfixRV:
-    """Log gamma function.
-
-    **TODO**: do we want
-    [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html)
-    or
-    [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)?
-    These are different!
-    """
-    return create_rv(ir.Loggamma(), a)
-
-
-def logit(a) -> InfixRV:
-    return create_rv(ir.Logit(), a)
-
-
-def sin(a) -> InfixRV:
-    return create_rv(ir.Sin(), a)
-
-
-def sinh(a) -> InfixRV:
-    return create_rv(ir.Sinh(), a)
-
-
-def step(a) -> InfixRV:
-    return create_rv(ir.Step(), a)
-
-
-def tan(a) -> InfixRV:
-    return create_rv(ir.Tan(), a)
-
-
-def tanh(a) -> InfixRV:
-    return create_rv(ir.Tanh(), a)
-
+sin = scalar_fun_factory1(ir.Sin)
+sinh = scalar_fun_factory1(ir.Sinh)
+tan = scalar_fun_factory1(ir.Tan)
+tanh = scalar_fun_factory1(ir.Tanh)
 
 ####################################################################################################
-# Multivariate dists
+# Other scalar function
 ####################################################################################################
 
+pow = scalar_fun_factory2(ir.Pow)
+abs = scalar_fun_factory1(ir.Abs)
+exp = scalar_fun_factory1(ir.Exp)
+inv_logit = scalar_fun_factory1(ir.InvLogit)
+log = scalar_fun_factory1(ir.Log)
+loggamma = scalar_fun_factory1(ir.Loggamma)
+logit = scalar_fun_factory1(ir.Logit)
+step = scalar_fun_factory1(ir.Step)
 
-def multi_normal(mean, cov) -> InfixRV:
-    """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
-    return create_rv(ir.MultiNormal(), mean, cov)
-
-
-def categorical(theta) -> InfixRV:
-    """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
-    where `theta` is a vector of non-negative reals that sums to one."""
-    return create_rv(ir.Categorical(), theta)
-
-
-def multinomial(n, p) -> InfixRV:
-    """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
-    random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
-    vector of probabilities that sums to one."""
-    return create_rv(ir.Multinomial(), n, p)
+expit = scalar_fun_factory1(ir.InvLogit)
+expit.__doc__ = "Equivalent to `inv_logit`"
+sigmoid = scalar_fun_factory1(ir.InvLogit)
+sigmoid.__doc__ = "Equivalent to `inv_logit`"
 
 
-def dirichlet(alpha) -> InfixRV:
-    """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
-    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
-    """
-    return create_rv(ir.Dirichlet(), alpha)
+def sqrt(x) -> InfixRV:
+    "sqrt(x) is an alias for pow(x,0.5)"
+    return pow(x, 0.5)
 
 
 ####################################################################################################
@@ -685,3 +407,52 @@ def sum(x: RV, axis: int) -> InfixRV:
     if not isinstance(axis, int):
         raise ValueError("axis argument for sum must be an integer")
     return create_rv(ir.Sum(axis), x)
+
+
+####################################################################################################
+# Scalar distributions
+####################################################################################################
+
+normal = scalar_fun_factory2(ir.Normal)
+normal_prec = scalar_fun_factory2(ir.NormalPrec)
+lognormal = scalar_fun_factory2(ir.Lognormal)
+cauchy = scalar_fun_factory2(ir.Cauchy)
+bernoulli = scalar_fun_factory1(ir.Bernoulli)
+bernoulli_logit = scalar_fun_factory1(ir.BernoulliLogit)
+binomial = scalar_fun_factory2(ir.Binomial)
+uniform = scalar_fun_factory2(ir.Uniform)
+beta = scalar_fun_factory2(ir.Beta)
+beta_binomial = scalar_fun_factory3(ir.BetaBinomial)
+exponential = scalar_fun_factory1(ir.Exponential)
+gamma = scalar_fun_factory2(ir.Gamma)
+poisson = scalar_fun_factory1(ir.Poisson)
+student_t = scalar_fun_factory3(ir.StudentT)
+
+####################################################################################################
+# Multivariate dists
+####################################################################################################
+
+
+def multi_normal(mean, cov) -> InfixRV:
+    """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
+    return create_rv(ir.MultiNormal(), mean, cov)
+
+
+def categorical(theta) -> InfixRV:
+    """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
+    where `theta` is a vector of non-negative reals that sums to one."""
+    return create_rv(ir.Categorical(), theta)
+
+
+def multinomial(n, p) -> InfixRV:
+    """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
+    random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
+    vector of probabilities that sums to one."""
+    return create_rv(ir.Multinomial(), n, p)
+
+
+def dirichlet(alpha) -> InfixRV:
+    """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
+    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
+    """
+    return create_rv(ir.Dirichlet(), alpha)

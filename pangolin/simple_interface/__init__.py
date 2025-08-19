@@ -8,7 +8,7 @@ The entire interface is based on methods that create `InfixRV` objects (or that 
 | Constants | `constant` |
 | Arithmetic | `add` `sub` `mul` `div` (or infix `+`, `-`, `*`, `/`) |
 | Trigonometry | `arccos` `arccosh` `arcsin` `arcsinh` `arctan` `arctanh` `cos` `cosh` `sin` `sinh` `tan` `tanh` |
-| Other scalar functions | `pow` (or infix `**`) `sqrt` `abs` `exp` `inv_logit` `expit` `sigmoid` `log` `log_gamma` `logit` `step` `softmax` |
+| Other scalar functions | `pow` (or infix `**`) `sqrt` `abs` `exp` `inv_logit` `expit` `sigmoid` `log` `loggamma` `logit` `step` `softmax` |
 | Linear algebra | `matmul` (or infix `@`) `inv` |
 | Other multivariate functions | `sum` |
 | Scalar distributions | `normal` `normal_prec` `lognormal` `cauchy` `bernoulli` `bernoulli_logit` `beta` `binomial` `categorical` `uniform` `beta_binomial` `exponential` `gamma` `poisson` `student_t`|
@@ -68,7 +68,7 @@ __all__ = [
     "expit",
     "sigmoid",
     "log",
-    "log_gamma",
+    "loggamma",
     "logit",
     "sin",
     "sinh",
