@@ -1,1 +1,0 @@
-* `vmap(normal)([0,1,2], [3,4,5])` should raise a better error message
