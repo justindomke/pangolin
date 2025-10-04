@@ -5,14 +5,14 @@ from pangolin.ir import *
 # Softmax
 # Sum
 
+
 def test_equality():
-    assert MatMul() == MatMul()
+    assert Matmul() == Matmul()
     assert Inv() == Inv()
     assert Softmax() == Softmax()
     assert Sum(0) == Sum(0)
     assert Sum(1) == Sum(1)
-    assert MatMul() != Inv()
-    assert MatMul() != Softmax()
-    assert MatMul() != Sum(0)
+    assert Matmul() != Inv()
+    assert Matmul() != Softmax()
+    assert Matmul() != Sum(0)
     assert Sum(0) != Sum(1)
-

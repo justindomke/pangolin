@@ -17,12 +17,12 @@ import numpy as np
 from jax import numpy as jnp
 
 
-def eliminate_ellipses(ndim, idx):
+def eliminate_ellipses(ndim: int, idx: tuple):
     """Given indices, if there is an ellipsis, insert full slices
 
     Examples
     --------
-    >>> eliminate_ellipses(4, (0, 1, 2))
+    >>> eliminate_ellipses(3, (0, 1, 2))
     (0, 1, 2)
     >>> eliminate_ellipses(4, (0, ..., 2))
     (0, slice(None, None, None), slice(None, None, None), 2)
@@ -30,6 +30,12 @@ def eliminate_ellipses(ndim, idx):
     """
 
     num_ellipsis = len([i for i in idx if i is ...])
+    if num_ellipsis == 0:
+        if len(idx) != ndim:
+            raise ValueError(
+                f"Number of indices ({len(idx)}) does not match ndim ({ndim})"
+            )
+
     if num_ellipsis > 1:
         raise ValueError("an index can only have a single ellipsis ('...')")
     elif num_ellipsis == 1:
@@ -45,7 +51,7 @@ def eliminate_ellipses(ndim, idx):
     return idx
 
 
-def convert_index(size: int, index: RV_or_ArrayLike | slice):
+def convert_index(size: int, index: RV_or_ArrayLike | slice) -> RV:
     """Convert an index which could be RV or ArrayLike or slice to an RV
 
     Parameters
@@ -88,7 +94,7 @@ def convert_index(size: int, index: RV_or_ArrayLike | slice):
         return constant(A)
 
 
-def convert_indices(shape: tuple[int], *indices: RV | slice):
+def convert_indices(shape: tuple[int], *indices: RV_or_ArrayLike | slice) -> tuple[RV]:
     """
     Examples
     --------
@@ -103,7 +109,10 @@ def convert_indices(shape: tuple[int], *indices: RV | slice):
     )
 
 
-def index(var: RV, *indices: RV | slice):
+IdxType = RV_or_ArrayLike | slice | type(Ellipsis)
+
+
+def index(var: RV, *indices: IdxType):
     """Index a RV.
 
     Examples
@@ -133,5 +142,5 @@ def index(var: RV, *indices: RV | slice):
     if len(var.shape) != len(indices):
         raise ValueError(f"RV has {var.ndim} dims but was given {len(indices)} indices")
 
-    indices = convert_indices(var.shape, *indices)
-    return InfixRV(SimpleIndex(), var, *indices)
+    rv_indices = convert_indices(var.shape, *indices)
+    return InfixRV(SimpleIndex(), var, *rv_indices)

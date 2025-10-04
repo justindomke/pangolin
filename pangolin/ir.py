@@ -1,7 +1,16 @@
 """
-The pangolin IR.
+The pangolin IR. Note that users of pangolin are not expected to interact with this module directly The core abstractions are:
 
-Types of `Op`s
+1. `Op`s represent conditional distributions or deterministic functions.
+2. `RV`s represent random variables. Each contains a single `Op` and a list of parent `RV`s.
+
+Notes on this RV:
+
+* All RVs have static shapes. The shape of an RV is recursively determined by its Op and the shapes of its parents.
+* There is no notion of a "model". In Pangolin you just directly manipulate RVs.
+* RVs do not have names. In Pangolin you manipulate them based on their identity. You can of course assign an RV to a variable with a name if you want, but Pangolin never sees that. You can also put RVs into tuples or lists or dicts.
+
+**Types of `Op`**
 
 | Type | Ops |
 | ---- | --------- |
@@ -9,12 +18,14 @@ Types of `Op`s
 | Arithmetic | `Add` `Sub` `Mul` `Div` |
 | Trigonometry | `Arccos` `Arccosh` `Arcsin` `Arcsinh` `Arctan` `Arctanh` `Cos` `Cosh` `Sin` `Sinh` `Tan` `Tanh` |
 | Other scalar functions | `Pow` `Abs` `Exp` `InvLogit` `Log` `Loggamma` `Logit` `Step` |
-| Linear algebra | `MatMul` `Inv` |
+| Linear algebra | `Matmul` `Inv` |
 | Other multivariate functions | `Sum` `Softmax` |
 | Scalar distributions | `Normal` `NormalPrec` `Lognormal` `Cauchy` `Bernoulli` `BernoulliLogit` `Beta` `Binomial` `Categorical` `Uniform` `BetaBinomial` `Exponential` `Gamma` `Poisson` `StudentT`|
 | Multivariate distributions | `MultiNormal` `Multinomial` `Dirichlet` |
 | Control flow | `VMap` `Composite` `Autoregressive` |
 | Indexing | `Index` `SimpleIndex` |
+
+In addition, this module provides `print_upstream`, which provides a nice human-readable description of an entire graph.
 """
 
 from abc import ABC, abstractmethod
@@ -44,43 +55,40 @@ class Op(ABC):
     and `d2 = Normal()` then `d1 == d2`. This base class provides a default implementation that
     simply tests if the types are the same. If an Op takes parameters (e.g. `VMap`), this should be
     overridden.
-    * `Op`s are programmatically enforced to be frozen after initialization.
     """
 
     _frozen = False
 
-    def __init__(self, random: bool):
+    def __init__(self):
         """
         Create a new op
-
-        Parameters
-        ----------
-        random: bool
-            is this a conditional distribution? (`random==True`) or a deterministic function (
-            `random==False`)
         """
-        assert isinstance(random, bool)
-        self.random: bool = random
+
+        # Parameters
+        # ----------
+        # random: bool
+        #     is this a conditional distribution? (`random==True`) or a deterministic function (
+        #     `random==False`)
+        # assert isinstance(random, bool)
+        # self.random: bool = random
         "True for conditional distributions, False for deterministic functions"
         self._frozen = True  # freeze after init
+
+    @property
+    @abstractmethod
+    def random(self) -> bool:
+        pass
 
     @abstractmethod
     def get_shape(self, *parents_shapes: _Shape) -> _Shape:
         """
-        Given the shapes of parents, return the shape of the output of this `Op`. Subclasses
-        must provide a `_get_shape(*parents_shapes)` function. This is needed because some `Op`s
-        (e.g. multivariate normal distributions) can have different shapes depending on the
-        shapes of the parents.
+        Given the shapes of parents, return the shape of the output of this `Op`. This is needed because some `Op`s (e.g. multivariate normal distributions) can have different shapes depending on the shapes of the parents.
 
-        It is also expected that `Op`s define a `_get_shape` method that does error checking—e.g.
+        It is also expected that `Op`s define a `get_shape` method that does error checking—e.g.
         verifies that the correct number of parents are provided and the shapes of the parents
         are coherent with each other.
         """
-        # return self._get_shape(*parents_shapes)
         pass
-
-    # def _get_shape(self, *parents_shapes: _Shape) -> _Shape:
-    #    pass
 
     def __eq__(self, other):
         "Returns true if `self` and `other` have the same type. If subtypes have more structure, should override."
@@ -110,12 +118,24 @@ class Op(ABC):
         return util.camel_case_to_snake_case(self.name)
 
 
+class OpRandom(Op):
+    @property
+    def random(self):
+        return True
+
+
+class OpNonrandom(Op):
+    @property
+    def random(self):
+        return False
+
+
 ################################################################################
-# Constant Ops
+# Constant
 ################################################################################
 
 
-class Constant(Op):
+class Constant(OpNonrandom):
     """
     Represents a "constant" distribution. Has no parents. Data is always stored
     as a numpy array. You can switch it to use jax's version of numpy by setting
@@ -134,7 +154,7 @@ class Constant(Op):
         self.value = np.array(value)
         """The actual stored data, stored as an immutable numpy array"""
         self.value.flags.writeable = False  # make value immutable
-        super().__init__(random=False)
+        super().__init__()
 
     def get_shape(self, *parents_shapes):
         """"""
@@ -162,12 +182,13 @@ class Constant(Op):
 
     def __repr__(self):
         # assure regular old numpy in case jax being used
-        if self.value.ndim > 0 and np.max(self.value.shape) > 5:
-            ret = "Constant("
-            with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
-                ret += np.array2string(self.value)
-            ret += ")"
-            return ret
+        # if self.value.ndim > 0 and np.max(self.value.shape) > 5:
+        #     ret = "Constant("
+        #     with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
+        #         ret += np.array2string(self.value)
+        #     ret += ")"
+        #     print("path 1")
+        #     return ret
 
         numpy_value = np.array(self.value)
         array_str = repr(numpy_value)  # get base string
@@ -198,16 +219,23 @@ class ScalarOp(Op):
     An `Op` expecting scalar inputs and producing a single scalar output.
     """
 
-    def __init__(self, random, num_parents):
+    def __init__(self):
         """"""
-        self._num_parents = num_parents
-        super().__init__(random=random)
+        super().__init__()
+
+    @property
+    @abstractmethod
+    def num_parents(self) -> int:
+        pass
 
     def get_shape(self, *parents_shapes):
-        if len(parents_shapes) != self._num_parents:
+        """
+        Checks that all parents have shape `()` and there are the correct number of parents. Always returns `()`.
+        """
+        if len(parents_shapes) != self.num_parents:
             raise TypeError(
                 f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
-                f" {self._num_parents}."
+                f" {self.num_parents}."
             )
         for shape in parents_shapes:
             if shape != ():
@@ -223,7 +251,7 @@ class ScalarOp(Op):
 
     # TODO: simplify?
     def __hash__(self):
-        return hash((self.name, self.random, self._num_parents))
+        return hash((self.name, self.random, self.num_parents))
 
 
 ################################################################################
@@ -239,7 +267,7 @@ def _generate_expected_parents(num_parents: int) -> dict[str, str]:
     return expected_parents
 
 
-class OpInfo:
+class _OpInfo:
     def __init__(
         self,
         name,
@@ -310,7 +338,7 @@ Examples
 
 
 def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarOp]:
-    op_info = OpInfo(
+    op_info = _OpInfo(
         name=name, random=random, expected_parents=expected_parents, **kwargs
     )
     name = op_info.name
@@ -320,7 +348,15 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
     num_parents = len(expected_parents)
 
     def __init__(self):
-        ScalarOp.__init__(self, random, num_parents)
+        ScalarOp.__init__(self)
+
+    @property
+    def prop_num_parents(self):
+        return num_parents
+
+    @property
+    def prop_random(self):
+        return random
 
     # __init__.__doc__ = f"""
     # Create a {name} op. Takes no arguments.
@@ -335,10 +371,11 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
             "__init__": __init__,
             "__doc__": __doc__,
             "_expected_parents": expected_parents,
-            "_random": random,
-            "_num_parents": num_parents,
+            "random": prop_random,
+            "num_parents": prop_num_parents,
+            # "_num_parents": num_parents,
             "_notes": notes,
-            "__qualname__": f"ScalarOp.{name}",  # crucial for docs?
+            # "__qualname__": f"ScalarOp.{name}",  # crucial for docs?
         },
     )
 
@@ -354,6 +391,233 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
     # MyClass.__doc__ = _get_scalar_op_docstring(op_info)
 
     return MyClass
+
+
+################################################################################
+# Arithmetic
+################################################################################
+
+Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)
+Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)
+Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)
+Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)
+Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)
+
+################################################################################
+# Trigonometry
+################################################################################
+
+Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)
+Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)
+Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)
+Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)
+Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)
+Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)
+Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)
+Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)
+Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)
+Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)
+Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)
+Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)
+
+
+################################################################################
+# Other scalar functions
+################################################################################
+
+Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)
+Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)
+InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)
+Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)
+Loggamma = _scalar_op_factory(
+    name="Loggamma",
+    random=False,
+    expected_parents=1,
+    notes=[
+        "Do we want [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)? These are different!"
+    ],
+)
+Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
+Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)
+
+################################################################################
+# Linear Algebra
+################################################################################
+
+
+class Matmul(OpNonrandom):
+    """
+    A class that does matrix multiplication, following the rules of `numpy.matmul`.
+    Currently only 1d and 2d arrays are supported.
+
+    Examples
+    --------
+    >>> op = Matmul()
+    >>> op
+    Matmul()
+    >>> print(op)
+    matmul
+    >>> op.random
+    False
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def get_shape(self, a_shape: _Shape, b_shape: _Shape):
+        """
+        Get the shape of applying a matmul to operators with shape `a_shape` and `b_shape`
+
+        Parameters
+        ----------
+        a_shape:
+            shape of first argument
+        b_shape:
+            shape of second argument
+
+        Returns
+        -------
+        tuple[int, ...]
+            resulting shape
+
+        Examples
+        --------
+        >>> op = Matmul()
+        >>> op.get_shape((4,), (4,)) # inner product
+        ()
+        >>> op.get_shape((5,4), (4,)) # matrix-vector
+        (5,)
+        >>> op.get_shape((5,), (5,4)) # vector-matrix
+        (4,)
+        >>> op.get_shape((5,4), (4,3)) # matrix-matrix
+        (5, 3)
+        >>> op.get_shape((5,5), (10, 10)) # incoherent shapes, error expected
+        Traceback (most recent call last):
+        ...
+        ValueError: Matmul parent shapes do not match ((5, 5) vs. (10, 10))
+
+        """
+        if len(a_shape) not in [1, 2]:
+            raise ValueError(
+                f"First parent for Matmul must have 1 or 2 dims (got {len(a_shape)})."
+            )
+
+        if len(b_shape) not in [1, 2]:
+            raise ValueError(
+                f"Second parent for Matmul must have 1 or 2 dims (got {len(a_shape)})."
+            )
+
+        if len(a_shape) == 1 and len(b_shape) == 1:
+            # inner product
+            if a_shape != b_shape:
+                raise ValueError(
+                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
+                )
+            return ()
+        elif len(a_shape) == 1 and len(b_shape) == 2:
+            # vector-matrix product
+            if a_shape[0] != b_shape[0]:
+                raise ValueError(
+                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
+                )
+            return (b_shape[1],)
+        elif len(a_shape) == 2 and len(b_shape) == 1:
+            # matrix-vector product
+            if a_shape[1] != b_shape[0]:
+                raise ValueError(
+                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
+                )
+            return (a_shape[0],)
+        elif len(a_shape) == 2 and len(b_shape) == 2:
+            # matrix-matrix product
+            if a_shape[1] != b_shape[0]:
+                raise ValueError(
+                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
+                )
+            return (a_shape[0], b_shape[1])
+        else:
+            raise Exception("bug: should be impossible")
+
+
+class Inv(OpNonrandom):
+    """
+    Take the inverse of a square matrix
+    """
+
+    def __init__(self):
+        """"""
+        super().__init__()
+
+    def get_shape(self, *parents):
+        assert len(parents) == 1
+        p_shape = parents[0]
+        assert len(p_shape) == 2, "inverse only applies to 2d arrays"
+        assert p_shape[0] == p_shape[1], "inverse only for square 2d arrays"
+        return p_shape
+
+
+################################################################################
+# Other multivariate funs
+################################################################################
+
+
+class Softmax(OpNonrandom):
+    """
+    Softmax
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def get_shape(self, *parents):
+        assert len(parents) == 1
+        p_shape = parents[0]
+        assert len(p_shape) == 1, "input to softmax would be 1d"
+        return p_shape
+
+
+class Sum(OpNonrandom):
+    """Take the sum of an array over some axis"""
+
+    def __init__(self, axis):
+        """
+        Create a Sum instance
+        Parameters
+        ----------
+        axis: int
+            What axis to sum over.
+        """
+        if isinstance(axis, np.ndarray) and axis.shape == ():
+            axis = int(axis)
+        if not isinstance(axis, int):
+            raise ValueError("axis argument for Sum must be a fixed integer")
+        self.axis = axis
+        super().__init__()
+
+    def get_shape(self, x_shape):
+        if self.axis is None:
+            return ()
+        else:
+            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
+
+    def __repr__(self):
+        return f"Sum(axis={self.axis})"
+
+    def __str__(self):
+        return f"sum(axis={self.axis})"
+
+    def __eq__(self, other):
+        if isinstance(other, Sum):
+            return self.axis == other.axis
+        return False
+
+    def __hash__(self):
+        return hash(self.axis)
+
+
+################################################################################
+# Scalar distributions
+################################################################################
 
 
 Normal = _scalar_op_factory(
@@ -472,53 +736,20 @@ StudentT = _scalar_op_factory(
     wikipedia="Student's_t",
 )
 
-Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)
-Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)
-Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)
-Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)
-Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)
-
-
-Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)
-Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)
-Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)
-Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)
-Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)
-Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)
-Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)
-Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)
-Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)
-Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)
-InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)
-Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)
-Loggamma = _scalar_op_factory(
-    name="Loggamma",
-    random=False,
-    expected_parents=1,
-    notes=[
-        "Do we want [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)? These are different!"
-    ],
-)
-Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
-Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)
-Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)
-Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)
-Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)
-Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)
 
 ################################################################################
 # Multivariate dists
 ################################################################################
 
 
-class VecMatOp(Op):
+class VecMatOp(OpRandom):
     """
     Convenience class to create "vec mat" distributions that take as input a vector of
     length N, a matrix of size NxN and is a vector of length N
     """
 
     def __init__(self):
-        super().__init__(random=True)
+        super().__init__()
 
     def get_shape(self, vec_shape, mat_shape):
         if len(vec_shape) != 1:
@@ -545,7 +776,7 @@ class MultiNormal(VecMatOp):
         super().__init__()
 
 
-class Categorical(Op):
+class Categorical(OpRandom):
     """
     Categorical distribution parameterized in terms of a 1-d vector of weights.
     """
@@ -554,7 +785,7 @@ class Categorical(Op):
         """
         Create a Categorical instance. Takes no parameters.
         """
-        super().__init__(random=True)
+        super().__init__()
 
     def get_shape(self, weights_shape):
         """"""
@@ -567,7 +798,7 @@ class Categorical(Op):
         return ()
 
 
-class Multinomial(Op):
+class Multinomial(OpRandom):
     """
     Multinomial distribution parameterized in terms of the number of observations `n` (a scalar)
     and a vector of probabilities `p` (1-D).
@@ -578,7 +809,7 @@ class Multinomial(Op):
         Create a Multinomial instance. Takes no parameters.
         Note: parameterization is different from Stan (which doesn't need n to be passed)
         """
-        super().__init__(random=True)
+        super().__init__()
 
     def get_shape(self, n_shape, p_shape):
         if n_shape != ():
@@ -588,145 +819,19 @@ class Multinomial(Op):
         return p_shape
 
 
-class Dirichlet(Op):
+class Dirichlet(OpRandom):
     """Dirichlet distribution parameterized in terms of the concentration"""
 
     def __init__(self):
         """
         Create a Dirichlet instance. Takes no parameters.
         """
-        super().__init__(random=True)
+        super().__init__()
 
     def get_shape(self, concentration_shape):
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
         return concentration_shape
-
-
-################################################################################
-# Linear Algebra
-################################################################################
-
-
-class MatMul(Op):
-    """
-    A class that does matrix multiplication, following the rules of `numpy.matmul`.
-    Currently only 1d and 2d arrays are supported.
-    """
-
-    def __init__(self):
-        super().__init__(random=False)
-
-    def get_shape(self, a_shape, b_shape):
-        # could someday generalize to handle more dimensions
-        assert len(a_shape) >= 1, "args to @ must have at least 1 dim"
-        assert len(b_shape) >= 1, "args to @ must have at least 1 dim"
-        assert len(a_shape) <= 2, "args to @ must have at most 2 dims"
-        assert len(b_shape) <= 2, "args to @ must have at most 2 dims"
-
-        # https://numpy.org/doc/stable/reference/generated/numpy.matmul.html
-        # The behavior depends on the arguments in the following way.
-        # * If both arguments are 2-D they are multiplied like conventional matrices.
-        # * If either argument is N-D, N > 2, it is treated as a stack of matrices
-        #   residing in the last two indexes and broadcast accordingly.
-        # * If the first argument is 1-D, it is promoted to a matrix by prepending a
-        #   1 to its dimensions. After matrix multiplication the prepended 1 is removed.
-        # * If the second argument is 1-D, it is promoted to a matrix by appending a
-        #   1 to its dimensions. After matrix multiplication the appended 1 is removed.
-
-        if len(a_shape) == 1 and len(b_shape) == 1:
-            # inner product
-            assert a_shape == b_shape
-            return ()
-        elif len(a_shape) == 1 and len(b_shape) == 2:
-            # vector-matrix product
-            assert a_shape[0] == b_shape[0]
-            return (b_shape[1],)
-        elif len(a_shape) == 2 and len(b_shape) == 1:
-            # matrix-vector product
-            assert a_shape[1] == b_shape[0]
-            return (a_shape[0],)
-        elif len(a_shape) == 2 and len(b_shape) == 2:
-            # matrix-matrix product
-            assert a_shape[1] == b_shape[0]
-            return (a_shape[0], b_shape[1])
-        else:
-            raise Exception("bug: should be impossible")
-
-
-class Inv(Op):
-    """
-    Take the inverse of a square matrix
-    """
-
-    def __init__(self):
-        super().__init__(random=False)
-
-    def get_shape(self, *parents):
-        assert len(parents) == 1
-        p_shape = parents[0]
-        assert len(p_shape) == 2, "inverse only applies to 2d arrays"
-        assert p_shape[0] == p_shape[1], "inverse only for square 2d arrays"
-        return p_shape
-
-
-# ################################################################################
-# # Multivariate funs
-# ################################################################################
-
-
-class Softmax(Op):
-    """
-    Softmax
-    """
-
-    def __init__(self):
-        super().__init__(random=False)
-
-    def get_shape(self, *parents):
-        assert len(parents) == 1
-        p_shape = parents[0]
-        assert len(p_shape) == 1, "input to softmax would be 1d"
-        return p_shape
-
-
-class Sum(Op):
-    """Take the sum of an array over some axis"""
-
-    def __init__(self, axis):
-        """
-        Create a Sum instance
-        Parameters
-        ----------
-        axis: int
-            What axis to sum over.
-        """
-        if isinstance(axis, np.ndarray) and axis.shape == ():
-            axis = int(axis)
-        if not isinstance(axis, int):
-            raise ValueError("axis argument for Sum must be a fixed integer")
-        self.axis = axis
-        super().__init__(random=False)
-
-    def get_shape(self, x_shape):
-        if self.axis is None:
-            return ()
-        else:
-            return x_shape[: self.axis] + x_shape[self.axis + 1 :]
-
-    def __repr__(self):
-        return f"Sum(axis={self.axis})"
-
-    def __str__(self):
-        return f"sum(axis={self.axis})"
-
-    def __eq__(self, other):
-        if isinstance(other, Sum):
-            return self.axis == other.axis
-        return False
-
-    def __hash__(self):
-        return hash(self.axis)
 
 
 ################################################################################
@@ -748,7 +853,7 @@ def split_shape(shape, i):
 def get_sliced_shapes(shapes, in_axes, axis_size):
     axis_size = axis_size
     remaining_shapes = []
-    for i, shape in zip(in_axes, shapes):
+    for i, shape in zip(in_axes, shapes, strict=True):
         new_shape, new_axis_size = split_shape(shape, i)
         remaining_shapes.append(new_shape)
         if axis_size is None:
@@ -761,6 +866,33 @@ def get_sliced_shapes(shapes, in_axes, axis_size):
 class VMap(Op):
     """
     Represents a `VMap` Op. That's *one specific* op vectorized over some number of arguments.
+
+    Examples
+    --------
+    >>> # diagonal normal
+    >>> op = VMap(Normal(), in_axes=(0, 0))
+    >>> op.get_shape((5,), (5,))
+    (5,)
+
+    >>> # diagonal normal with shared scale
+    >>> op = VMap(Normal(), in_axes=(0, None))
+    >>> op.get_shape((5,), ())
+    (5,)
+
+    >>> # 2D diagonal normal with shared scale
+    >>> op = VMap(VMap(Normal(), in_axes=(0, None)), in_axes=(0, None))
+    >>> op.get_shape((6,4), ())
+    (6, 4)
+
+    >>> # 2D diagonal normal with "outer product" of location and scale
+    >>> op = VMap(VMap(Normal(), in_axes=(None, 0)), in_axes=(0, None))
+    >>> op.get_shape((6,), (4,))
+    (6, 4)
+
+    >>> # 2D diagonal normal with "outer product" in the other order
+    >>> op = VMap(VMap(Normal(), in_axes=(0, None)), in_axes=(None, 0))
+    >>> op.get_shape((6,), (4,))
+    (4, 6)
     """
 
     # tuple[int | None, ...] means a tuple of int or None of any length
@@ -802,9 +934,19 @@ class VMap(Op):
         self.base_op = base_op
         self.in_axes = in_axes
         self.axis_size = axis_size
-        super().__init__(random=base_op.random)
+        self._random = base_op.random
+        super().__init__()
+
+    @property
+    def random(self):
+        return self._random
 
     def get_shape(self, *parents_shapes):
+        if len(parents_shapes) != len(self.in_axes):
+            raise ValueError(
+                f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}"
+            )
+
         remaining_shapes, axis_size = get_sliced_shapes(
             parents_shapes, self.in_axes, self.axis_size
         )
@@ -881,7 +1023,12 @@ class Composite(Op):
         self.ops = tuple(ops)
         # self.par_nums = tuple(par_nums)
         self.par_nums = tuple(tuple(pp) for pp in par_nums)
-        super().__init__(random=ops[-1].random)
+        self._random = ops[-1].random
+        super().__init__()
+
+    @property
+    def random(self):
+        return self._random
 
     def get_shape(self, *parents_shapes):
         all_shapes = list(parents_shapes)
@@ -951,7 +1098,12 @@ class Autoregressive(Op):
         self.length = length
         self.in_axes = tuple(in_axes)
         self.where_self = where_self
-        super().__init__(random=base_op.random)
+        self._random = base_op.random
+        super().__init__()
+
+    @property
+    def random(self):
+        return self._random
 
     def get_shape(self, start_shape, *other_shapes):
         # const_shapes = other_shapes[: self.num_constants]
@@ -1107,7 +1259,7 @@ def _slice_length(size, slice):
     return len(np.ones(size)[slice])
 
 
-class Index(Op):
+class Index(OpNonrandom):
     """
     Represents an `Op` to index into a `RV`. Slices for all sliced dimensions
     must be baked into the Index op when created. Non sliced dimensions are not
@@ -1127,7 +1279,7 @@ class Index(Op):
             indexed with a RV instead.
         """
         self.slices = slices
-        super().__init__(random=False)
+        super().__init__()
 
     @property
     def advanced_at_start(self) -> bool:
@@ -1296,7 +1448,7 @@ currently, JAGS is the only backend that can actually do inference in these sett
 """
 
 
-class SimpleIndex(Op):
+class SimpleIndex(OpNonrandom):
     """
     Represents an `Op` to index into a `RV`. Does not deal with slices. (That's the interface's problem)
     """
@@ -1305,7 +1457,7 @@ class SimpleIndex(Op):
         """
         Create an Index op
         """
-        super().__init__(random=False)
+        super().__init__()
 
     def get_shape(self, *shapes):
         var_shape, *indices_shapes = shapes
@@ -1365,12 +1517,48 @@ def index_orthogonal(array, *index_arrays):
     return array[*result_arrays]
 
 
+def index_orthogonal_no_slices(array, *index_arrays):
+    """
+    Create orthogonal index arrays for advanced indexing.
+    """
+    # Calculate final shape
+
+    assert array.ndim == len(index_arrays)
+
+    index_shapes = [arr.shape for arr in index_arrays]
+    total_dims = sum(len(shape) for shape in index_shapes)
+
+    result_arrays = []
+    current_dim = 0
+
+    for arr in index_arrays:
+        # Create shape with 1s everywhere except for this array's dimensions
+        new_shape = [1] * total_dims
+
+        # Place this array's dimensions in the correct position
+        for j, dim_size in enumerate(arr.shape):
+            new_shape[current_dim + j] = dim_size
+
+        # Reshape and add to result
+        reshaped = arr.reshape(new_shape)
+        result_arrays.append(reshaped)
+
+        current_dim += len(arr.shape)
+
+    return array[*result_arrays]
+
+
 ################################################################################
 # RVs
 ################################################################################
 
+from typing import TypeVar, Generic
 
-class RV(dag.Node):
+OpT = TypeVar("OpT", bound=Op)
+
+
+class RV(dag.Node, Generic[OpT]):
+    # class RV(dag.Node):
     """
     A RV is essentially just an Op and a a tuple of parent RVs.
 
@@ -1495,7 +1683,9 @@ def equal(A: RV, B: RV) -> bool:
     Parameters
     ----------
     self: RV
+        the first RV to be compared
     other: RV
+        the second RV to be compared
 
     Examples
     --------
@@ -1541,13 +1731,37 @@ def equal(A: RV, B: RV) -> bool:
 ################################################################################
 
 
-def print_upstream(*vars):
+def print_upstream(*vars: RV):
+    """Prints all upstream variables in a friendly readable format.
+
+    Parameters
+    ----------
+    vars: RV
+        random variables
+
+    Examples
+    --------
+    >>> a = RV(Constant(0.5))
+    >>> b = RV(Bernoulli(), a)
+    >>> c = RV(Constant(2))
+    >>> d = RV(Normal(), b, c)
+    >>> e = RV(Constant([75, 50, 99]))
+    >>> print_upstream(d, e)
+    shape | statement
+    ----- | ---------
+    ()    | a = 0.5
+    ()    | b ~ bernoulli(a)
+    ()    | c = 2
+    ()    | d ~ normal(b,c)
+    (3,)  | e = [75 50 99]
+    """
+
     import jax.tree_util
 
-    vars = jax.tree_util.tree_leaves(vars)
-    nodes = dag.upstream_nodes(vars)
+    all_vars = jax.tree_util.tree_leaves(vars)
+    nodes = dag.upstream_nodes(all_vars)
 
-    if vars == []:
+    if all_vars == []:
         print("[empty vars, nothing to print]")
         return
 

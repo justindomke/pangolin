@@ -44,14 +44,14 @@ def test_multi_normal_varying_cov_dim2():
 def test_matrix_mul():
     ndims = 3
     length = 5
-    op = Autoregressive(ir.MatMul(), length, (None,), 1)
+    op = Autoregressive(ir.Matmul(), length, (None,), 1)
     assert op.get_shape((ndims,), (ndims, ndims)) == (length, ndims)
 
 
 def test_matrix_mul_left():
     ndims = 3
     length = 5
-    op = Autoregressive(ir.MatMul(), length, (None,), 0)
+    op = Autoregressive(ir.Matmul(), length, (None,), 0)
     assert op.get_shape((ndims,), (ndims, ndims)) == (length, ndims)
 
 
@@ -77,4 +77,3 @@ def test_vmap_autoregressive_mapped1():
     base_op = ir.VMap(ir.Mul(), (0, 0))
     op = Autoregressive(base_op, length, (1,), 1)
     assert op.get_shape((dims,), (dims, length)) == (length, dims)
-

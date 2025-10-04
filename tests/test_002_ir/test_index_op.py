@@ -56,7 +56,7 @@ def test_index_class(start_shape, idx):
     # print(f"{start_shape=}")
     # print(f"{idx=}")
 
-    x = np.random.randn(*start_shape)
+    x = np.array(np.random.randn(*start_shape))
     expected_shape = x[idx].shape
     # print(f"{expected_shape=}")
 
@@ -67,4 +67,3 @@ def test_index_class(start_shape, idx):
     shape = d.get_shape(x.shape, *non_slice_shapes)
     # print(f"{shape=}")
     assert expected_shape == shape
-

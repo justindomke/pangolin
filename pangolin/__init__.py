@@ -41,4 +41,3 @@ Main interface to pangolin. Broadly speaking, there are the following classes of
 # ]
 # # __all__ += base.for_api # pyright: ignore [reportUnsupportedDunderAll]
 # # __all__.sort() # pyright: ignore [reportUnsupportedDunderAll]
-

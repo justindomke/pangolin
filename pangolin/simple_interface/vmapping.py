@@ -1,7 +1,7 @@
 import collections
 
 from . import InfixRV
-from pangolin.ir import Op, RV, VMap, Constant, print_upstream
+from pangolin.ir import Op, OpNonrandom, RV, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RV_or_ArrayLike, constant, exp, log
@@ -20,7 +20,7 @@ FlatCallable = Callable[
 # TODO: Force inputs to be list?
 
 
-class AbstractOp(Op):
+class AbstractOp(OpNonrandom):
     """
     An `AbstractOp` doesn't actually do anything and expects no parents. It just has a fixed shape.
     """
@@ -37,7 +37,7 @@ class AbstractOp(Op):
             is the op random
         """
         self.shape = shape
-        super().__init__(random=False)
+        super().__init__()
 
     def get_shape(self, *parents_shapes):
         return self.shape

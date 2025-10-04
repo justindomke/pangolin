@@ -14,7 +14,7 @@ The entire interface is based on methods that create `InfixRV` objects (or that 
 | Scalar distributions | `normal` `normal_prec` `lognormal` `cauchy` `bernoulli` `bernoulli_logit` `beta` `binomial` `categorical` `uniform` `beta_binomial` `exponential` `gamma` `poisson` `student_t`|
 | Multivariate distributions | `multi_normal` `multinomial` `dirichlet` |
 | Control flow | `vmap` `composite` `autoregressive` `autoregress` |
-| Indexing | `index` (or `[]`) |
+| Indexing | `index` (or `InfixRV.__getitem__` / `[]` operator) |
 """
 
 from .base import *

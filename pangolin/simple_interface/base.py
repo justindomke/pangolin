@@ -9,19 +9,21 @@ from pangolin.ir import RV, Op, Constant, ScalarOp
 # from pangolin.ir.op import SetAutoRV
 from pangolin import ir
 
-# from .index import index
-# from numpy.typing import ArrayLike
+# from .indexing import index
 
-from jax.typing import ArrayLike
+from numpy.typing import ArrayLike
+
+# from jax.typing import ArrayLike
 import jax
 import numpy as np
 from typing import TypeVar, Type, Callable, cast
 from pangolin.util import comma_separated
 import inspect
+from typing import Generic
 
 
-# RV_or_ArrayLike = RV | ArrayLike
-RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
+RV_or_ArrayLike = RV | ArrayLike
+# RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
 """Represents either a `RV` or a value that can be cast to a NumPy array, such as a float or list of floats.
 This will include JAX arrays (which is good) but also unfortunately accepts strings (which is bad)."""
 
@@ -29,9 +31,11 @@ This will include JAX arrays (which is good) but also unfortunately accepts stri
 # The core InfixRV class. Like an RV except has infix operations
 ####################################################################################################
 
+OpU = TypeVar("OpU", bound=Op)
 
-class InfixRV(RV):
-    """An Infix RV is exactly like a standard `RV` except it supports infix operations.
+
+class InfixRV(RV[OpU], Generic[OpU]):
+    """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix operations.
 
     Examples
     --------
@@ -46,13 +50,13 @@ class InfixRV(RV):
 
     See Also
     --------
-    Pangolin.ir.RV.rv
+    pangolin.ir.RV
 
     """
 
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op, *parents):
+    def __init__(self, op: OpU, *parents):
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -100,11 +104,58 @@ class InfixRV(RV):
     def __str__(self):
         return super().__str__()
 
-    # def __getitem__(self, idx):
-    #     if not isinstance(idx, tuple):
-    #         idx = (idx,)
+    _IdxType = RV_or_ArrayLike | slice | type(Ellipsis)
 
-    #     return index(self, *idx)
+    def __getitem__(self, idx: _IdxType | tuple[_IdxType, ...]):
+        """
+        @public
+        You can index an `RV` with the `[]` operators, e.g. as `A[B,C]`.
+
+        Note that indexing with this interface is different (and simpler) than NumPy or JAX:
+
+        First, indexing is always fully-orthogonal. This is done to avoid the [utter insanity](https://numpy.org/doc/stable/user/basics.indexing.html) that is NumPy indexing with broadcasting, basic indexing, advanced indexing, and combinations of basic and advanced indexing. In this interface, if `A`, `B`, and `C` are RVs, then `A[B,C].shape == A.shape + B.shape`, and similarly if `B` or `C` are int / list of (list of) int / numpy array / slice.
+
+        Second, all axes must be indexed. For example, if `A` is a RV with 3 axes, then `A[2]` will trigger an exception. The idea of this is to make code more legible and self-enforcing. Instead you must write `A[2, :, :]` or `A[2, ...]`.
+
+        Examples
+        --------
+        >>> # Basic indexing
+        >>> A = constant([9,8,7,6,5,4])
+        >>> B = A[2]
+        >>> B.op
+        SimpleIndex()
+        >>> B.parents[0] == A
+        True
+        >>> B.parents[1]
+        InfixRV(Constant(2))
+
+        >>> # indexing with a slice
+        >>> B = A[1::2]
+        >>> B.op
+        SimpleIndex()
+        >>> B.parents[0] == A
+        True
+        >>> B.parents[1]
+        InfixRV(Constant([1,3,5]))
+
+        >>> # indexing with a combination of constants and slices
+        >>> A = constant([[3,4,5],[6,7,8]])
+        >>> B = A[[1,0],::2]
+        >>> B.op
+        SimpleIndex()
+        >>> B.parents[0] == A
+        True
+        >>> B.parents[1]
+        InfixRV(Constant([1,0]))
+        >>> B.parents[2]
+        InfixRV(Constant([0,2]))
+        """
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+
+        from .indexing import index
+
+        return index(self, *idx)
 
 
 ####################################################################################################
@@ -112,7 +163,7 @@ class InfixRV(RV):
 ####################################################################################################
 
 
-def constant(value: ArrayLike) -> InfixRV:
+def constant(value: ArrayLike):
     """Create a constant RV
 
     Parameters
@@ -197,7 +248,7 @@ def _scalar_op_doc(OpClass):
     op = OpClass
     expected_parents = op._expected_parents
 
-    if op._random:
+    if op.random:
         __doc__ = f"""
         Creates a {str(OpClass.__name__)} distributed RV.
         """
@@ -349,7 +400,7 @@ sigmoid = scalar_fun_factory1(ir.InvLogit)
 sigmoid.__doc__ = "Equivalent to `inv_logit`"
 
 
-def sqrt(x) -> InfixRV:
+def sqrt(x):
     "sqrt(x) is an alias for pow(x,0.5)"
     return pow(x, 0.5)
 
@@ -359,7 +410,7 @@ def sqrt(x) -> InfixRV:
 ####################################################################################################
 
 
-def matmul(a, b) -> InfixRV:
+def matmul(a, b):
     """
     Matrix product of two arrays. The behavior follows that of
     [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
@@ -369,17 +420,17 @@ def matmul(a, b) -> InfixRV:
     * If `a` is 2-D and `b` is 1-D then this represents matrix/vector multiplication
     * If `a` and `b` are both 2-D then this represents matrix/matrix multiplication
     """
-    return create_rv(ir.MatMul(), a, b)
+    return create_rv(ir.Matmul(), a, b)
 
 
-def inv(a) -> InfixRV:
+def inv(a):
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
     return create_rv(ir.Inv(), a)
 
 
-def softmax(a) -> InfixRV:
+def softmax(a):
     """
     Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
     syntax of [scipy.special.softmax](
@@ -393,7 +444,7 @@ def softmax(a) -> InfixRV:
     return create_rv(ir.Inv(), a)
 
 
-def sum(x: RV, axis: int) -> InfixRV:
+def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
     """
     Take the sum of a random variable along a given axis
 
@@ -433,25 +484,25 @@ student_t = scalar_fun_factory3(ir.StudentT)
 ####################################################################################################
 
 
-def multi_normal(mean, cov) -> InfixRV:
+def multi_normal(mean, cov):
     """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
     return create_rv(ir.MultiNormal(), mean, cov)
 
 
-def categorical(theta) -> InfixRV:
+def categorical(theta):
     """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
     where `theta` is a vector of non-negative reals that sums to one."""
     return create_rv(ir.Categorical(), theta)
 
 
-def multinomial(n, p) -> InfixRV:
+def multinomial(n, p):
     """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
     random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
     vector of probabilities that sums to one."""
     return create_rv(ir.Multinomial(), n, p)
 
 
-def dirichlet(alpha) -> InfixRV:
+def dirichlet(alpha):
     """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
     random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
     """
