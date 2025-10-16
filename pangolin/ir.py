@@ -30,7 +30,7 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 
 from abc import ABC, abstractmethod
 
-from typing import Type, Sequence, Self, Literal
+from typing import Type, Sequence, Self, Literal, Tuple, Any
 from collections.abc import Callable
 from pangolin import util, dag
 import numpy as np
@@ -860,6 +860,7 @@ def get_sliced_shapes(shapes, in_axes, axis_size):
             axis_size = new_axis_size
         elif new_axis_size is not None:
             assert axis_size == new_axis_size, "incoherent axis size"
+    assert isinstance(axis_size, int), "couldn't identify axis size"
     return remaining_shapes, axis_size
 
 
@@ -941,7 +942,7 @@ class VMap(Op):
     def random(self):
         return self._random
 
-    def get_shape(self, *parents_shapes):
+    def get_shape(self, *parents_shapes) -> _Shape:
         if len(parents_shapes) != len(self.in_axes):
             raise ValueError(
                 f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}"
@@ -950,7 +951,7 @@ class VMap(Op):
         remaining_shapes, axis_size = get_sliced_shapes(
             parents_shapes, self.in_axes, self.axis_size
         )
-        dummy_shape = self.base_op.get_shape(*remaining_shapes)
+        dummy_shape: _Shape = self.base_op.get_shape(*remaining_shapes)
         return (axis_size,) + dummy_shape
 
     def __repr__(self):
@@ -1554,7 +1555,7 @@ def index_orthogonal_no_slices(array, *index_arrays):
 
 from typing import TypeVar, Generic
 
-OpT = TypeVar("OpT", bound=Op)
+OpT = TypeVar("OpT", bound=Op)  # TODO: covariant=True? does it matter?
 
 
 class RV(dag.Node, Generic[OpT]):
@@ -1591,7 +1592,7 @@ class RV(dag.Node, Generic[OpT]):
     _frozen = False
     _n = 1  # convenient to store order all RVs were created
 
-    def __init__(self, op: Op, *parents: Self):
+    def __init__(self, op: OpT, *parents: "RV"):
         """
         Initialize an RV with Op `op` and parents `*parents`.
 

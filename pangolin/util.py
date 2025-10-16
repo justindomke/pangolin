@@ -1,7 +1,8 @@
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
-from typing import Sequence, Any, Callable
+from typing import Sequence, Any, Callable, Iterable
+
 
 def comma_separated(stuff, fun=None, parens=True, spaces=False):
     """convenience function for printing and such
@@ -28,7 +29,7 @@ def comma_separated(stuff, fun=None, parens=True, spaces=False):
         if i < len(stuff) - 1:
             ret += ","
             if spaces:
-                ret += ' '
+                ret += " "
     if parens:
         ret += ")"
     return ret
@@ -53,6 +54,7 @@ class VarNames:
     >>> var_names['bob']
     'v0v'
     """
+
     def __init__(self):
         self.num = 0
         self.node_to_name = {}
@@ -94,6 +96,33 @@ def all_unique(lst):
     return len(lst) == len(set(lst))
 
 
+def intersects(A: Iterable, B: Iterable) -> bool:
+    """
+    Check if two collections have any common elements.
+
+    Parameters
+    ----------
+    A : iterable
+        First collection of elements.
+    B : iterable
+        Second collection of elements.
+
+    Returns
+    -------
+    bool
+        True if A and B share at least one element, False otherwise.
+
+    Examples
+    --------
+    >>> intersects([1, 2, 3], [3, 4, 5])
+    True
+
+    >>> intersects(['apple', 'banana'], ['orange', 'grape'])
+    False
+    """
+    return bool(set(A) & set(B))
+
+
 class WriteOnceDict(dict):
     """A dict where you can't overwrite entries
 
@@ -110,6 +139,7 @@ class WriteOnceDict(dict):
     Traceback (most recent call last):
     ValueError: Cannot overwrite existing key a in WriteOnceDict
     """
+
     def __setitem__(self, key, value):
         if key in self:
             raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDict")
@@ -131,6 +161,7 @@ class WriteOnceDefaultDict(dict):
     Traceback (most recent call last):
     ValueError: Cannot overwrite existing key bob in WriteOnceDefaultDict
     """
+
     # TODO: if an entry is accessed, should we freeze it so it can't be overwritten after that?
 
     def __init__(self, default_factory):
@@ -139,7 +170,9 @@ class WriteOnceDefaultDict(dict):
 
     def __setitem__(self, key, value):
         if key in self:
-            raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDefaultDict")
+            raise ValueError(
+                f"Cannot overwrite existing key {key} in WriteOnceDefaultDict"
+            )
         super().__setitem__(key, value)
 
     def __getitem__(self, key):
@@ -150,8 +183,9 @@ class WriteOnceDefaultDict(dict):
 
 
 def is_leaf_with_none(xi):
-    #return (xi is None) or not isinstance(xi, (list, tuple, dict))
+    # return (xi is None) or not isinstance(xi, (list, tuple, dict))
     return xi is None
+
 
 def tree_map_with_none_as_leaf(f, tree, *rest):
     """
@@ -181,13 +215,16 @@ def tree_map_preserve_none(f, tree, *rest):
 
 def tree_structure_with_none_as_lead(pytree):
     import jax.tree_util
+
     return jax.tree_util.tree_structure(pytree, is_leaf=is_leaf_with_none)
 
 
 def tree_flatten_with_none_as_leaf(x):
     import jax.tree_util
+
     # return jax.tree_util.tree_flatten(x, lambda xi: (xi is None) or not isinstance(x,(list,tuple,dict)) )
     return jax.tree_util.tree_flatten(x, is_leaf=is_leaf_with_none)
+
 
 def same(x, y):
     """
@@ -311,11 +348,12 @@ def is_shape_tuple(a):
 
 PyTree = Any
 
+
 def tree_map_recurse_at_leaf(
     f: Callable[..., Any],
     tree: PyTree,
     *remaining_trees: PyTree,
-    is_leaf: Callable[[Any], bool] | None = None
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> PyTree:
     """
     Applies a function `f` to corresponding leaves of `tree` and `*remaining_trees`.
@@ -382,6 +420,7 @@ def tree_map_recurse_at_leaf(
     ... )
     {'config': 'None_default', 'data': {'factor': 200, 'val': 100}}
     """
+
     def mini_eval(leaf: Any, *remaining_subtrees: PyTree) -> PyTree:
         # `leaf` here is a leaf from the `tree` (first argument) as determined
         # by the outer `jax.tree_map`'s `is_leaf` rule.
@@ -391,7 +430,7 @@ def tree_map_recurse_at_leaf(
         return jax.tree_map(
             lambda *leaves: f(leaf, *leaves),
             *remaining_subtrees,
-            is_leaf=is_leaf # Propagate the custom is_leaf to the inner map
+            is_leaf=is_leaf,  # Propagate the custom is_leaf to the inner map
         )
 
     # The outer `jax.tree_map` traverses `tree` and `*remaining_trees` in parallel.
@@ -401,7 +440,7 @@ def tree_map_recurse_at_leaf(
         mini_eval,
         tree,
         *remaining_trees,
-        is_leaf=is_leaf # Pass the custom is_leaf to the outer map
+        is_leaf=is_leaf,  # Pass the custom is_leaf to the outer map
     )
 
 
@@ -419,7 +458,9 @@ def tree_map_recurse_at_leaf_with_none_as_leaf(f, tree, *remaining_trees):
     >>> tree_map_recurse_at_leaf_with_none_as_leaf(lambda a,b: a, pytree1, pytree2)
     {'cat': 3, 'dog': 3}
     """
-    return tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=is_leaf_with_none)
+    return tree_map_recurse_at_leaf(
+        f, tree, *remaining_trees, is_leaf=is_leaf_with_none
+    )
 
 
 def flatten_fun(f, *args, is_leaf=None):
@@ -449,9 +490,10 @@ def flatten_fun(f, *args, is_leaf=None):
 
 def _check_tree_consistency(*args):
     trees = [jax.tree_util.tree_structure(args, is_leaf=is_leaf_with_none)]
-    #trees = [tree_structure_with_none(args)]
+    # trees = [tree_structure_with_none(args)]
     for t in trees:
         assert t == trees[0]
+
 
 def dual_flatten(pytree1, pytree2):
     """
@@ -481,9 +523,11 @@ def dual_flatten(pytree1, pytree2):
     flat_tree2, tree2_treedef = tree_flatten_with_none_as_leaf(pytree2)
     return flat_tree1, flat_tree2
 
+
 ################################################################################
 # Cast observed variables to arrays (and check that they have corresponding shapes)
 ################################################################################
+
 
 def short_pytree_string(treedef):
     "Get a string for a JAX PyTreeDef without printing PyTreeDef and scaring the noobs"
@@ -506,20 +550,24 @@ def assimilate_vals(vars, vals):
     except ValueError:
         vars_treedef = jax.tree_util.tree_structure(vars)
         vals_treedef = jax.tree_util.tree_structure(vals)
-        raise ValueError(f"Not able to find common pytree structure for given vars and vals.\n"
-                         f"For given vars got: {short_pytree_string(vars_treedef)}.\n"
-                         f"For given vals got: {short_pytree_string(vals_treedef)}.")
+        raise ValueError(
+            f"Not able to find common pytree structure for given vars and vals.\n"
+            f"For given vars got: {short_pytree_string(vars_treedef)}.\n"
+            f"For given vals got: {short_pytree_string(vals_treedef)}."
+        )
 
     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
     flat_vals, vals_treedef = jax.tree_util.tree_flatten(new_vals)
-    assert (
-        vars_treedef == vals_treedef
-    ), (f"vars and vals must have same structure (after conversion to arrays). ({vars_treedef} vs "
-        f"{vals_treedef}")
+    assert vars_treedef == vals_treedef, (
+        f"vars and vals must have same structure (after conversion to arrays). ({vars_treedef} vs "
+        f"{vals_treedef}"
+    )
     for var, val in zip(flat_vars, flat_vals):
         if var.shape != val.shape:
-            raise ValueError(f"given var {var} with shape {var.shape} does not match given val"
-                           f" {val} with shape {val.shape}.")
+            raise ValueError(
+                f"given var {var} with shape {var.shape} does not match given val"
+                f" {val} with shape {val.shape}."
+            )
     return new_vals
 
 
@@ -602,3 +650,77 @@ def unzip(source: Sequence[tuple], strict=False):
     """
     return zip(*source, strict=strict)
 
+
+################################################################################
+# call np.allclose on pytrees instead of arrays
+################################################################################
+
+
+def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
+    """Checks if two PyTrees are structurally identical and all leaves are close.
+
+    This function first verifies that the two PyTrees have the exact same
+    structure. If they do, it then compares each corresponding leaf node (array)
+    using `np.allclose` and returns `True` if all leaves are close, `False`
+    otherwise.
+
+    Parameters
+    ----------
+    a : PyTree
+        The first PyTree to compare.
+    b : PyTree
+        The second PyTree to compare.
+    **kwargs : dict, optional
+        Additional keyword arguments to be passed directly to `np.allclose`.
+        Common arguments include `rtol` (relative tolerance) and `atol`
+        (absolute tolerance).
+
+    Returns
+    -------
+    bool
+        `True` if the structures match and all corresponding leaves are close.
+        `False` if the structures match but any leaves are not close.
+
+    Raises
+    ------
+    ValueError
+        If the PyTree structures of `a` and `b` are not identical.
+
+    Examples
+    --------
+    >>> tree1 = {'a': jnp.array([1.0, 2.0]), 'b': (jnp.array(3.0),)}
+    >>> tree2 = {'a': jnp.array([1.000001, 2.0]), 'b': (jnp.array(3.0),)}
+    >>> tree_allclose(tree1, tree2, atol=1e-5)
+    True
+
+    >>> tree3 = {'a': jnp.array([1.0, 2.5]), 'b': (jnp.array(3.0),)}
+    >>> tree_allclose(tree1, tree3)
+    False
+
+    >>> tree4 = {'a': jnp.array([1.0, 2.0])} # Different structure
+    >>> try:
+    ...     tree_allclose(tree1, tree4)
+    ... except ValueError as e:
+    ...     print(e)
+    PyTree structures do not match.
+     a structure: PyTreeDef({'a': *, 'b': (*,)})
+     b structure: PyTreeDef({'a': *})
+
+    """
+    # 1. Check if the tree structures are the same.
+    struct_a = jax.tree_util.tree_structure(a)
+    struct_b = jax.tree_util.tree_structure(b)
+    if struct_a != struct_b:
+        raise ValueError(
+            "PyTree structures do not match.\n"
+            f" a structure: {struct_a}\n"
+            f" b structure: {struct_b}"
+        )
+
+    # 2. Map np.allclose over the leaves to get a PyTree of booleans.
+    leaves_are_close = jax.tree_util.tree_map(
+        lambda x, y: np.allclose(x, y, **kwargs), a, b
+    )
+
+    # 3. Flatten the boolean PyTree and check if all values are True.
+    return all(jax.tree_util.tree_leaves(leaves_are_close))

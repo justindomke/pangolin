@@ -10,6 +10,7 @@ dependencies = [
     "numpyro",
     "funsor>=0.4.5",
     "makefun>=1.16.0",
+    "blackjax>=1.2.5",
 ]
 
 [build-system]
