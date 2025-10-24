@@ -675,21 +675,72 @@ def ancestor_sample(vars, key, size: Optional[int] = None):
     return unflatten(flat_samps)
 
 
-def ancestor_log_prob(vars, vals):
+def ancestor_sampler(vars):
     """
-    Evaluate log-probabilities
+    Compiles a pytree of RVs into a plain-old JAX function that takes a PNGKey and returns a pytree with the same structure containing a joint sample from the distribution of those RVs.
 
     Parameters
     ----------
     vars
-        a pytree of `RV`s
-    values for those `RV`s
-        a jax PRNGKey
+        a pytree of `RV`s to sample
+
 
     Returns
     -------
     out
-        scalar log-probability
+        callable mapping a jax PRNGKey to a sample matching the structure and shape of `vars`
+
+
+    Examples
+    --------
+    >>> x = RV(ir.Constant(1.5))
+    >>> y = RV(ir.Add(), x, x)
+    >>> fun = ancestor_sampler([{'cat': x}, y])
+
+    You now have a plain-old JAX function that's completely independent of pangolin.
+
+    >>> key = jax.random.PRNGKey(0)
+    >>> fun(key)
+    [{'cat': Array(1.5, dtype=float32)}, Array(3., dtype=float32)]
+
+    You can do normal JAX stuff with it, e.g. vmap.
+
+    >>> print(jax.vmap(fun)(jax.random.split(key, 3)))
+    [{'cat': Array([1.5, 1.5, 1.5], dtype=float32)}, Array([3., 3., 3.], dtype=float32)]
+
+    """
+
+    (
+        flat_vars,
+        _,
+        _,
+        unflatten,
+        _,
+    ) = util.flatten_args(vars, [], [])
+
+    def sampler(key):
+        flat_samps = ancestor_sample_flat(flat_vars, key)
+
+        return unflatten(flat_samps)
+
+    return sampler
+
+
+def ancestor_log_prob(*vars, **kwvars):
+    """
+    Given a pytree of vars, create a plain-old JAX function to compute log_probabilities
+
+    Parameters
+    ----------
+    vars
+        pytrees of `RV`s
+    kwargs
+        more pytrees of `RV`s
+
+    Returns
+    -------
+    out
+        log_prob function
 
 
     Examples
@@ -697,20 +748,89 @@ def ancestor_log_prob(vars, vals):
     >>> loc = ir.RV(ir.Constant(0.0))
     >>> scale = ir.RV(ir.Constant(1.0))
     >>> x = RV(ir.Normal(),loc,scale)
-    >>> ancestor_log_prob(x, jnp.array(0.0))
+    >>> fun = ancestor_log_prob(x)
+
+    You now have a plain JAX function that's completely independent of pangolin. You can evaluate it.
+
+    >>> fun(0.0)
     Array(-0.9189385, dtype=...)
+
+    Or you can vmap it.
+
+    >>> jax.vmap(fun)(jnp.array([0.0, 0.5]))
+    Array([-0.9189385, -1.0439385], dtype=float32)
+
+    Here's a more complex example:
 
     >>> op = ir.VMap(ir.Normal(), [None,None], 3)
     >>> y = RV(op,loc,scale)
-    >>> ancestor_log_prob({'x':x, 'y':y}, {'x':0.0, 'y':[0.0, 0.5, 0.1]})
+    >>> fun = ancestor_log_prob({'x':x, 'y':y})
+    >>> fun({'x':0.0, 'y':[0.0, 0.5, 0.1]})
     Array(-3.8057542, dtype=...)
+
+    You can also create a function that uses positional and/or keyword arguments:
+
+    >>> fun = ancestor_log_prob(x, cat=y)
+    >>> fun(0.0, cat=[0.0, 0.5, 0.1])
+    Array(-3.8057542, dtype=...)
+
     """
 
-    vals = util.assimilate_vals(vars, vals)  # casts lists and such to ndarray
+    all_vars = (vars, kwvars)
 
-    flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
-    flat_vals, vals_treedef = jax.tree_util.tree_flatten(vals)
-    if vars_treedef != vals_treedef:
-        raise ValueError("vars_treedef does not match vals_treedef")
+    def myfun(*vals, **kwvals):
+        all_vals = (vals, kwvals)
 
-    return ancestor_log_prob_flat(flat_vars, flat_vals)
+        all_vals = util.assimilate_vals(
+            all_vars, all_vals
+        )  # casts lists and such to ndarray
+
+        flat_vars, vars_treedef = jax.tree_util.tree_flatten(all_vars)
+        flat_vals, vals_treedef = jax.tree_util.tree_flatten(all_vals)
+        if vars_treedef != vals_treedef:
+            raise ValueError("vars_treedef does not match vals_treedef")
+
+        return ancestor_log_prob_flat(flat_vars, flat_vals)
+
+    return myfun
+
+
+# def ancestor_log_prob(vars, vals):
+#     """
+#     Evaluate log-probabilities
+
+#     Parameters
+#     ----------
+#     vars
+#         a pytree of `RV`s
+#     values for those `RV`s
+#         a jax PRNGKey
+
+#     Returns
+#     -------
+#     out
+#         scalar log-probability
+
+
+#     Examples
+#     --------
+#     >>> loc = ir.RV(ir.Constant(0.0))
+#     >>> scale = ir.RV(ir.Constant(1.0))
+#     >>> x = RV(ir.Normal(),loc,scale)
+#     >>> ancestor_log_prob(x, jnp.array(0.0))
+#     Array(-0.9189385, dtype=...)
+
+#     >>> op = ir.VMap(ir.Normal(), [None,None], 3)
+#     >>> y = RV(op,loc,scale)
+#     >>> ancestor_log_prob({'x':x, 'y':y}, {'x':0.0, 'y':[0.0, 0.5, 0.1]})
+#     Array(-3.8057542, dtype=...)
+#     """
+
+#     vals = util.assimilate_vals(vars, vals)  # casts lists and such to ndarray
+
+#     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
+#     flat_vals, vals_treedef = jax.tree_util.tree_flatten(vals)
+#     if vars_treedef != vals_treedef:
+#         raise ValueError("vars_treedef does not match vals_treedef")
+
+#     return ancestor_log_prob_flat(flat_vars, flat_vals)

@@ -97,7 +97,7 @@ def sample_flat(
             f"Cannot condition on RV with non-random op(s) {nonrandom_ops}"
         )
 
-    # if no given variables, just do ancestor sampling (works but disabled for efficiency)
+    # if no given variables, just do ancestor sampling (works but disabled for simplicity)
     # if len(given_vars) == 0:
     #     key = jax.random.PRNGKey(0)
     #     keys = jax.random.split(key, niter)
