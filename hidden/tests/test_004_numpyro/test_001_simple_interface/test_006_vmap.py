@@ -1,6 +1,6 @@
 from numpyro.contrib.funsor import config_enumerate
 
-from pangolin.simple_interface import (
+from pangolin.interface import (
     normal,
     lognormal,
     ir,

@@ -1,16 +1,17 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.simple_interface.vmapping import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
     AbstractOp,
     vmap_eval_flat,
-    vmap
+    vmap,
 )
 import numpy as np
+
 
 def test_vmap_dummy_args():
     in_axes = (0,)

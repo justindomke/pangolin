@@ -1,7 +1,7 @@
 import jax.random
 
 from pangolin import ir
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin.inference.numpyro.handlers import numpyro_handlers
 from pangolin.inference.numpyro import (
     sample,

@@ -1,4 +1,4 @@
-from pangolin.simple_interface import constant, InfixRV
+from pangolin.interface import constant, InfixRV
 from pangolin.ir import Constant
 from numpy.testing import assert_array_equal
 import numpy as np

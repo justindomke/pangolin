@@ -1,9 +1,10 @@
 from pangolin.ir import Composite, RV
-from pangolin.simple_interface import InfixRV, makerv, normal, create_rv
+from pangolin.interface import InfixRV, makerv, normal, create_rv
 from .vmapping import generated_nodes, AbstractOp
 from pangolin import util
 import jax.tree_util
 from typing import Callable
+
 
 def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
     """
@@ -21,7 +22,7 @@ def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
         A function that takes RVs as inputs and returns a single RV
     input_shapes: tuple[int, ...]
         shapes for each explicit input to `fun`
-    
+
     Returns
     -------
     op
@@ -90,6 +91,7 @@ def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
 
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
+
 def composite_flat(flat_fun: Callable[..., RV]):
     """Turn a function into a new function that returns a single Composite RV
 
@@ -126,9 +128,11 @@ def composite_flat(flat_fun: Callable[..., RV]):
 
     def myfun(*inputs):
         input_shapes = [x.shape for x in inputs]
-        op, consts = make_composite(flat_fun,*input_shapes)
+        op, consts = make_composite(flat_fun, *input_shapes)
         return create_rv(op, *consts, *inputs)
+
     return myfun
+
 
 def composite(fun):
     """Turn a function into a new function that returns a single Composite RV. Typically this would be used to create autoregressive distributions via the `autoregressive` function, rather than called directly by the user.
@@ -178,8 +182,8 @@ def composite(fun):
 
         flat_inputs = flatten_input(*inputs)
 
-        #test_out = new_flat_fun(*flat_inputs)
-        #print(f"{test_out=}")
+        # test_out = new_flat_fun(*flat_inputs)
+        # print(f"{test_out=}")
 
         flat_input_shapes = [x.shape for x in flat_inputs]
         op, consts = make_composite(new_flat_fun, *flat_input_shapes)
@@ -187,19 +191,22 @@ def composite(fun):
 
     return myfun
 
+
 import functools
+
 
 def my_decorator(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         "EXTRA INFO"
         return func(*args, **kwargs)
-    
+
     return wrapper
 
-#composite2 = my_decorator(composite)
-#exec('composite5 = my_decorator(composite)')
-#exec('composite5.__doc__ += "HEY"')
+
+# composite2 = my_decorator(composite)
+# exec('composite5 = my_decorator(composite)')
+# exec('composite5.__doc__ += "HEY"')
 
 composite5 = my_decorator(composite)
 
@@ -208,6 +215,7 @@ def function_factory(name, description):
     """
     A factory that creates functions with dynamic docstrings.
     """
+
     def generated_function(*args, **kwargs):
         """
         This is a placeholder docstring. It will be overwritten.
@@ -221,13 +229,19 @@ def function_factory(name, description):
 
     # Optionally, set the function name for better introspection and pdoc display
     generated_function.__name__ = name
-    generated_function.__qualname__ = name # For nested functions or methods
+    generated_function.__qualname__ = name  # For nested functions or methods
 
     return generated_function
 
+
 # Example usage:
-my_func_a = function_factory("my_specific_function_A", "This function performs operation A.")
-my_func_b = function_factory("my_specific_function_B", "This function handles data processing B.")
+my_func_a = function_factory(
+    "my_specific_function_A", "This function performs operation A."
+)
+my_func_b = function_factory(
+    "my_specific_function_B", "This function handles data processing B."
+)
+
 
 class MyBaseProcessor:
     """
@@ -235,6 +249,7 @@ class MyBaseProcessor:
 
     Dynamically generated methods will be added to this class.
     """
+
     def __init__(self, data_source):
         """
         Initializes the processor with a data source.
@@ -251,7 +266,9 @@ class MyBaseProcessor:
         """
         return self.data_source
 
+
 # --- Factory Function for Dynamic Methods ---
+
 
 def method_factory(method_name, method_docstring, method_logic_func):
     """
@@ -267,6 +284,7 @@ def method_factory(method_name, method_docstring, method_logic_func):
     Returns:
         callable: The prepared method function.
     """
+
     def generated_method(self, *args, **kwargs):
         """
         This is a placeholder docstring. It will be overwritten.
@@ -284,9 +302,10 @@ def method_factory(method_name, method_docstring, method_logic_func):
     # For now, we'll leave it as just the method_name, and update it later.
     # Alternatively, you could pass the class name to the factory, but
     # setting it during assignment is often cleaner.
-    generated_method.__qualname__ = method_name # Will be updated later
+    generated_method.__qualname__ = method_name  # Will be updated later
 
     return generated_method
+
 
 # --- Dynamic Method Assignment ---
 
@@ -295,18 +314,24 @@ method_specs = [
     {
         "name": "process_csv",
         "doc": "Processes data from a CSV file source.\n\nReturns: bool: True if processing was successful.",
-        "logic": lambda self: f"Processing CSV from {self.data_source}..."
+        "logic": lambda self: f"Processing CSV from {self.data_source}...",
     },
     {
         "name": "process_json",
         "doc": "Processes data from a JSON API source.\n\nArgs:\n    api_key (str): The API key for authentication.\n\nReturns: dict: The parsed JSON data.",
-        "logic": lambda self, api_key: {"status": "processed", "source": self.data_source, "key_used": api_key}
+        "logic": lambda self, api_key: {
+            "status": "processed",
+            "source": self.data_source,
+            "key_used": api_key,
+        },
     },
     {
         "name": "log_activity",
         "doc": "Logs a specific activity.\n\nArgs:\n    activity (str): The activity to log.\n\nReturns: None",
-        "logic": lambda self, activity: print(f"[{self.data_source}] Logging activity: {activity}")
-    }
+        "logic": lambda self, activity: print(
+            f"[{self.data_source}] Logging activity: {activity}"
+        ),
+    },
 ]
 
 # Loop through the specs and add methods to MyBaseProcessor

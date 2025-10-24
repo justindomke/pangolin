@@ -1,42 +1,44 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.simple_interface.vmapping import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
     AbstractOp,
     vmap_eval_flat,
-    vmap
+    vmap,
 )
 import numpy as np
 
 
 def test_square():
     def f(x):
-        return x*x
+        return x * x
 
-    x = constant([1,2,3])
+    x = constant([1, 2, 3])
     y = vmap(f)(x)
 
-    assert y.op == ir.VMap(ir.Mul(),(0,0),3)
+    assert y.op == ir.VMap(ir.Mul(), (0, 0), 3)
     assert y.parents == (x, x)
 
+
 def test_add_and_square():
-    def f(x,y):
-        z = x+y
-        return z*z
+    def f(x, y):
+        z = x + y
+        return z * z
 
-    x = constant([1,2,3])
-    y = constant([4,5,6])
-    u = vmap(f)(x,y)
+    x = constant([1, 2, 3])
+    y = constant([4, 5, 6])
+    u = vmap(f)(x, y)
 
-    assert u.op == ir.VMap(ir.Mul(),(0,0),3)
+    assert u.op == ir.VMap(ir.Mul(), (0, 0), 3)
     z = u.parents[0]
-    assert u.parents == (z,z)
-    assert z.op == ir.VMap(ir.Add(),(0,0),3)
-    assert z.parents == (x,y)
+    assert u.parents == (z, z)
+    assert z.op == ir.VMap(ir.Add(), (0, 0), 3)
+    assert z.parents == (x, y)
+
 
 # def test_indexing():
 #     def f(x):
@@ -44,7 +46,6 @@ def test_add_and_square():
 
 #     x = makerv([[1,2],[3,4],[5,6]])
 #     z = vmap(f)(x)
-
 
 
 # def test_vmap_partial_mapping():
@@ -58,6 +59,7 @@ def test_add_and_square():
 #     t = vmap(f,(0,None))(x,y)
 #
 
+
 def test_single_arg():
     y = vmap(exponential, 0, 3)(np.zeros(3))
     assert y.shape == (3,)
@@ -67,10 +69,11 @@ def test_single_arg():
     assert y.shape == (3,)
     assert y.op == ir.VMap(ir.Exponential(), (0,), 3)
 
+
 def test_two_args():
     y = vmap(normal, 0, 3)(np.zeros(3), np.ones(3))
     assert y.shape == (3,)
-    assert y.op == ir.VMap(ir.Normal(), (0,0), 3)
+    assert y.op == ir.VMap(ir.Normal(), (0, 0), 3)
 
     y = vmap(normal, None, 3)(np.array(0), np.array(1))
     assert y.shape == (3,)
@@ -88,6 +91,7 @@ def test_two_args():
     assert y.shape == (3,)
     assert y.op == ir.VMap(ir.Normal(), (None, 0), 3)
 
+
 def test_two_args_lists():
     y = vmap(normal, [0, 0], 3)(np.zeros(3), np.ones(3))
     assert y.shape == (3,)
@@ -97,6 +101,7 @@ def test_two_args_lists():
 
     y = vmap(normal, [None, 0], 3)(np.array(0), np.ones(3))
     assert y.shape == (3,)
+
 
 def test_use_arg_twice():
     def f(x):
@@ -127,47 +132,56 @@ def test_use_arg_twice_complicated():
     assert y.shape == (3,)
     assert y.parents[0].parents[0] == y.parents[1].parents[0]
 
+
 def test_outside_arg():
-    x = constant([1,2,3])
+    x = constant([1, 2, 3])
     y = constant(4)
+
     def f(xi):
-        return normal(xi,y)
+        return normal(xi, y)
+
     z = vmap(f)(x)
     assert z.shape == (3,)
-    assert z.parents == (x,y)
+    assert z.parents == (x, y)
     assert z.op == ir.VMap(ir.Normal(), (0, None), 3)
+
 
 def test_deterministic_scalars():
     # notice z is a SCALAR, because + is deterministic
     x = constant(1)
     y = constant(2)
-    def f(x,y):
-        z = x+y
-        return z*z
-    u = vmap(f,None,3)(x,y)
+
+    def f(x, y):
+        z = x + y
+        return z * z
+
+    u = vmap(f, None, 3)(x, y)
     assert u.shape == (3,)
     assert u.op == ir.VMap(ir.Mul(), (None, None), 3)
     z = u.parents[0]
-    assert u.parents == (z,z)
+    assert u.parents == (z, z)
     assert z.shape == ()
     assert z.op == ir.Add()
-    assert z.parents == (x,y)
+    assert z.parents == (x, y)
+
 
 def test_random_scalars():
     # unlike the previous example, notice z is now a VECTOR, because normal is random
     x = constant(1)
     y = constant(2)
-    def f(x,y):
-        z = normal(x,y)
-        return z*z
-    u = vmap(f,None,3)(x,y)
+
+    def f(x, y):
+        z = normal(x, y)
+        return z * z
+
+    u = vmap(f, None, 3)(x, y)
     assert u.shape == (3,)
     assert u.op == ir.VMap(ir.Mul(), (0, 0), 3)
     z = u.parents[0]
-    assert u.parents == (z,z)
+    assert u.parents == (z, z)
     assert z.shape == (3,)
     assert z.op == ir.VMap(ir.Normal(), (None, None), 3)
-    assert z.parents == (x,y)
+    assert z.parents == (x, y)
 
 
 def test_vmap_dict():
@@ -180,11 +194,12 @@ def test_vmap_dict():
         return ({"a": a}, b, c)
 
     stuff = {"x": 1.1, "yz": (2.2 * np.ones(5), 3.3)}
-    in_axes = {'x': None, 'yz': (0, None)}
+    in_axes = {"x": None, "yz": (0, None)}
     out = vmap(f, in_axes=in_axes, axis_size=5)(stuff)
     assert out[0]["a"].shape == (5,)
     assert out[1].shape == (5,)
     assert out[2].shape == (5,)
+
 
 def test_vmap_dict_prefix():
     def f(stuff):
@@ -196,7 +211,7 @@ def test_vmap_dict_prefix():
         return ({"a": a}, b, c)
 
     stuff = {"x": 1.1, "yz": (2.2 * np.ones(5), np.ones(5))}
-    in_axes = {'x': None, 'yz': 0}
+    in_axes = {"x": None, "yz": 0}
     out = vmap(f, in_axes=in_axes, axis_size=5)(stuff)
     assert out[0]["a"].shape == (5,)
     assert out[1].shape == (5,)

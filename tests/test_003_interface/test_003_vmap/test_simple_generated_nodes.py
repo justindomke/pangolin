@@ -1,10 +1,10 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
 # from pangolin.simple_interface.base import make_infix_rv
 
-from pangolin.simple_interface.vmapping import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,

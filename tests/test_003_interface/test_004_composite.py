@@ -1,8 +1,8 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin.ir import Composite
-from pangolin.simple_interface.compositing import composite
+from pangolin.interface.compositing import composite
 from pangolin import ir
-from pangolin.simple_interface.compositing import composite_flat, make_composite
+from pangolin.interface.compositing import composite_flat, make_composite
 
 
 def test_make_composite_plain_normal():
@@ -72,7 +72,7 @@ def test_make_composite_closure2():
 
 
 def test_make_composite_closure3():
-    #x = normal(0, 1)
+    # x = normal(0, 1)
     y = normal(0, 1)
 
     def f(x):
@@ -89,7 +89,7 @@ def test_make_composite_closure3():
 
 def test_make_composite_closure4():
     x = normal(0, 1)
-    #y = normal(0, 1)
+    # y = normal(0, 1)
 
     def f(y):
         z = x * y
@@ -266,9 +266,10 @@ def test_composite_normal_const_rv():
 
     z = fun(2.2)
 
-    assert z.op == ir.Composite(2, [ir.Normal()], [[0,1]])
+    assert z.op == ir.Composite(2, [ir.Normal()], [[0, 1]])
     assert z.parents[0].op == ir.Constant(2.2)
     assert z.parents[1].op == ir.Constant(3.3)
+
 
 def test_composite_normal_const_rv_reversed():
     loc = constant(3.3)
@@ -279,7 +280,7 @@ def test_composite_normal_const_rv_reversed():
 
     z = fun(2.2)
 
-    assert z.op == ir.Composite(2, [ir.Normal()], [[1,0]])
+    assert z.op == ir.Composite(2, [ir.Normal()], [[1, 0]])
     assert z.parents[0].op == ir.Constant(2.2)
     assert z.parents[1].op == ir.Constant(3.3)
 
@@ -382,7 +383,10 @@ def test_composite_complex_inputs():
 
     z = f((0, (1, 2)))
 
-    assert z.op == ir.Composite(3, (ir.Add(), ir.Div(), ir.Mul()), ((0, 2), (1, 2), (3, 4)))
+    assert z.op == ir.Composite(
+        3, (ir.Add(), ir.Div(), ir.Mul()), ((0, 2), (1, 2), (3, 4))
+    )
+
 
 def test_composite_norm():
     x = constant(0.5)
@@ -394,5 +398,5 @@ def test_composite_norm():
 
     y = f(x)
 
-    assert y.op == Composite(2, [ir.Normal()], [[0,1]] )
+    assert y.op == Composite(2, [ir.Normal()], [[0, 1]])
     assert y.parents == (x, noise)

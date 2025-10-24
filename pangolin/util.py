@@ -1,3 +1,9 @@
+"""
+This submodule contains internal utility functions.
+None of these functions import or use any other parts of Pangolin.
+**End-users of Pangolin are not typically expected to use these functions directly**, though people designing new inference algorithms may find them useful.
+"""
+
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np

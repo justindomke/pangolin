@@ -1,5 +1,5 @@
-from pangolin.simple_interface import *
-from pangolin.simple_interface.autoregressing import (
+from pangolin.interface import *
+from pangolin.interface.autoregressing import (
     autoregressive,
     autoregressive_flat,
     autoregress,

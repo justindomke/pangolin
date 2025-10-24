@@ -34,7 +34,7 @@ def reset_module_imports():
 def test_unary_op_off(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "off")
 
-    from pangolin.simple_interface import exp, constant, bernoulli
+    from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir
 
     for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
@@ -56,7 +56,7 @@ def test_unary_op_off(monkeypatch):
 def test_unary_op_simple(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
 
-    from pangolin.simple_interface import exp, constant, bernoulli
+    from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir
 
     for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
@@ -73,7 +73,7 @@ def test_unary_op_simple(monkeypatch):
 def test_unary_op_numpy(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
 
-    from pangolin.simple_interface import exp, constant, bernoulli
+    from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir
 
     for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
@@ -90,7 +90,7 @@ def test_unary_op_numpy(monkeypatch):
 def test_binary_op_off(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "off")
 
-    from pangolin.simple_interface import add, constant, normal
+    from pangolin.interface import add, constant, normal
     from pangolin import ir
 
     for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
@@ -110,7 +110,7 @@ def test_binary_op_off(monkeypatch):
 def test_binary_op_simple(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
 
-    from pangolin.simple_interface import add, constant, normal
+    from pangolin.interface import add, constant, normal
     from pangolin import ir
 
     for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
@@ -137,7 +137,7 @@ def test_binary_op_simple(monkeypatch):
 def test_binary_op_numpy(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "numpy")
 
-    from pangolin.simple_interface import add, constant, normal
+    from pangolin.interface import add, constant, normal
     from pangolin import ir
 
     for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
@@ -167,7 +167,7 @@ def test_binary_op_numpy(monkeypatch):
 def test_tertiary_op_off(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "off")
 
-    from pangolin.simple_interface import student_t, beta_binomial, constant
+    from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir
 
     for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:
@@ -187,7 +187,7 @@ def test_tertiary_op_off(monkeypatch):
 def test_tertiary_op_simple(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
 
-    from pangolin.simple_interface import student_t, beta_binomial, constant
+    from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir
 
     for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:
@@ -217,7 +217,7 @@ def test_tertiary_op_simple(monkeypatch):
 def test_tertiary_op_numpy(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "numpy")
 
-    from pangolin.simple_interface import student_t, beta_binomial, constant
+    from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir
 
     for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:

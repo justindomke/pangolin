@@ -1,6 +1,6 @@
 from pangolin.ir import Composite, RV
 from pangolin.ir import Autoregressive
-from pangolin.simple_interface import (
+from pangolin.interface import (
     InfixRV,
     makerv,
     constant,
@@ -10,11 +10,11 @@ from pangolin.simple_interface import (
     normal,
     exponential,
 )
-from pangolin.simple_interface.compositing import composite_flat, make_composite
+from pangolin.interface.compositing import composite_flat, make_composite
 from .vmapping import generated_nodes, AbstractOp, get_dummy_args
 from pangolin import util
 import jax.tree_util
-from pangolin.simple_interface.base import RV_or_ArrayLike
+from pangolin.interface.base import RV_or_ArrayLike
 
 # from pangolin.simple_interface.vmapping import get_flat_vmap_args_and_axes
 from typing import Callable, Sequence, Any

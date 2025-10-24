@@ -1,6 +1,6 @@
 from pangolin.ir import RV, Constant, Index
-from pangolin.simple_interface import InfixRV, makerv, constant
-from pangolin.simple_interface.indexing import index, eliminate_ellipses, convert_index
+from pangolin.interface import InfixRV, makerv, constant
+from pangolin.interface.indexing import index, eliminate_ellipses, convert_index
 import numpy as np
 import pytest
 

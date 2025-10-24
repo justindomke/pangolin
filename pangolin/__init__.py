@@ -1,15 +1,23 @@
 """
-Main interface to pangolin. Broadly speaking, there are the following classes of functions:
-- `makerv` will either cast its input to a constant RV or (if it is already an RV) leave it alone
-    (TODO: This is bad)
-- Functions to create new RVs with given distributions: `normal`, `exponential`,
-`multi_normal`, `dirichlet`, etc.
-- Functions to apply deterministic transformations to other RVs: `exp`, `sin`, `pow`, `matmul`, etc.
-- Program transforms: `vmap`
+Pangolin's goal is to be **the world's friendliest probabilistic programming language**.
+
+Quickstart:
+
+- Use `pangolin.interface` to define probabilistic models in a cheerful interface.
+- Use `pangolin.backend` to compile probabilistic models into plain JAX functions (to be used independently of the rest of Pangolin).
+- Use `pangolin.blackjax` to easily call [blackjax](https://blackjax-devs.github.io/blackjax/) to do inference on probabilistic models.
+
+In addition, there are three submodules that end-users would not typically interact with:
+
+- `pangolin.ir` - The internal representation (IR) for probabilistic models in Pangolin.
+- `pangolin.util` - Various internal utility functions.
+- `pangolin.dag` - Utilities for interacting with directed acyclic graphs (DAGs).
 """
 
 from .ir import print_upstream
 from pangolin import blackjax
+
+from pangolin import util, dag, ir
 
 # from pangolin import interface, ir, inference, simple_interface, util
 
@@ -27,6 +35,12 @@ from pangolin import blackjax
 
 # # import test_imports
 # from . import ir_test
+
+__all__ = [
+    "util",
+    "dag",
+    "ir",
+]
 
 # __all__ = []
 # __all__ = [

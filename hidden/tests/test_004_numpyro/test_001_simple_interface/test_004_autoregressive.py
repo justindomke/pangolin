@@ -1,4 +1,4 @@
-from pangolin.simple_interface import (
+from pangolin.interface import (
     makerv,
     normal,
     autoregressive,

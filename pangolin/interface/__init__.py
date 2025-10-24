@@ -1,5 +1,37 @@
 """
-This module defines an extremely simple interface for creating objects in the IR.
+This module defines a friendly interface for creating models in the Pangolin IR.
+
+## Example
+
+Take the following model:
+
+```text
+x ~ normal(0,1)
+y[i] ~ exponential(d[i])
+z[i] ~ normal(x, y[i])
+```
+
+In Pangolin, you can declare this model like so:
+
+```python
+>>> from pangolin.interface import normal, exponential
+>>>
+>>> x = normal(0,1)
+>>> y = vmap(exponential)(constant([2,3,4]))
+>>> z = vmap(normal, [None, 0])(x, y)
+>>> print_upstream(z)
+shape | statement
+----- | ---------
+()    | a = 0
+()    | b = 1
+()    | c ~ normal(a,b)
+(3,)  | d = [2 3 4]
+(3,)  | e ~ vmap(exponential, (0,), 3)(d)
+(3,)  | f ~ vmap(normal, (None, 0), 3)(c,e)
+
+```
+
+## Reference card
 
 The entire interface is based on methods that create `InfixRV` objects (or that create functions that create `InfixRV` objects). Here are all the functions:
 
@@ -15,6 +47,7 @@ The entire interface is based on methods that create `InfixRV` objects (or that 
 | Multivariate distributions | `multi_normal` `multinomial` `dirichlet` |
 | Control flow | `vmap` `composite` `autoregressive` `autoregress` |
 | Indexing | `index` (or `InfixRV.__getitem__` / `[]` operator) |
+
 """
 
 from .base import *
@@ -25,6 +58,7 @@ from .vmapping import vmap
 from .compositing import composite
 from .autoregressing import autoregressive, autoregress
 from .indexing import index
+from pangolin.ir import print_upstream
 
 __all__ = [
     "InfixRV",
@@ -88,6 +122,7 @@ __all__ = [
     "compositing",
     "autoregressing",
     "indexing",
+    "print_upstream",
 ]
 
 

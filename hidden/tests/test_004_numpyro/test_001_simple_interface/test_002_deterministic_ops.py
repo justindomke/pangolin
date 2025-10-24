@@ -1,4 +1,4 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin.inference.numpyro.model import get_model_flat
 import numpyro.handlers
 import numpy as np

@@ -1,4 +1,4 @@
-from pangolin.simple_interface import normal, makerv, InfixRV, add, mul, div
+from pangolin.interface import normal, makerv, InfixRV, add, mul, div
 from pangolin import ir
 
 
@@ -112,5 +112,5 @@ def test_normal_non_scalar():
     try:
         z = normal(x, y)
         assert False
-    except TypeError as e:
+    except ValueError as e:
         assert str(e) == f"Normal op got parent shapes ((2,), ()) not all scalar."

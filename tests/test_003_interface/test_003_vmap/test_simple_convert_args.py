@@ -1,14 +1,14 @@
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.simple_interface.vmapping import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
     AbstractOp,
     vmap_eval_flat,
-    vmap
+    vmap,
 )
 import numpy as np
 
@@ -17,6 +17,7 @@ class NewRV(InfixRV):
     """
     New test RV class to make sure propagated correctly
     """
+
     def __repr__(self):
         return "New" + super().__repr__()[8:]  # len("Operator")=8
 
@@ -56,4 +57,3 @@ def test_convert_args_closure():
     assert y1.parents == (x1, z)
     assert x1.op == ir.Normal()
     assert y1.op == ir.Normal()
-

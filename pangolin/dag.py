@@ -1,6 +1,7 @@
 """
 Basic code for operating on directed acyclic graphs (DAGs).
-This is all independent of the rest of pangolin.
+None of these functions import or use any other parts of Pangolin.
+**End-users of Pangolin are not typically expected to use these functions directly**, though people designing new inference algorithms may find them useful.
 """
 
 import jax.tree_util
@@ -132,13 +133,13 @@ def get_children(nodes, block_condition=None):
     children = {}
     for n in all_nodes:
         children[n] = []
-    #print(f"{all_nodes=}")
-    #print(f"{children=}")
-    #print(f"{[hash(n) for n in all_nodes]=}")
-    #print(f"{[hash(n) for n in children]=}")
+    # print(f"{all_nodes=}")
+    # print(f"{children=}")
+    # print(f"{[hash(n) for n in all_nodes]=}")
+    # print(f"{[hash(n) for n in children]=}")
     for n in all_nodes:
         for p in n.parents:
-            #print(f"{hash(n)=} {hash(p)=}")
+            # print(f"{hash(n)=} {hash(p)=}")
             if n not in children[p]:
                 children[p].append(n)
     return children

@@ -1,7 +1,7 @@
 import numpy as np
 
 # from pangolin import makerv, vmap, inference
-from pangolin.simple_interface import constant, vmap
+from pangolin.interface import constant, vmap
 import numpyro
 import pytest
 import jax

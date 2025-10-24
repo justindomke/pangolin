@@ -10,7 +10,7 @@ import numpy as np
 # from pangolin import bernoulli, E
 
 from pangolin import ir
-from pangolin.simple_interface import *
+from pangolin.interface import *
 
 
 def test_repeated_exp():

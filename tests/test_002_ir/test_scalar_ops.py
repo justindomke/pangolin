@@ -30,7 +30,7 @@ def test_non_scalar_parent_shapes():
             # args = tuple(RV(Constant(a)) for a in args) # convert to RVs
             # x = RV(d,*args)
             assert False
-        except TypeError as e:
+        except ValueError as e:
             assert (
                 str(e)
                 == f"Normal op got parent shapes {parents_shapes} not all scalar."

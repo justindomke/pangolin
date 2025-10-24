@@ -1,6 +1,6 @@
 import numpyro.handlers
 
-from pangolin.simple_interface import *
+from pangolin.interface import *
 from pangolin.inference.numpyro import (
     sample_flat,
     sample,
