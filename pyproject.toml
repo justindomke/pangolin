@@ -21,6 +21,8 @@ build-backend = "hatchling.build"
 dev = [
     "black>=25.1.0",
     "pytest>=8.4.1",
+    "jupyter",
+    "seaborn",
 ]
 
 [tool.pytest.ini_options]

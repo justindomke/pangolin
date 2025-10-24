@@ -618,6 +618,10 @@ def first(lst, cond, default=None):
     return next((x for x in lst if cond(x)), default)
 
 
+def reverse_dict(d: dict):
+    return {value: key for key, value in d.items()}
+
+
 def replace_in_sequence(seq, i, new):
     assert i >= 0
     assert i < len(seq)
@@ -724,3 +728,137 @@ def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
 
     # 3. Flatten the boolean PyTree and check if all values are True.
     return all(jax.tree_util.tree_leaves(leaves_are_close))
+
+
+################################################################################
+# Tricks for dealing with named arguments
+################################################################################
+
+
+import inspect
+
+
+def get_positional_args(target_func, *args, **kwargs):
+    """
+    Transforms a mix of positional and keyword arguments into a list of
+    purely positional arguments for a target function.
+
+    This function inspects the signature of `target_func` to correctly
+    map and order the provided arguments. It ensures that the resulting
+    list of positional arguments, when passed to `target_func`, will
+    produce the identical outcome as the original call with mixed arguments.
+
+    Raises a `ValueError` if `target_func` contains any keyword-only
+    arguments, as these cannot be represented in a purely positional call.
+    Raises a `TypeError` if the provided arguments (`*args`, `**kwargs`)
+    are invalid for `target_func` (e.g., missing required arguments,
+    unexpected arguments).
+
+    Parameters
+    ----------
+    target_func : callable
+        The function whose signature will be used to transform and order
+        the arguments.
+    *args : tuple
+        Positional arguments to be transformed.
+    **kwargs : dict
+        Keyword arguments to be transformed.
+
+    Returns
+    -------
+    list
+        A list of arguments in the correct positional order for `target_func`.
+
+    Raises
+    ------
+    ValueError
+        If `target_func` has keyword-only arguments.
+    TypeError
+        If the provided `*args` and `**kwargs` do not match the signature
+        of `target_func`.
+
+    See Also
+    --------
+    inspect.signature : For detailed information on function signature inspection.
+
+    Examples
+    --------
+    >>> def add_five_numbers(a, b, c, d, e):
+    ...     return a + b + c + d + e
+
+    >>> # Case 1: All arguments provided positionally
+    >>> get_positional_args(add_five_numbers, 1, 2, 3, 4, 5)
+    [1, 2, 3, 4, 5]
+
+    >>> # Case 2: Mixed positional and keyword arguments
+    >>> get_positional_args(add_five_numbers, 1, 2, 3, e=5, d=4)
+    [1, 2, 3, 4, 5]
+
+    >>> # Case 3: All arguments provided as keywords
+    >>> get_positional_args(add_five_numbers, a=10, b=20, c=30, d=40, e=50)
+    [10, 20, 30, 40, 50]
+
+    >>> # Case 4: Function with default arguments
+    >>> def greet(name, greeting="Hello"):
+    ...     return f"{greeting}, {name}!"
+    >>> get_positional_args(greet, "Alice")
+    ['Alice', 'Hello']
+    >>> get_positional_args(greet, "Bob", greeting="Hi")
+    ['Bob', 'Hi']
+    >>> get_positional_args(greet, name="Charlie", greeting="Greetings")
+    ['Charlie', 'Greetings']
+
+    >>> # Case 5: Verification that the transformed arguments yield the same result
+    >>> def multiply(x, y, z):
+    ...     return x * y * z
+    >>> original_args = (2,)
+    >>> original_kwargs = {'z': 5, 'y': 3}
+    >>> transformed = get_positional_args(multiply, *original_args, **original_kwargs)
+    >>> multiply(*original_args, **original_kwargs) == multiply(*transformed)
+    True
+
+    >>> # Case 6: Attempting to transform a function with keyword-only arguments (raises ValueError)
+    >>> def func_with_kw_only(a, b, *, kw_only_arg, default_kw_only=10):
+    ...     pass
+    >>> try:
+    ...     get_positional_args(func_with_kw_only, 1, 2, kw_only_arg=3)
+    ... except ValueError as e:
+    ...     print(e)
+    Function 'func_with_kw_only' has keyword-only arguments (kw_only_arg), which is not allowed by this transformer.
+
+    >>> # Case 7: Missing a required argument (raises TypeError)
+    >>> try:
+    ...     get_positional_args(add_five_numbers, 1, 2, 3)
+    ... except TypeError as e:
+    ...     # Use '...' to match any varying parts of the error message
+    ...     # and check for a key phrase.
+    ...     assert "missing a required argument" in str(e)
+    ...     print(e.__class__.__name__ + ": " + str(e))
+    TypeError: ...
+
+    >>> # Case 8: Providing an unexpected argument (raises TypeError)
+    >>> try:
+    ...     get_positional_args(add_five_numbers, 1, 2, 3, 4, 5, extra_arg=6)
+    ... except TypeError as e:
+    ...     print(e.__class__.__name__ + ": " + str(e))
+    TypeError: ... an unexpected keyword argument 'extra_arg'
+    """
+    sig = inspect.signature(target_func)
+
+    for param in sig.parameters.values():
+        if param.kind == inspect.Parameter.KEYWORD_ONLY:
+            raise ValueError(
+                f"Function '{target_func.__name__}' has keyword-only arguments "
+                f"({param.name}), which is not allowed by this transformer."
+            )
+
+    # Bind the arguments. This will raise TypeError if arguments are invalid
+    # (e.g., missing required args, unexpected args).
+    bound_args = sig.bind(*args, **kwargs)
+    bound_args.apply_defaults()
+
+    positional_args_for_target = []
+    for param_name in sig.parameters:
+        positional_args_for_target.append(bound_args.arguments[param_name])
+
+    return positional_args_for_target

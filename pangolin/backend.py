@@ -1,7 +1,16 @@
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
-from typing import Any, Callable, TypeAlias, TYPE_CHECKING, Type, Sequence, List
+from typing import (
+    Any,
+    Callable,
+    TypeAlias,
+    TYPE_CHECKING,
+    Type,
+    Sequence,
+    List,
+    Optional,
+)
 from pangolin import ir
 from pangolin.ir import Op, RV
 from numpy.typing import ArrayLike
@@ -130,7 +139,7 @@ for op_class in simple_funs:
 
 
 def eval_constant(op: ir.Constant, parent_values):
-    return op.value
+    return jnp.array(op.value)
 
 
 eval_handlers[ir.Constant] = eval_constant
@@ -552,7 +561,7 @@ def eval_op(op: Op, parent_values: Sequence[ArrayLike]):
 # TODO: Add conditioning?
 
 
-def ancestor_sample_flat(vars: list[RV], key):
+def ancestor_sample_flat_single(vars: list[RV], key):
     all_vars = dag.upstream_nodes(vars)
     all_values = {}
     for var in all_vars:
@@ -563,6 +572,15 @@ def ancestor_sample_flat(vars: list[RV], key):
         else:
             all_values[var] = eval_op(var.op, parent_values)
     return [all_values[var] for var in vars]
+
+
+def ancestor_sample_flat(vars: list[RV], key, size: Optional[int] = None):
+    if size is None:
+        return ancestor_sample_flat_single(vars, key)
+    else:
+        mysample = lambda key: ancestor_sample_flat_single(vars, key)
+        keys = jax.random.split(key, size)
+        return jax.vmap(mysample)(keys)
 
 
 def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike]):
@@ -616,7 +634,7 @@ def fill_in(
 ################################################################################
 
 
-def ancestor_sample(vars, key):
+def ancestor_sample(vars, key, size: Optional[int] = None):
     """
     Draw exact samples!
 
@@ -638,10 +656,10 @@ def ancestor_sample(vars, key):
     >>> x = RV(ir.Constant(1.5))
     >>> key = jax.random.PRNGKey(0)
     >>> ancestor_sample(x, key)
-    array(1.5)
+    Array(1.5, dtype=...)
     >>> y = RV(ir.Normal(), x, x)
-    >>> ancestor_sample({'cat': x, 'dog': (x, y)}, key)
-    {'cat': array(1.5), 'dog': (array(1.5), Array(...))}
+    >>> print(ancestor_sample({'cat': x, 'dog': (x, y)}, key))
+    {'cat': Array(1.5, dtype=...), 'dog': (Array(1.5, dtype=...), Array(...))}
     """
 
     (
@@ -652,7 +670,7 @@ def ancestor_sample(vars, key):
         _,
     ) = util.flatten_args(vars, [], [])
 
-    flat_samps = ancestor_sample_flat(flat_vars, key)
+    flat_samps = ancestor_sample_flat(flat_vars, key, size)
 
     return unflatten(flat_samps)
 

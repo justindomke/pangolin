@@ -2,7 +2,7 @@
 This package defines a special subtype of RV that supports operator overloading
 """
 
-from pangolin.ir import RV, Op, Constant, ScalarOp
+from pangolin.ir import RV, Op, Constant, ScalarOp, VMap
 
 # from pangolin.ir.scalar_ops import add, mul, sub, div, pow
 
@@ -16,16 +16,22 @@ from numpy.typing import ArrayLike
 # from jax.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, cast
+from typing import TypeVar, Type, Callable, cast, Sequence
 from pangolin.util import comma_separated
 import inspect
 from typing import Generic
-
+import os
 
 RV_or_ArrayLike = RV | ArrayLike
 # RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
 """Represents either a `RV` or a value that can be cast to a NumPy array, such as a float or list of floats.
 This will include JAX arrays (which is good) but also unfortunately accepts strings (which is bad)."""
+
+####################################################################################################
+# config
+####################################################################################################
+
+SCALAR_BROADCASTING = os.getenv("SCALAR_BROADCASTING", "off")
 
 ####################################################################################################
 # The core InfixRV class. Like an RV except has infix operations
@@ -312,21 +318,162 @@ def _scalar_op_doc(OpClass):
     return __doc__
 
 
+def vmap_scalars_simple(op: Op, *parent_shapes: ir._Shape) -> Op:
+    """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
+    This only accepts a very limited amount of broadcasting: All parents shapes must
+    either be *scalar* or *exactly equal*.
+
+    Parameters
+    ----------
+    op: Op
+        the op to VMap
+    shapes
+        shapes for each parent, must all be *equal* or scalar
+
+    Returns
+    -------
+    new_op: Op
+        vmapped op (or possibly original op)
+
+    Examples
+    --------
+    >>> vmap_scalars_simple(ir.Exp(), (3,))
+    VMap(Exp(), (0,), 3)
+
+    >>> vmap_scalars_simple(ir.Normal(), (3,), ())
+    VMap(Normal(), (0, None), 3)
+
+    >>> vmap_scalars_simple(ir.Normal(), (3,), ())
+    VMap(Normal(), (0, None), 3)
+
+    >>> vmap_scalars_simple(ir.StudentT(), (3,5), (), (3,5))
+    VMap(VMap(StudentT(), (0, None, 0), 5), (0, None, 0), 3)
+    """
+
+    array_shape = None
+    for shape in parent_shapes:
+        if shape == ():
+            continue
+
+        if array_shape is None:
+            array_shape = shape
+        else:
+            if shape != array_shape:
+                raise ValueError(
+                    f"Can't broadcast non-matching shapes {shape} and {array_shape}"
+                )
+
+    if array_shape is None:
+        return op
+
+    in_axes = [0 if shape == array_shape else None for shape in parent_shapes]
+
+    new_op = op
+    for size in reversed(array_shape):
+        new_op = VMap(new_op, in_axes, size)
+
+    assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
+
+    return new_op
+
+
+def vmap_scalars_numpy(op: Op, *parent_shapes: ir._Shape) -> Op:
+    """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
+    This implements most of numpy-style scalar broadcasting. The only limitation is that broadcasting of singleton dimensions
+    against non-singleton dimensions is not supported.
+
+    Parameters
+    ----------
+    op: Op
+        the op to VMap
+    shapes
+        shapes for each parent, must all be *equal* or scalar
+
+    Returns
+    -------
+    new_op: Op
+        vmapped op (or possibly original op)
+
+    Examples
+    --------
+    >>> vmap_scalars_numpy(ir.Exp(), (3,))
+    VMap(Exp(), (0,), 3)
+
+    >>> vmap_scalars_numpy(ir.Normal(), (3,), ())
+    VMap(Normal(), (0, None), 3)
+
+    >>> vmap_scalars_numpy(ir.Normal(), (), (2,3))
+    VMap(VMap(Normal(), (None, 0), 3), (None, 0), 2)
+
+    >>> vmap_scalars_numpy(ir.Normal(), (3,), (2,3))
+    VMap(VMap(Normal(), (0, 0), 3), (None, 0), 2)
+    """
+
+    # will raise ValueError if not broadcastable
+    array_shape = np.broadcast_shapes(*parent_shapes)
+
+    if array_shape is None:
+        return op
+
+    new_op = op
+    for n, size in enumerate(reversed(array_shape)):
+        in_axes = []
+        for parent_shape in parent_shapes:
+            if len(parent_shape) < n + 1:
+                my_axis = None
+            else:
+                my_axis = 0
+            in_axes.append(my_axis)
+
+        new_op = VMap(new_op, in_axes, size)
+
+    assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
+
+    return new_op
+
+    # the obvious way to generalize this to handle singleten dimensions would be to change to
+    #
+    # (new_op, new_parents) = vmap_scalars_numpy(op: Op, *parents: ir.RV)
+    #
+    # where new_parents could be the same as old, or might include "squeeze" operations
+    # (will also need to create ir.Squeeze)
+
+
 def scalar_fun_factory(OpClass, /):
     import makefun
 
     op = OpClass()
     expected_parents = op._expected_parents  # type: ignore
 
-    def fun(*args, **kwargs):
-        return create_rv(op, *args, *[kwargs[a] for a in kwargs])
+    if SCALAR_BROADCASTING == "simple":
+
+        def fun(*args, **kwargs):
+            positional_args = args + tuple(kwargs[a] for a in kwargs)
+            parent_shapes = [arg.shape for arg in positional_args]
+            vmapped_op = vmap_scalars_simple(op, *parent_shapes)
+            return create_rv(vmapped_op, *positional_args)
+
+    elif SCALAR_BROADCASTING == "numpy":
+
+        def fun(*args, **kwargs):
+            positional_args = args + tuple(kwargs[a] for a in kwargs)
+            parent_shapes = [arg.shape for arg in positional_args]
+            vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
+            return create_rv(vmapped_op, *positional_args)
+
+    elif SCALAR_BROADCASTING == "off":
+
+        def fun(*args, **kwargs):
+            return create_rv(op, *args, *[kwargs[a] for a in kwargs])
+
+    else:
+        raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
 
     func_sig = (
         f"{op.name}"
         + comma_separated([f"{a}:RV_or_ArrayLike" for a in expected_parents])
         + " -> InfixRV"
     )
-    print(func_sig)
 
     fun = makefun.create_function(func_sig, fun)
     fun.__doc__ = _scalar_op_doc(OpClass)

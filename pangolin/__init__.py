@@ -8,6 +8,9 @@ Main interface to pangolin. Broadly speaking, there are the following classes of
 - Program transforms: `vmap`
 """
 
+from .ir import print_upstream
+from pangolin import blackjax
+
 # from pangolin import interface, ir, inference, simple_interface, util
 
 # from pangolin.inference import *
