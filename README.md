@@ -33,6 +33,7 @@ Bayesian inference on the 8-schools model:
 
 ```python
 import pangolin as pg
+from pangolin import interface as pgi
 
 # data for 8 schools model
 num_schools = 8
@@ -40,13 +41,14 @@ observed_effects = [28, 8, -3, 7, -1, 1, 18, 12]
 stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
 
 # define model
-mu = pg.normal(0,10)                                             # μ ~ normal(0,10)
-tau = pg.exp(pg.normal(5,1))                                     # τ ~ lognormal(5,1)
-theta = [pg.normal(mu,tau) for i in range(num_schools)]          # θ[i] ~ normal(μ,τ)
-y = [pg.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(θ[i],stddevs[i])
+mu = pgi.normal(0,10)                                             # μ ~ normal(0,10)
+tau = pgi.exp(pg.normal(5,1))                                     # τ ~ lognormal(5,1)
+theta = [pgi.normal(mu,tau) for i in range(num_schools)]          # θ[i] ~ normal(μ,τ)
+y = [pgi.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(θ[i],stddevs[i])
 
 # do inference / sample from p(theta | y=observed_effects)
-theta_samps = pg.inference.numpyro.sample_flat(theta, y, observed_effects)
+theta_samps = pg.blackjax.sample(theta, y, observed_effects, niter=10000)
+
 
 # plot results (no pangolin here!)
 import numpy as np

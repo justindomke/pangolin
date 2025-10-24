@@ -1,3 +1,5 @@
+**2025.10.24:** Drop NumPyro (NumPyro is too unstable), replace with Blackjax backend. Create options for no / simple / numpy style broadcasting.
+
 **2025.08.01:** Add notebooks demonstrating IR and interface.
 
 **2025.07.31:** Various cleanup, improve printing.
