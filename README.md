@@ -24,9 +24,9 @@ Simple "probabilistic calculator":
 
 ```python
 import pangolin as pg
-x = pg.normal(0,2)    # x ~ normal(0,2)
-y = pg.normal(x,6)    # y ~ normal(x,6)
-print(pg.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
+x = pg.interface.normal(0,2)    # x ~ normal(0,2)
+y = pg.interface.normal(x,6)    # y ~ normal(x,6)
+print(pg.blackjax.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
 
 Bayesian inference on the 8-schools model:
