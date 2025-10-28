@@ -14,40 +14,39 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 ## API Docs
 
-All user-facing functions are concisely documented [here](API.md), with examples, in a single 250-ish line file.
-
-Alternatively, auto-generated docs are available at [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/). (Currently quite chaotic.)
+See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
 ## Examples
 
 Simple "probabilistic calculator":
 
 ```python
-import pangolin as pg
-x = pg.interface.normal(0,2)    # x ~ normal(0,2)
-y = pg.interface.normal(x,6)    # y ~ normal(x,6)
-print(pg.blackjax.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
+import pangolin
+from pangolin import interface as pi
+x = pi.normal(0,2)    # x ~ normal(0,2)
+y = pi.normal(x,6)    # y ~ normal(x,6)
+print(pangolin.blackjax.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
 
 Bayesian inference on the 8-schools model:
 
 ```python
 import pangolin as pg
-from pangolin import interface as pgi
+from pangolin import interface as pi
 
 # data for 8 schools model
 num_schools = 8
-observed_effects = [28, 8, -3, 7, -1, 1, 18, 12]
+observed = [28, 8, -3, 7, -1, 1, 18, 12]
 stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
 
 # define model
-mu = pgi.normal(0,10)                                             # μ ~ normal(0,10)
-tau = pgi.exp(pg.normal(5,1))                                     # τ ~ lognormal(5,1)
-theta = [pgi.normal(mu,tau) for i in range(num_schools)]          # θ[i] ~ normal(μ,τ)
-y = [pgi.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(θ[i],stddevs[i])
+mu = pi.normal(0,10)                                             # μ ~ normal(0,10)
+tau = pi.exp(pg.normal(5,1))                                     # τ ~ lognormal(5,1)
+theta = [pi.normal(mu,tau) for i in range(num_schools)]          # θ[i] ~ normal(μ,τ)
+y = [pi.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(θ[i],stddevs[i])
 
-# do inference / sample from p(theta | y=observed_effects)
-theta_samps = pg.blackjax.sample(theta, y, observed_effects, niter=10000)
+# do inference / sample from p(theta | y=observed)
+theta_samps = pg.blackjax.sample(theta, y, observed, niter=10000)
 
 
 # plot results (no pangolin here!)
