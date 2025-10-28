@@ -439,6 +439,54 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir._Shape) -> Op:
     # (will also need to create ir.Squeeze)
 
 
+def get_shape(arg: RV_or_ArrayLike):
+    """If `arg` has a shape, attribute return it. Otherwise return the shape it would have if cast to an array. (No array is actually created.)
+
+        Parameters
+    ----------
+    arg : array_like
+        Input data, in any form that can be converted to an array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples
+        of lists, and ndarrays.
+
+    Returns
+    -------
+    shape : tuple of ints
+        Shape of the array that would result from casting `arg` to an array.
+        Each element of the tuple gives the size of the corresponding dimension.
+
+    See Also
+    --------
+    numpy.shape : Return the shape of an array
+
+    Examples
+    --------
+    >>> get_shape([[1, 2, 3], [4, 5, 6]])
+    (2, 3)
+
+    >>> get_shape(np.array([[1, 2, 3], [4, 5, 6]]))
+    (2, 3)
+
+    >>> get_shape(constant([[1, 2, 3], [4, 5, 6]]))
+    (2, 3)
+
+    >>> get_shape(42)  # Scalar
+    ()
+
+    >>> get_shape([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    (2, 2, 2)
+
+    >>> get_shape([[], [], []])
+    (3, 0)
+
+    """
+
+    if hasattr(arg, "shape"):
+        return arg.shape  # type: ignore
+    else:
+        return np.shape(arg)
+
+
 def scalar_fun_factory(OpClass, /):
     import makefun
 
@@ -449,7 +497,8 @@ def scalar_fun_factory(OpClass, /):
 
         def fun(*args, **kwargs):
             positional_args = args + tuple(kwargs[a] for a in kwargs)
-            parent_shapes = [arg.shape for arg in positional_args]
+            # parent_shapes = [arg.shape for arg in positional_args]
+            parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
 
@@ -457,7 +506,8 @@ def scalar_fun_factory(OpClass, /):
 
         def fun(*args, **kwargs):
             positional_args = args + tuple(kwargs[a] for a in kwargs)
-            parent_shapes = [arg.shape for arg in positional_args]
+            # parent_shapes = [arg.shape for arg in positional_args]
+            parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
 

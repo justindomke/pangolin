@@ -236,3 +236,20 @@ def test_tertiary_op_numpy(monkeypatch):
         )
         assert fun(c, a, c).op == ir.VMap(ir.VMap(op, (0, None, 0), 3), (0, None, 0), 2)
         assert fun(c, c, c).op == ir.VMap(ir.VMap(op, (0, 0, 0), 3), (0, 0, 0), 2)
+
+def test_autoregressive_broadcasting(monkeypatch):
+    monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
+    from pangolin import interface as pi
+    from jax import numpy as jnp
+
+    start = jnp.zeros(2)
+    scale = pi.constant(1.0)
+
+    z = pi.autoregressive(lambda last: pi.normal(last, scale), 100)(start)
+    assert z.shape == (100, 2)
+
+    z = pi.autoregressive(lambda last: pi.normal(last, scale), 100)([0.0, 0.5])
+    assert z.shape == (100, 2)
+
+    z = pi.autoregressive(lambda last: pi.normal(last, 1.0), 100)(start)
+    assert z.shape == (100, 2)
