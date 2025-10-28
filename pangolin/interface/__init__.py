@@ -6,7 +6,7 @@ This module defines a friendly interface for creating models in the Pangolin IR.
 Take the following model:
 
 ```text
-x ~ normal(0,1)
+x    ~ normal(0,1)
 y[i] ~ exponential(d[i])
 z[i] ~ normal(x, y[i])
 ```
@@ -14,12 +14,18 @@ z[i] ~ normal(x, y[i])
 In Pangolin, you can declare this model like so:
 
 ```python
->>> from pangolin.interface import normal, exponential
+>>> from pangolin import interface as pi
 >>>
->>> x = normal(0,1)
->>> y = vmap(exponential)(constant([2,3,4]))
->>> z = vmap(normal, [None, 0])(x, y)
->>> print_upstream(z)
+>>> x = pi.normal(0,1)
+>>> y = pi.vmap(pi.exponential)(pi.constant([2,3,4]))
+>>> z = pi.vmap(pi.normal, [None, 0])(x, y)
+
+```
+
+This produces the following internal representation.
+
+```python
+>>> pi.print_upstream(z)
 shape | statement
 ----- | ---------
 ()    | a = 0

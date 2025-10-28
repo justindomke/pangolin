@@ -17,7 +17,9 @@ from numpy.typing import ArrayLike
 from numpyro import distributions as dist
 from jax.scipy import special as jspecial
 from jax import nn as jnn
+from jax import Array as JaxArray
 from pangolin import dag, util
+
 
 ################################################################################
 # Dict of Ops that correspond to simple functions
@@ -634,7 +636,7 @@ def fill_in(
 ################################################################################
 
 
-def ancestor_sample(vars, key, size: Optional[int] = None):
+def ancestor_sample(vars, key: Optional[JaxArray] = None, size: Optional[int] = None):
     """
     Draw exact samples!
 
@@ -643,7 +645,7 @@ def ancestor_sample(vars, key, size: Optional[int] = None):
     vars
         a pytree of `RV`s to sample
     key
-        a jax PRNGKey
+        a jax PRNGKey or None (default)
 
     Returns
     -------
@@ -661,6 +663,12 @@ def ancestor_sample(vars, key, size: Optional[int] = None):
     >>> print(ancestor_sample({'cat': x, 'dog': (x, y)}, key))
     {'cat': Array(1.5, dtype=...), 'dog': (Array(1.5, dtype=...), Array(...))}
     """
+
+    if key is None:
+        # Generate random seed from numpy
+        seed = np.random.randint(0, 2**32 - 1)
+        key = jax.random.PRNGKey(seed)
+
 
     (
         flat_vars,
