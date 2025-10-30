@@ -199,44 +199,8 @@ log_prob_handlers[ir.Composite] = log_prob_composite
 sample_handlers[ir.Composite] = sample_composite
 
 ################################################################################
-# Fancy indexing
-################################################################################
-
-
-# @register_handler(ir.Index)
-# def handle_index(op: ir.Index, val, *indices, is_observed):
-#     stuff = []
-#     i = 0
-#     for my_slice in op.slices:
-#         if my_slice:
-#             stuff.append(my_slice)
-#         else:
-#             stuff.append(indices[i])
-#             i += 1
-#     stuff = tuple(stuff)
-#     return val[stuff]
-
-
-# @register_handler(ir.SimpleIndex)
-# def handle_simple_index(op: ir.SimpleIndex, val, *indices, is_observed):
-#     return ir.index_orthogonal_no_slices(val, *indices)
-
-
-################################################################################
 # Autoregressive
 ################################################################################
-
-
-# @register_handler(ir.Autoregressive)
-# def handle_autoregressive(op, *numpyro_parents, is_observed):
-#     if op.random:
-#         return handle_autoregressive_random(
-#             op, *numpyro_parents, is_observed=is_observed
-#         )
-#     else:
-#         return handle_autoregressive_nonrandom(
-#             op, *numpyro_parents, is_observed=is_observed
-#         )
 
 
 def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents):
@@ -348,91 +312,6 @@ def sample_autoregressive(
 
 
 sample_handlers[ir.Autoregressive] = sample_autoregressive
-
-
-# def handle_autoregressive_random(
-#     op: ir.Autoregressive, numpyro_init, *numpyro_parents, is_observed
-# ):
-#     # numpyro.contrib.control_flow.scan exists but seems very buggy/limited
-#     assert isinstance(op, ir.Autoregressive)
-#     assert op.random
-
-#     mapped_parents, merge_args = handle_autoregressive_inputs(op, *numpyro_parents)
-
-#     if not is_continuous(op) and not is_observed:
-#         raise ValueError(
-#             "Can't have non-observed autoregressive over discrete variables"
-#         )
-
-#     class NewDist(dist.Distribution):  # NUMPYRO dist
-#         # @property
-#         # def support(self):
-#         #     return get_support(op.base_op)
-
-#         def __init__(self, *args, validate_args=False):
-#             self.args = args
-
-#             # TODO: infer correct batch_shape?
-#             batch_shape = ()
-#             parents_shapes = [p.shape for p in args]
-#             event_shape = op.get_shape(*parents_shapes)
-
-#             super().__init__(
-#                 batch_shape=batch_shape,
-#                 event_shape=event_shape,
-#                 validate_args=validate_args,
-#             )
-
-#         def sample(self, key, sample_shape=()):
-#             # assert numpyro.util.is_prng_key(key)
-#             # assert sample_shape == (), f"sample shape is {sample_shape} expected ()"
-#             assert sample_shape in ((), (1,))
-#             single_samp = sample_shape == (1,)
-
-#             # print(f"{sample_shape=} {single_samp=}")
-
-#             def base_sample(carry, key_and_x):
-#                 # print(f"{key_and_x=}")
-#                 key = key_and_x[0]
-#                 x = key_and_x[1:]
-#                 # inputs = (carry,) + x
-#                 inputs = (carry,) + merge_args(x)
-#                 var = get_numpyro_val(op.base_op, *inputs, is_observed=is_observed)
-#                 y = var.sample(key)
-#                 return y, y
-
-#             keys = jax.random.split(key, op.length)
-
-#             # base_sample(numpyro_init, (keys[0],) + mapped_parents)
-
-#             carry, ys = jax.lax.scan(
-#                 base_sample, numpyro_init, (keys,) + mapped_parents, length=op.length
-#             )
-#             if single_samp:
-#                 return jnp.array([ys])
-#             else:
-#                 return ys
-
-#         @dist_util.validate_sample
-#         def log_prob(self, value):
-#             def base_log_prob(carry, val_and_x):
-#                 val = val_and_x[0]
-#                 x = val_and_x[1:]
-#                 # inputs = (carry,) + x
-#                 inputs = (carry,) + merge_args(x)
-#                 var = get_numpyro_val(op.base_op, *inputs, is_observed=is_observed)
-#                 return val, var.log_prob(val)
-
-#             # numpyro_init = 0.0
-#             print(f"{numpyro_init=}")
-#             print(f"{value=}")
-
-#             carry, ls = jax.lax.scan(
-#                 base_log_prob, numpyro_init, (value,) + mapped_parents, length=op.length
-#             )
-#             return jnp.sum(ls)
-
-#     return NewDist(numpyro_init, *numpyro_parents)
 
 
 ################################################################################
@@ -669,7 +548,6 @@ def ancestor_sample(vars, key: Optional[JaxArray] = None, size: Optional[int] = 
         seed = np.random.randint(0, 2**32 - 1)
         key = jax.random.PRNGKey(seed)
 
-
     (
         flat_vars,
         _,
@@ -801,44 +679,3 @@ def ancestor_log_prob(*vars, **kwvars):
         return ancestor_log_prob_flat(flat_vars, flat_vals)
 
     return myfun
-
-
-# def ancestor_log_prob(vars, vals):
-#     """
-#     Evaluate log-probabilities
-
-#     Parameters
-#     ----------
-#     vars
-#         a pytree of `RV`s
-#     values for those `RV`s
-#         a jax PRNGKey
-
-#     Returns
-#     -------
-#     out
-#         scalar log-probability
-
-
-#     Examples
-#     --------
-#     >>> loc = ir.RV(ir.Constant(0.0))
-#     >>> scale = ir.RV(ir.Constant(1.0))
-#     >>> x = RV(ir.Normal(),loc,scale)
-#     >>> ancestor_log_prob(x, jnp.array(0.0))
-#     Array(-0.9189385, dtype=...)
-
-#     >>> op = ir.VMap(ir.Normal(), [None,None], 3)
-#     >>> y = RV(op,loc,scale)
-#     >>> ancestor_log_prob({'x':x, 'y':y}, {'x':0.0, 'y':[0.0, 0.5, 0.1]})
-#     Array(-3.8057542, dtype=...)
-#     """
-
-#     vals = util.assimilate_vals(vars, vals)  # casts lists and such to ndarray
-
-#     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
-#     flat_vals, vals_treedef = jax.tree_util.tree_flatten(vals)
-#     if vars_treedef != vals_treedef:
-#         raise ValueError("vars_treedef does not match vals_treedef")
-
-#     return ancestor_log_prob_flat(flat_vars, flat_vals)
