@@ -129,6 +129,7 @@ __all__ = [
     "autoregressing",
     "indexing",
     "print_upstream",
+    "ScalarBroadcasting",
 ]
 
 

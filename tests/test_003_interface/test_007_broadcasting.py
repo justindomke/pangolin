@@ -237,6 +237,7 @@ def test_tertiary_op_numpy(monkeypatch):
         assert fun(c, a, c).op == ir.VMap(ir.VMap(op, (0, None, 0), 3), (0, None, 0), 2)
         assert fun(c, c, c).op == ir.VMap(ir.VMap(op, (0, 0, 0), 3), (0, 0, 0), 2)
 
+
 def test_autoregressive_broadcasting(monkeypatch):
     monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
     from pangolin import interface as pi
@@ -253,3 +254,51 @@ def test_autoregressive_broadcasting(monkeypatch):
 
     z = pi.autoregressive(lambda last: pi.normal(last, 1.0), 100)(start)
     assert z.shape == (100, 2)
+
+
+def test_broadcasting_manager_numpy(monkeypatch):
+    monkeypatch.setenv("SCALAR_BROADCASTING", "numpy")
+    from pangolin import interface as pi
+
+    assert pi.SCALAR_BROADCASTING == ["numpy"]
+
+    with pi.ScalarBroadcasting("off"):
+        assert pi.SCALAR_BROADCASTING == ["off"]
+
+    with pi.ScalarBroadcasting("simple"):
+        assert pi.SCALAR_BROADCASTING == ["simple"]
+
+    with pi.ScalarBroadcasting("numpy"):
+        assert pi.SCALAR_BROADCASTING == ["numpy"]
+
+
+def test_broadcasting_manager_simple(monkeypatch):
+    monkeypatch.setenv("SCALAR_BROADCASTING", "simple")
+    from pangolin import interface as pi
+
+    assert pi.SCALAR_BROADCASTING == ["simple"]
+
+    with pi.ScalarBroadcasting("off"):
+        assert pi.SCALAR_BROADCASTING == ["off"]
+
+    with pi.ScalarBroadcasting("simple"):
+        assert pi.SCALAR_BROADCASTING == ["simple"]
+
+    with pi.ScalarBroadcasting("numpy"):
+        assert pi.SCALAR_BROADCASTING == ["numpy"]
+
+
+def test_broadcasting_manager_off(monkeypatch):
+    monkeypatch.setenv("SCALAR_BROADCASTING", "off")
+    from pangolin import interface as pi
+
+    assert pi.SCALAR_BROADCASTING == ["off"]
+
+    with pi.ScalarBroadcasting("off"):
+        assert pi.SCALAR_BROADCASTING == ["off"]
+
+    with pi.ScalarBroadcasting("simple"):
+        assert pi.SCALAR_BROADCASTING == ["simple"]
+
+    with pi.ScalarBroadcasting("numpy"):
+        assert pi.SCALAR_BROADCASTING == ["numpy"]

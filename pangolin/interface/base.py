@@ -31,7 +31,25 @@ This will include JAX arrays (which is good) but also unfortunately accepts stri
 # config
 ####################################################################################################
 
-SCALAR_BROADCASTING = os.getenv("SCALAR_BROADCASTING", "off")
+SCALAR_BROADCASTING = [os.getenv("SCALAR_BROADCASTING", "simple")]
+
+_broadcasting_modes = ["off", "simple", "numpy"]
+
+
+class ScalarBroadcasting:
+    def __init__(self, mode):
+        if mode not in _broadcasting_modes:
+            raise ValueError(f"mode must be in {_broadcasting_modes}")
+        self.new_mode = mode  # Store the mode to set
+
+    def __enter__(self):
+        self.old_mode = SCALAR_BROADCASTING[0]  # Store the current global value
+        SCALAR_BROADCASTING[0] = self.new_mode  # Set the global to the new mode
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        SCALAR_BROADCASTING[0] = self.old_mode
+
 
 ####################################################################################################
 # The core InfixRV class. Like an RV except has infix operations
@@ -493,31 +511,21 @@ def scalar_fun_factory(OpClass, /):
     op = OpClass()
     expected_parents = op._expected_parents  # type: ignore
 
-    if SCALAR_BROADCASTING == "simple":
-
-        def fun(*args, **kwargs):
+    def fun(*args, **kwargs):
+        if SCALAR_BROADCASTING[0] == "off":
+            return create_rv(op, *args, *[kwargs[a] for a in kwargs])
+        elif SCALAR_BROADCASTING[0] == "simple":
             positional_args = args + tuple(kwargs[a] for a in kwargs)
-            # parent_shapes = [arg.shape for arg in positional_args]
             parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
-
-    elif SCALAR_BROADCASTING == "numpy":
-
-        def fun(*args, **kwargs):
+        elif SCALAR_BROADCASTING[0] == "numpy":
             positional_args = args + tuple(kwargs[a] for a in kwargs)
-            # parent_shapes = [arg.shape for arg in positional_args]
             parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
-
-    elif SCALAR_BROADCASTING == "off":
-
-        def fun(*args, **kwargs):
-            return create_rv(op, *args, *[kwargs[a] for a in kwargs])
-
-    else:
-        raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
+        else:
+            raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
 
     func_sig = (
         f"{op.name}"
