@@ -543,6 +543,7 @@ def short_pytree_string(treedef):
     return s[10:-1]
 
 
+# TODO: Move to jax backend
 def assimilate_vals(vars, vals):
     """
     convert `vals` to a pytree of arrays with the same shape as `vars`
@@ -582,6 +583,7 @@ def assimilate_vals(vars, vals):
 ################################################################################
 
 
+# TODO: Move to jax backend
 def flatten_args(vars, given_vars=None, given_vals=None):
     given_vals = assimilate_vals(given_vars, given_vals)
 
