@@ -139,17 +139,18 @@ def test_double_vmap_eval():
 
 def test_vmap_eval1():
     "should fail because of incoherent axes sizes"
-    try:
-        y = vmap_eval_flat(
-            lambda loc, scale: [normal(loc, scale)],
-            [None, None],
-            5,
-            np.zeros(3),
-            np.ones(3),
-        )
-        assert False
-    except ValueError as e:
-        assert True
+    with ScalarBroadcasting("off"):
+        try:
+            y = vmap_eval_flat(
+                lambda loc, scale: [normal(loc, scale)],
+                [None, None],
+                5,
+                np.zeros(3),
+                np.ones(3),
+            )
+            assert False
+        except ValueError as e:
+            assert True
 
 
 def test_vmap_eval2():

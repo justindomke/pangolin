@@ -156,14 +156,15 @@ def test_double_nicer():
 
 def test_1():
     "should fail because of incoherent axes sizes"
-    try:
-        y = vmap_flat(lambda loc, scale: [normal(loc, scale)], (None, None), 5)(
-            np.zeros(3),
-            np.ones(3),
-        )
-        assert False
-    except ValueError as e:
-        assert True
+    with ScalarBroadcasting("off"):
+        try:
+            y = vmap_flat(lambda loc, scale: [normal(loc, scale)], (None, None), 5)(
+                np.zeros(3),
+                np.ones(3),
+            )
+            assert False
+        except ValueError as e:
+            assert True
 
 
 def test_2():
