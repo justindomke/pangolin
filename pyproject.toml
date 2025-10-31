@@ -25,6 +25,9 @@ dev = [
     "seaborn",
 ]
 
+[project.optional-dependencies]
+torch = ["torch"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--doctest-modules"
