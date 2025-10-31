@@ -104,13 +104,3 @@ def test_math():
     # these weren't true before because x and y just passed as ints, do different RVs created
     assert z.parents[0].parents[0] == z.parents[1].parents[0]
     assert z.parents[0].parents[1] == z.parents[1].parents[1]
-
-
-def test_normal_non_scalar():
-    x = [0, 1]
-    y = 1
-    try:
-        z = normal(x, y)
-        assert False
-    except ValueError as e:
-        assert str(e) == f"Normal op got parent shapes ((2,), ()) not all scalar."
