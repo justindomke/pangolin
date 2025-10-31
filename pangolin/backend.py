@@ -2,13 +2,9 @@ from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import (
-    Any,
     Callable,
-    TypeAlias,
-    TYPE_CHECKING,
     Type,
     Sequence,
-    List,
     Optional,
 )
 from pangolin import ir
@@ -121,7 +117,6 @@ def make_simple_eval(op_class):
 ################################################################################
 # Basic dicts that map Op types to log_prob and/or sample handlers
 ################################################################################
-
 
 log_prob_handlers: dict[Type[Op], Callable] = {}
 sample_handlers: dict[Type[Op], Callable] = {}
