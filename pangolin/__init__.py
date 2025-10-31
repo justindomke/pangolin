@@ -5,6 +5,7 @@ Quickstart:
 
 - Use `pangolin.interface` to define probabilistic models in a cheerful interface.
 - Use `pangolin.backend` to compile probabilistic models into plain JAX functions (to be used independently of the rest of Pangolin).
+- Use `pangolin.torch_backend` to compile probabilistic models into plain pytorch functions (to be used independently of the rest of Pangolin).
 - Use `pangolin.blackjax` to easily call [blackjax](https://blackjax-devs.github.io/blackjax/) to do inference on probabilistic models.
 
 In addition, there are three submodules that end-users would not typically interact with:
@@ -16,6 +17,6 @@ In addition, there are three submodules that end-users would not typically inter
 
 from .ir import print_upstream
 
-from pangolin import util, dag, ir, interface, backend, blackjax
+from pangolin import util, dag, ir, interface, backend, blackjax, torch_backend
 
-__all__ = ["util", "dag", "ir", "interface", "backend", "blackjax"]
+__all__ = ["util", "dag", "ir", "interface", "backend", "torch_backend", "blackjax"]
