@@ -1,3 +1,5 @@
+**2025.12.05:** Update Pangolin logo (h/t Bob)
+
 **2025.10.31:** Add experimental Torch backend
 
 **2025.10.24:** Drop NumPyro (NumPyro is too unstable), replace with Blackjax backend. Create options for no / simple / numpy style broadcasting.

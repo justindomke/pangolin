@@ -26,7 +26,7 @@ jobs:
       # ADJUST THIS: install all dependencies (including pdoc)
       - run: pip install pdoc
       - run: pip install -e ".[torch]"
-      - run: pdoc --docformat numpy -n pangolin -o ./docs  --logo "https://raw.githubusercontent.com/justindomke/pangolin/main/pangolin.jpg"
+      - run: pdoc --docformat numpy -n pangolin -o ./docs  --logo "https://raw.githubusercontent.com/justindomke/pangolin/main/pangolin-logo-small.jpg"
 
       - uses: actions/upload-pages-artifact@v3
         with:

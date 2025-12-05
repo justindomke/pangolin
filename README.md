@@ -1,8 +1,6 @@
-# Pangolin
+![pangolin](pangolin-logo.png)
 
 Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is still something of an early-stage research project.
-
-![pangolin](pangolin.jpg)
 
 ## Installation
 
