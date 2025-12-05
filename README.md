@@ -75,11 +75,10 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 
 * [IR.ipynb](demos/ir.ipynb) demonstrates pangolin's internal representation of probabilistic models.
 * [interface.ipynb](demos/interface.ipynb) demonstrates pangolin's friendly interface and what internal representation it produces.
-* [taxicab.ipynb](demos/taxicab.ipynb) is the classic taxicab problem.
-* [coins.ipynb](demos/coins.ipynb) models the bias of a coin.
 * [8schools.ipynb](demos/8schools.ipynb) is the classic 8-schools model.
 * [regression.ipynb](demos/regression.ipynb) is Bayesian linear regression.
-* [polling.ipynb](demos/polling.ipynb) is a polling model.
+* [timeseries.ipynb](demos/timeseries.ipynb) is a simple timeseries model.
+* [autoregressive.ipynb](demos/autoregressive.ipynb) is an autoregressive Kalman-filter-esque model.
 * [GP-regression.ipynb](demos/GP-regression.ipynb) is Gaussian Process regression.
 
 
