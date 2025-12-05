@@ -17,6 +17,13 @@ In addition, there are three submodules that end-users would not typically inter
 
 from .ir import print_upstream
 
-from pangolin import util, dag, ir, interface, backend, blackjax, torch_backend
+from pangolin import util, dag, ir, interface, backend, blackjax
 
-__all__ = ["util", "dag", "ir", "interface", "backend", "torch_backend", "blackjax"]
+__all__ = ["util", "dag", "ir", "interface", "backend", "blackjax"]
+
+try:
+    from pangolin import torch_backend
+
+    __all__.append("torch_backend")
+except ImportError:
+    pass

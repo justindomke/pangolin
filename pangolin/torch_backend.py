@@ -5,6 +5,13 @@ plain-old pytorch functions. For usage, see:
 - `ancestor_sampler`
 - `ancestor_log_prob`
 
+**Note**: Because pytorch is large and sometimes annoying to install, and many users will not use this functionality, pangolin does not install pytorch as a requirement by default. This might lead you to get this error:
+
+```
+ImportError: Using torch backend requires torch to be installed
+```
+
+To fix this, either install pangolin with the pytorch requirements (e.g. with `uv sync --extra torch`) or manually install pytorch and funtorch yourself (e.g. with `pip install torch funtorch` or `uv pip install torch funtorch`).
 """
 
 import numpy as np

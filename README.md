@@ -19,11 +19,12 @@ See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 Simple "probabilistic calculator":
 
 ```python
-import pangolin
 from pangolin import interface as pi
-x = pi.normal(0,2)    # x ~ normal(0,2)
-y = pi.normal(x,6)    # y ~ normal(x,6)
-print(pangolin.blackjax.E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
+from pangolin.blackjax import E
+
+x = pi.normal(0,2) # x ~ normal(0,2)
+y = pi.normal(x,6) # y ~ normal(x,6)
+print(E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
 
 Bayesian inference on the 8-schools model:
