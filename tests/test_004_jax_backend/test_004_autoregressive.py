@@ -1,7 +1,7 @@
 import numpy as np
 from pangolin import ir
 
-from pangolin.backend import (
+from pangolin.jax_backend import (
     ancestor_sample_flat,
     ancestor_log_prob_flat,
     eval_op,

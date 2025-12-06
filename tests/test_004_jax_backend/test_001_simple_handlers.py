@@ -1,4 +1,4 @@
-from pangolin.backend import (
+from pangolin.jax_backend import (
     # get_handler,
     # NumpyroHandler,
     # DeterministicHandler,

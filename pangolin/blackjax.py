@@ -9,7 +9,7 @@ from numpyro import distributions as dist
 from jax.scipy import special as jspecial
 from jax import nn as jnn
 from pangolin import dag, util
-from pangolin import backend
+from pangolin import jax_backend
 import blackjax
 
 
@@ -110,16 +110,18 @@ def sample_flat(
 
     @jax.jit
     def log_prob(latent_vals):
-        return backend.ancestor_log_prob_flat(
+        return jax_backend.ancestor_log_prob_flat(
             latent_vars + given_vars, latent_vals + given_vals
         )
 
     key = jax.random.PRNGKey(0)
-    latent_vals = backend.ancestor_sample_flat(latent_vars, key)
+    latent_vals = jax_backend.ancestor_sample_flat(latent_vars, key)
     latent_samps = run_nuts(log_prob, key, latent_vals, niter)
 
     def fill(latent_vals):
-        return backend.fill_in(latent_vars + given_vars, latent_vals + given_vals, vars)
+        return jax_backend.fill_in(
+            latent_vars + given_vars, latent_vals + given_vals, vars
+        )
 
     # include niter in case latent_samps is empty
     return jax.vmap(fill, axis_size=niter)(latent_samps)

@@ -4,7 +4,7 @@ import numpyro.handlers
 import numpy as np
 import pytest
 import scipy.special
-from pangolin.backend import ancestor_sample_flat
+from pangolin.jax_backend import ancestor_sample_flat
 import jax
 
 

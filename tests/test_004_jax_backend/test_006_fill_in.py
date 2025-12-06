@@ -1,7 +1,7 @@
 import numpy as np
 from pangolin import ir
 
-from pangolin.backend import fill_in
+from pangolin.jax_backend import fill_in
 import jax
 import numpyro.distributions
 from jax import numpy as jnp
