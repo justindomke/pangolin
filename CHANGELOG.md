@@ -1,3 +1,5 @@
+**2025.12.12:** Update API docs to use Sphinx, be somewhat less chaotic.
+
 **2025.12.05:** Update Pangolin logo (h/t Bob), update demos, update install instructions.
 
 **2025.10.31:** Add experimental Torch backend
