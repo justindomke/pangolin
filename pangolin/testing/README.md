@@ -1,0 +1,1 @@
+This directory includes functionality for testing that is expected to be shared between different modules. (E.g. different backends.)

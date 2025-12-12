@@ -4,14 +4,36 @@ None of these functions import or use any other parts of Pangolin.
 **End-users of Pangolin are not typically expected to use these functions directly**, though people designing new inference algorithms may find them useful.
 """
 
+from __future__ import annotations  # so it's possible to preserve type aliases
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import Sequence, Any, Callable, Iterable
 
 
-def comma_separated(stuff, fun=None, parens=True, spaces=False):
-    """convenience function for printing and such
+def comma_separated(
+    stuff: Sequence,
+    fun: Callable | None = None,
+    parens: bool = True,
+    spaces: bool = False,
+) -> str:
+    """convenience function for turning seqences into comma separated strings.
+
+    Parameters
+    ----------
+    stuff
+        list to print
+    fun
+        function to apply to each item before printing
+    parens
+        do you want parentheses?
+    spaces
+        do you want spaces between items?
+
+    Returns
+    -------
+    out: str
+        string containing all items with commas between them
 
     Examples
     --------
@@ -44,6 +66,8 @@ def comma_separated(stuff, fun=None, parens=True, spaces=False):
 class VarNames:
     """Convenience class to automatically give unique string names to objects.
 
+    This class has no parameters.
+
     Examples
     --------
     >>> var_names = VarNames()
@@ -75,8 +99,19 @@ class VarNames:
         return varname
 
 
-def one_not_none(*args):
-    """Is exactly one argument not None?
+def one_not_none(*args: Any) -> int:
+    """how many items are not None? (Should be named num_not_none)
+
+    Parameters
+    ----------
+    *args
+        any number of arguments of any time
+
+    Returns
+    -------
+    count: int
+        number of items that are non-None
+
 
     Examples
     --------
@@ -98,8 +133,21 @@ def one_not_none(*args):
     return num
 
 
-def all_unique(lst):
-    return len(lst) == len(set(lst))
+def all_unique(a: Sequence) -> bool:
+    """
+    Are all items in a sequence unique?
+
+    Parameters
+    ----------
+    a
+        some sequence
+
+    Returns
+    -------
+    bool
+        True if all items are unique, False otherwise.
+    """
+    return len(a) == len(set(a))
 
 
 def intersects(A: Iterable, B: Iterable) -> bool:

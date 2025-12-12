@@ -19,18 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.12'
+          enable-cache: true
 
-      # ADJUST THIS: install all dependencies (including pdoc)
-      - run: pip install pdoc
-      - run: pip install -e ".[torch]"
-      - run: pdoc --docformat numpy -n pangolin -o ./docs  --logo "https://raw.githubusercontent.com/justindomke/pangolin/refs/heads/main/pangolin-logo-small.png"
+      - run: uv python install 3.12
+      - run: uv run --group docs sphinx-build -M html docs/source docs/build
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/
+          path: docs/build/html
 
   # Deploy the artifact to GitHub pages.
   # This is a separate job so that only actions/deploy-pages has the necessary permissions.

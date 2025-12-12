@@ -14,7 +14,7 @@ from pangolin.interface.compositing import composite_flat, make_composite
 from .vmapping import generated_nodes, AbstractOp, get_dummy_args
 from pangolin import util
 import jax.tree_util
-from pangolin.interface.base import RV_or_ArrayLike
+from pangolin.interface.base import RVLike
 
 # from pangolin.simple_interface.vmapping import get_flat_vmap_args_and_axes
 from typing import Callable, Sequence, Any
@@ -110,7 +110,7 @@ def autoregressive_flat(
     # next = flat_fun(prev, *args)
     # from pangolin.interface.base import rv_factory
 
-    def myfun(init: RV_or_ArrayLike, *args0: RV_or_ArrayLike):
+    def myfun(init: RVLike, *args0: RVLike):
         init = makerv(init)
         args = tuple(makerv(a) for a in args0)
 
@@ -142,36 +142,50 @@ def autoregressive_flat(
     return myfun
 
 
-def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0):
+def autoregressive(
+    fun: Callable, length: None | int = None, in_axes: Any = 0
+) -> Callable[[Any], RV[Autoregressive]]:
     """
     Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
 
-    ```python
-    auto_fun = autoregressive(fun, 5, [0, None])
-    z = autoregressive_fun(start, A, B)
-    ```
+    .. code-block:: python
+
+        auto_fun = autoregressive(fun, 5, [0, None])
+        z = autoregressive_fun(start, A, B)
 
     is semantically like
 
-    ```python
-    carry = start
-    values = []
-    # length = 5
-    for i in range(5):
-        # in_axes = [0, None] <-> A sliced on 0th axis, B unsliced
-        carry = fun(carry, A[i], B)
-        values.append(carry)
-    z = concatenate(values)
-    ```
+    .. code-block:: python
+
+        carry = start
+        values = []
+        # length = 5
+        for i in range(5):
+            # in_axes = [0, None] <-> A sliced on 0th axis, B unsliced
+            carry = fun(carry, A[i], B)
+            values.append(carry)
+        z = concatenate(values)
 
     Parameters
     ----------
     fun
-        Function to call repeatedly to define the distribution. Must take `carry` as the first input. Must return a single RV. Can only create a single *random* RV, which must be the final output, but can create an arbitrary number of *non*-random RVs. Can optionally take extra inputs that will be mapped as the
-    length: int | None
-        Length of autoregressive. Can be None if any inputs are mapped along some axis.
+        Function to call repeatedly to define the distribution.
+        Must take `carry` as the first input.
+        Must return a single `RV`.
+        Can only create a single *random* RV, which must be the final output.
+        But can create an arbitrary number of *non*-random RVs.
+        Can optionally take extra inputs that will be mapped.
+    length
+        Length of autoregressive. Can be `None` if any inputs are mapped along some axis.
     in_axes
-        What axis to map each input other than `carry` over (or none if non-mapped). As with `.vmap`, can be a pytree corresponding to the structure of all inputs other than `carry`.
+        What axis to map each input other than `carry` over (or `None` if non-mapped).
+        As with `vmap`, can be a `PyTree[RV]` corresponding to the structure of all
+        inputs other than `carry`.
+
+    Returns
+    -------
+    auto_fun
+        Function that takes some number of PyTrees of `RV` with mapped axes and produces a single `RV[Autoregressive]`
 
     Examples
     --------
@@ -224,12 +238,13 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0):
 
     See Also
     --------
-    autoregressive_flat
-    pangolin.ir.autoregressive.Autoregressive
-
+    pangolin.ir.Autoregressive
+    autoregress
     """
 
-    def myfun(init: RV_or_ArrayLike, *args):
+    # TODO: Document pytree inputs
+
+    def myfun(init: RVLike, *args):
         if len(args) == 1:
             # handles vmap(f, 0)(x) instead vmap(f,(0,))(x)
             my_in_axes = (in_axes,)
@@ -259,27 +274,41 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0):
     return myfun
 
 
-def autoregress(length=None, in_axes=0):
+def autoregress(length: int | None = None, in_axes: Any = 0) -> Callable:
     """
     Simple decorator to create functions to create autoregressive RVs. The idea is that
 
-    `autoregress(length, in_axes)(fun)`
+    .. code-block:: python
+
+        autoregress(length, in_axes)(fun)
 
     is exactly the same as
 
-    `autoregressive(fun, length, in_axes)`
+    .. code-block:: python
+
+        autoregressive(fun, length, in_axes)
 
     This can be very convenient as a decorator.
 
+    Parameters
+    ----------
+    length
+        the number of repetitions
+    in_axes
+        axis to map arguments other than `carry` over
+
     Examples
     --------
+
     Here are two equivalent examples. Here's `autoregressive`:
+
     >>> x = constant(3.3)
     >>> def fun(carry):
     ...     return normal(exp(carry), 1)
     >>> z1 = autoregressive(fun,5)(x)
 
     And here's `autoregress`:
+
     >>> @autoregress(5)
     ... def fun(carry):
     ...     return normal(exp(carry), 1)
@@ -294,7 +323,6 @@ def autoregress(length=None, in_axes=0):
     --------
     autoregressive
     pangolin.ir.Autoregressive
-
     """
 
     return lambda fun: autoregressive(fun, length, in_axes)

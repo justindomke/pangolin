@@ -1,17 +1,18 @@
-"""This is an **experimental** sub-module to compile pangolin models into
-plain-old pytorch functions. For usage, see:
+"""
+This is an **experimental** sub-module to compile pangolin models into
+plain-old pytorch functions.
 
-- `ancestor_sample`
-- `ancestor_sampler`
-- `ancestor_log_prob`
-
-**Note**: Because pytorch is large and sometimes annoying to install, and many users will not use this functionality, pangolin does not install pytorch as a requirement by default. This might lead you to get this error:
+**Note**: Because pytorch is large and sometimes annoying to install, and many users
+will not use this functionality, pangolin does not install pytorch as a requirement by
+default. This might lead you to get this error:
 
 ```
 ImportError: Using torch backend requires torch to be installed
 ```
 
-To fix this, either install pangolin with the pytorch requirements (e.g. with `uv sync --extra torch`) or manually install pytorch and funtorch yourself (e.g. with `pip install torch funtorch` or `uv pip install torch funtorch`).
+To fix this, either install pangolin with the pytorch requirements
+(e.g. with `uv sync --extra torch`) or manually install pytorch and funtorch yourself
+(e.g. with `pip install torch funtorch` or `uv pip install torch funtorch`).
 """
 
 import numpy as np
@@ -34,6 +35,8 @@ except ImportError:
     raise ImportError("Using torch backend requires torch to be installed")
 
 from typing import Type, Callable
+
+__all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 
 ################################################################################
 # Dict of Ops that correspond to simple functions
@@ -850,23 +853,53 @@ def ancestor_sample(vars, size: Optional[int] = None):
 
     Parameters
     ----------
-    vars
-        a pytree of `RV`s to sample
+    vars: `PyTree[RV]`
+        a PyTree of `RV` s to sample
+    size
+        number of samples to draw (default of `None` is just a single sample)
 
     Returns
     -------
     out
-        pytree of values matching structure of vars, but with torch tensors in place of RVs
-
+        `PyTree` matching structure of `vars`, but with `torch.tensor` in place
+        of `RV`. If `size` is `None`, then each tensor will have the same shape as the
+        corresponding `RV`. Otherwise, each tensor will have an extra dimension of size
+        `size` appended at the beginning.
 
     Examples
     --------
+
+    Sample a constant RV.
+
     >>> x = RV(ir.Constant(1.5))
     >>> ancestor_sample(x)
     tensor(1.5000)
-    >>> y = RV(ir.Normal(), x, x)
-    >>> print(ancestor_sample({'cat': x, 'dog': (x, y)}))
-    {'cat': tensor(1.5000), 'dog': (tensor(1.5000), tensor(...))}
+
+    Sample a PyTree with the RV inside it.
+
+    >>> ancestor_sample({'sup': [[x]]})
+    {'sup': [[tensor(1.5000)]]}
+
+    Draw several samples.
+
+    >>> ancestor_sample(x, size=3)
+    tensor([1.5000, 1.5000, 1.5000])
+
+    Sample several samples from a PyTree with an RV inside it.
+
+    >>> ancestor_sample({'sup': x}, size=3)
+    {'sup': tensor([1.5000, 1.5000, 1.5000])}
+
+    Sample from several random variables at once
+
+    >>> y = RV(ir.Add(), x, x)
+    >>> z = RV(ir.Mul(), x, y)
+    >>> print(ancestor_sample({'cat': x, 'dog': [y, z]}))
+    {'cat': tensor(1.5000), 'dog': [tensor(3.), tensor(4.5000)]}
+
+    See Also
+    --------
+    pangolin.jax_backend.ancestor_sample
     """
 
     (
@@ -910,10 +943,15 @@ def ancestor_sampler(vars):
     [{'cat': tensor(1.5000)}, tensor(3.)]
 
     You can do normal torch stuff with it, e.g. vmap. But note that limitations
-    in pytorch mean that you must pass some kind of dummy argument to convey the number of samples.
+    in pytorch mean that you must pass some kind of dummy argument and pass
+    `randomness='different'` to get independent samples.
 
     >>> print(torch.vmap(lambda dummy: fun(), randomness='different')(torch.ones(3)))
     [{'cat': tensor([1.5000, 1.5000, 1.5000])}, tensor([3., 3., 3.])]
+
+    See Also
+    --------
+    pangolin.jax_backend.ancestor_sampler
     """
 
     (

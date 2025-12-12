@@ -1,62 +1,78 @@
 """
 This module defines a friendly interface for creating models in the Pangolin IR.
 
-## Example
+Example
+=======
 
 Take the following model:
 
-```text
-x    ~ normal(0,1)
-y[i] ~ exponential(d[i])
-z[i] ~ normal(x, y[i])
-```
+.. code-block:: text
+
+    x    ~ normal(0,1)
+    y[i] ~ exponential(d[i])
+    z[i] ~ normal(x, y[i])
 
 In Pangolin, you can declare this model like so:
 
-```python
->>> from pangolin import interface as pi
->>>
->>> x = pi.normal(0,1)
->>> y = pi.vmap(pi.exponential)(pi.constant([2,3,4]))
->>> z = pi.vmap(pi.normal, [None, 0])(x, y)
+.. code-block:: python
 
-```
+    >>> from pangolin import interface as pi
+    >>>
+    >>> x = pi.normal(0,1)
+    >>> y = pi.vmap(pi.exponential)(pi.constant([2,3,4]))
+    >>> z = pi.vmap(pi.normal, [None, 0])(x, y)
 
 This produces the following internal representation.
 
-```python
->>> pi.print_upstream(z)
-shape | statement
------ | ---------
-()    | a = 0
-()    | b = 1
-()    | c ~ normal(a,b)
-(3,)  | d = [2 3 4]
-(3,)  | e ~ vmap(exponential, (0,), 3)(d)
-(3,)  | f ~ vmap(normal, (None, 0), 3)(c,e)
 
-```
+.. code-block:: python
 
-## Reference card
+    >>> pi.print_upstream(z)
+    shape | statement
+    ----- | ---------
+    ()    | a = 0
+    ()    | b = 1
+    ()    | c ~ normal(a,b)
+    (3,)  | d = [2 3 4]
+    (3,)  | e ~ vmap(exponential, (0,), 3)(d)
+    (3,)  | f ~ vmap(normal, (None, 0), 3)(c,e)
 
-The entire interface is based on methods that create `InfixRV` objects (or that create functions that create `InfixRV` objects). Here are all the functions:
+Reference card
+--------------
 
-| To do... | Use... |
-| ---- | --------- |
-| Constants | `constant` |
-| Arithmetic | `add` `sub` `mul` `div` (or infix `+`, `-`, `*`, `/`) |
-| Trigonometry | `arccos` `arccosh` `arcsin` `arcsinh` `arctan` `arctanh` `cos` `cosh` `sin` `sinh` `tan` `tanh` |
-| Other scalar functions | `pow` (or infix `**`) `sqrt` `abs` `exp` `inv_logit` `expit` `sigmoid` `log` `loggamma` `logit` `step` `softmax` |
-| Linear algebra | `matmul` (or infix `@`) `inv` |
-| Other multivariate functions | `sum` |
-| Scalar distributions | `normal` `normal_prec` `lognormal` `cauchy` `bernoulli` `bernoulli_logit` `beta` `binomial` `categorical` `uniform` `beta_binomial` `exponential` `gamma` `poisson` `student_t`|
-| Multivariate distributions | `multi_normal` `multinomial` `dirichlet` |
-| Control flow | `vmap` `composite` `autoregressive` `autoregress` |
-| Indexing | `index` (or `InfixRV.__getitem__` / `[]` operator) |
+The entire interface is based on methods that create :class:`InfixRV` objects (or that create functions that create :class:`InfixRV` objects).
+
+Here are all the functions:
+
+============================ ======
+To do...                     Use...
+============================ ======
+Constants                    :func:`constant`
+Arithmetic                   :func:`add` :func:`sub` :func:`mul` :func:`div` (or infix `+`, `-`, `*`, `/`)
+Trigonometry                 :func:`arccos` :func:`arccosh` :func:`arcsin` :func:`arcsinh` :func:`arctan` :func:`arctanh` :func:`cos` :func:`cosh` :func:`sin` :func:`sinh` :func:`tan` :func:`tanh`
+Other scalar functions       :func:`pow` (or infix `**`) :func:`sqrt` :func:`abs` :func:`exp` :func:`inv_logit` :func:`expit` :func:`sigmoid` :func:`log` :func:`loggamma` :func:`logit` :func:`step`
+Linear algebra               :func:`matmul` (or infix `@`) :func:`inv`
+Other multivariate functions :func:`sum` :func:`softmax`
+Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
+Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet`
+Control flow                 :func:`vmap` :func:`composite` :func:`autoregressive` :func:`autoregress`
+Indexing                     :func:`index` (or :func:`InfixRV.__getitem__` / `[]` operator)
+============================ ======
+
+Automatic casting of arguments
+------------------------------
+
+See `RVLike`.
+
+API docs
+------------------------------
 
 """
 
+from __future__ import annotations
 from .base import *
+from .base import RVLike
+
 
 # from . import vmap
 # from . import vmap
@@ -65,6 +81,25 @@ from .compositing import composite
 from .autoregressing import autoregressive, autoregress
 from .indexing import index
 from pangolin.ir import print_upstream
+
+RVLike = RVLike  # no-op assignment so it can be documented
+"""A type class indicating either:
+
+1. An `RV`
+2. A NumPy array
+3. Something that can be transformed into a NumPy array, such as a float or a list of lists of floats.
+
+Many functions in this interface take `RVLike` arguments.
+If the argument to the function is not an `RV`, then an `InfixRV` with a `Constant` op
+is automatically created.
+So, for example, `cos(2.5)` is equivalent to
+
+`cos(InfixRV(pangolin.ir.Constant(2.5)))`.
+
+Note that JAX arrays will typecheck as valid instances of `RVLike` (which is probably
+good) but so will strings (which is probably bad).
+"""
+
 
 __all__ = [
     "InfixRV",
@@ -130,6 +165,7 @@ __all__ = [
     "indexing",
     "print_upstream",
     "ScalarBroadcasting",
+    "RVLike",
 ]
 
 

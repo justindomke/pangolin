@@ -5,38 +5,48 @@ None of these functions import or use any other parts of Pangolin.
 """
 
 import jax.tree_util
+from typing import Sequence, Callable
 
 
 class Node:
     """
-    The basic `Node` class. This is just an object that remembers a set of
-    parents, nothing more.
+    The basic node class. This is just an object that remembers a set of parents.
+
+    Parameters
+    ----------
+    *parents
+        The parents of this Node
     """
 
-    def __init__(self, *parents):
-        self.parents = parents
-        "The parents of this node"
+    def __init__(self, *parents: "Node"):
+        self.parents: tuple[Node] = parents
+        "The parents of this Node"
 
 
-def upstream_nodes_flat(nodes_flat, node_block, edge_block, upstream):
+def upstream_nodes_flat(
+    nodes_flat: Sequence[Node],
+    node_block: Callable,
+    edge_block: Callable,
+    upstream: list[Node],
+):
     """
     Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
     `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
 
     Parameters
     ----------
-    nodes_flat: Sequence[Node]
+    nodes_flat
         starting nodes
-    node_block: Callable
+    node_block
         should DFS be blocked from visting a node?
-    edge_block: Callable
-        should DFS be blocked from following a link
-    upstream: List
+    edge_block
+        should DFS be blocked from following a link?
+    upstream
         list of nodes, destructively updated
 
     Returns
     -------
-    upstream: list[Node]
+    upstream
         list of all nodes found, with a partial order so that parents always come
         before children
     """
@@ -52,34 +62,36 @@ def upstream_nodes_flat(nodes_flat, node_block, edge_block, upstream):
     return upstream
 
 
-def upstream_nodes(nodes, block_condition=None, edge_block=None):
+def upstream_nodes(
+    nodes, node_block: Callable | None = None, edge_block: Callable | None = None
+) -> list[Node]:
     """
     Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
     `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
 
     Parameters
     ----------
-    nodes_flat: pytree[Node]
+    nodes: PyTree[Node]
         starting nodes
-    node_block: Callable
+    node_block
         should DFS be blocked from visting a node? If None, then all nodes allowed.
-    edge_block: Callable
+    edge_block
         should DFS be blocked from following an edge? If None, then all edges allowed.
 
     Returns
     -------
-    upstream: list[Node]
+    upstream
         list of all nodes found, with a partial order so that parents always come
         before children
     """
 
     nodes_flat, _ = jax.tree_util.tree_flatten(nodes)
-    if block_condition is None:
-        block_condition = lambda x: False
+    if node_block is None:
+        node_block = lambda x: False
     if edge_block is None:
         edge_block = lambda x, y: False
 
-    return upstream_nodes_flat(nodes_flat, block_condition, edge_block, [])
+    return upstream_nodes_flat(nodes_flat, node_block, edge_block, [])
 
 
 def upstream_with_descendent_old(requested_nodes, given_nodes):
@@ -133,13 +145,8 @@ def get_children(nodes, block_condition=None):
     children = {}
     for n in all_nodes:
         children[n] = []
-    # print(f"{all_nodes=}")
-    # print(f"{children=}")
-    # print(f"{[hash(n) for n in all_nodes]=}")
-    # print(f"{[hash(n) for n in children]=}")
     for n in all_nodes:
         for p in n.parents:
-            # print(f"{hash(n)=} {hash(p)=}")
             if n not in children[p]:
                 children[p].append(n)
     return children

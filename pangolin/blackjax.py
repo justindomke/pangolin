@@ -1,7 +1,24 @@
+"""
+This module defines a convenient interface to call
+`blackjax <https://blackjax-devs.github.io/blackjax/>`_ 
+to do inference. You could of course just call `jax_backend.ancestor_log_prob` to get
+a plain jax function and then call blackjax yourself. But this module abstracts away 
+all the details.
+"""
+
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
-from typing import Any, Callable, TypeAlias, TYPE_CHECKING, Type, Sequence, List
+from typing import (
+    Any,
+    Callable,
+    TypeAlias,
+    TYPE_CHECKING,
+    Type,
+    Sequence,
+    List,
+    Optional,
+)
 from pangolin import ir
 from pangolin.ir import Op, RV
 from numpy.typing import ArrayLike
@@ -11,6 +28,8 @@ from jax import nn as jnn
 from pangolin import dag, util
 from pangolin import jax_backend
 import blackjax
+
+__all__ = ["sample", "E", "var", "std", "Calculate", "inf_until_match"]
 
 
 def inference_loop(rng_key, kernel, initial_states, num_samples):
@@ -128,13 +147,20 @@ def sample_flat(
 
 
 class Calculate:
-    def __init__(self, default: None | dict = None, frozen: None | dict = None):
-        """
-        Create a `Calculate` object.
+    """
+    A `Calculate` object just remembers a set of options and then offers inference
+    methods.
 
-        Inputs:
-        * `**options`: options to "freeze" in
-        """
+    Parameters
+    ----------
+    default
+        represents a set of options for the inference engine that can be overriden later
+    frozen
+        represents a set of options for the inference engine that cannot be overridden
+
+    """
+
+    def __init__(self, default: Optional[dict] = None, frozen: Optional[dict] = None):
 
         if default is None:
             default = {}
@@ -152,32 +178,47 @@ class Calculate:
         vars,
         given_vars=None,
         given_vals=None,
-        reduce_fn=None,
+        reduce_fn: Optional[Callable] = None,
         **options,
     ):
         """
         Draw samples!
 
-        Inputs:
-        * `vars`: a pytree of `RV`s to sample. (Can be any pytree)
-        * `given_vars`: a pytree of `RV`s to condition on. `None` is no conditioning
-        variables. (
-        Can be any pytree)
-        * `given_vals`: a pytree of observed values. (Pytree must match `given_vars`.)
-        * `reduce_fn` (optional) will apply a function to the samples for each `RV` in
-        `vars` before returning samples. (This is used to define `E`, `var`, etc.
-        below.)
+        Parameters
+        ----------
+        vars: `PyTree[RV]`
+            A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
+        given_vars: `PyTree[RV]`
+            A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+            Or `None` if no conditioning variables.
+        given_vals: `PyTree[ArrayLike]`
+            An `ArrayLike` or list/tuple of `ArrayLike` or pytree of `ArrayLike`
+            representing observed values. Must match the structure and shape of
+            `given_vars`.
+        reduce_fn
+            Function to apply to each leaf node in samples before returning. This is
+            used to create `E`, `var`, etc. (If `None`, does nothing.)
+        **options
+            extra options to pass to sampler
 
-        Outputs:
-        * A `pytree` of `RV`s matching `vars` with one extra dimension, containing
-        the samples.
+        Returns
+        -------
+        samps
+            A `pytree` of JAX arrays matching structure and shape of `vars` but with one
+            extra dimension at the start, containing the samples.
 
-        Example:
-        ```python
-        x = normal(0,1)
-        y = normal(x,1)
-        sample(x,y,2) # returns something close to 1.0
-        ```
+        Examples
+        --------
+        >>> zero    = ir.RV(ir.Constant(0))
+        >>> one     = ir.RV(ir.Constant(1))
+        >>> x       = ir.RV(ir.Normal(), zero, one)
+        >>> y       = ir.RV(ir.Normal(), x, one)
+        >>> calc    = Calculate({'niter': 529})
+        >>> x_samps = calc.sample(x,y,2)
+        >>> x_samps.shape
+        (529,)
+        >>> np.mean(x_samps) # something close to 1.0
+        Array(...)
         """
 
         if util.intersects(options, self.frozen):
@@ -207,6 +248,42 @@ class Calculate:
         return unflatten(flat_samps)
 
     def E(self, vars, given_vars=None, given_vals=None, **options):
+        """
+        Compute (conditional) expected values. This is just a thin wrapper that calls
+        `sample` and then reduces by taking the mean.
+
+        Parameters
+        ----------
+        vars: `PyTree[RV]`
+            A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
+        given_vars: `PyTree[RV]`
+            A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+            Or `None` if no conditioning variables.
+        given_vals: `PyTree[ArrayLike]`
+            An `ArrayLike` or list/tuple of `ArrayLike` or pytree of `ArrayLike`
+            representing observed values. Must match the structure and shape of
+            `given_vars`.
+        **options
+            extra options to pass to sampler
+
+
+        Returns
+        -------
+        expectations: `PyTree[jnp.ndarray]`
+            A pytree of JAX arrays matching structure and shape of `vars`, containing
+            the expectations.
+
+        Examples
+        --------
+        >>> zero    = ir.RV(ir.Constant(0))
+        >>> one     = ir.RV(ir.Constant(1))
+        >>> x       = ir.RV(ir.Normal(), zero, one)
+        >>> y       = ir.RV(ir.Normal(), x, one)
+        >>> calc    = Calculate({'niter': 529})
+        >>> calc.E(x,y,2) # something close to 1.0
+        Array(...)
+        """
+
         return self.sample(
             vars, given_vars, given_vals, lambda x: np.mean(x, axis=0), **options
         )

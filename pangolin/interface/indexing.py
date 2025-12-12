@@ -2,12 +2,13 @@
 Interface for fully-orthogonal indexing.
 """
 
+from __future__ import annotations
 from . import InfixRV
 from pangolin.ir import Op, RV, VMap, Constant, print_upstream
 from pangolin.ir import SimpleIndex
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RV_or_ArrayLike, constant, exp, log
+from .base import makerv, create_rv, RVLike, constant, exp, log
 from typing import Sequence, Type
 import jax.tree_util
 
@@ -15,6 +16,8 @@ from typing import Protocol, TypeVar, Any
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
+
+# TODO: Clarify exactly how indexing works, how related to broadcasting
 
 
 def eliminate_ellipses(ndim: int, idx: tuple):
@@ -51,7 +54,7 @@ def eliminate_ellipses(ndim: int, idx: tuple):
     return idx
 
 
-def convert_index(size: int, index: RV_or_ArrayLike | slice) -> RV:
+def convert_index(size: int, index: RVLike | slice) -> RV:
     """Convert an index which could be RV or ArrayLike or slice to an RV
 
     Parameters
@@ -94,7 +97,7 @@ def convert_index(size: int, index: RV_or_ArrayLike | slice) -> RV:
         return constant(A)
 
 
-def convert_indices(shape: tuple[int], *indices: RV_or_ArrayLike | slice) -> tuple[RV]:
+def convert_indices(shape: tuple[int], *indices: RVLike | slice) -> tuple[RV]:
     """
     Examples
     --------
@@ -109,7 +112,7 @@ def convert_indices(shape: tuple[int], *indices: RV_or_ArrayLike | slice) -> tup
     )
 
 
-IdxType = RV_or_ArrayLike | slice | type(Ellipsis)
+IdxType = RVLike | slice | type(Ellipsis)
 
 
 def index(var: RV, *indices: IdxType):

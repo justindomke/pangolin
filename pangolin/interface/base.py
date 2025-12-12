@@ -2,30 +2,24 @@
 This package defines a special subtype of RV that supports operator overloading
 """
 
+from __future__ import annotations
 from pangolin.ir import RV, Op, Constant, ScalarOp, VMap
-
-# from pangolin.ir.scalar_ops import add, mul, sub, div, pow
-
-# from pangolin.ir.op import SetAutoRV
 from pangolin import ir
-
-# from .indexing import index
-
 from numpy.typing import ArrayLike
-
-# from jax.typing import ArrayLike
 import jax
 import numpy as np
 from typing import TypeVar, Type, Callable, cast, Sequence
 from pangolin.util import comma_separated
 import inspect
-from typing import Generic
+from typing import Generic, TypeAlias
 import os
 
-RV_or_ArrayLike = RV | ArrayLike
+RVLike: TypeAlias = RV | ArrayLike
+
 # RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
-"""Represents either a `RV` or a value that can be cast to a NumPy array, such as a float or list of floats.
-This will include JAX arrays (which is good) but also unfortunately accepts strings (which is bad)."""
+
+# TODO: Change return types to InfixRV?
+# TODO: Shorten InfixRV name?
 
 ####################################################################################################
 # config
@@ -128,16 +122,15 @@ class InfixRV(RV[OpU], Generic[OpU]):
     def __str__(self):
         return super().__str__()
 
-    _IdxType = RV_or_ArrayLike | slice | type(Ellipsis)
+    _IdxType = RVLike | slice | type(Ellipsis)
 
     def __getitem__(self, idx: _IdxType | tuple[_IdxType, ...]):
         """
-        @public
         You can index an `RV` with the `[]` operators, e.g. as `A[B,C]`.
 
         Note that indexing with this interface is different (and simpler) than NumPy or JAX:
 
-        First, indexing is always fully-orthogonal. This is done to avoid the [utter insanity](https://numpy.org/doc/stable/user/basics.indexing.html) that is NumPy indexing with broadcasting, basic indexing, advanced indexing, and combinations of basic and advanced indexing. In this interface, if `A`, `B`, and `C` are RVs, then `A[B,C].shape == A.shape + B.shape`, and similarly if `B` or `C` are int / list of (list of) int / numpy array / slice.
+        First, indexing is by default fully-orthogonal. This is done to avoid the `utter insanity <https://numpy.org/doc/stable/user/basics.indexing.html>`_ that is NumPy indexing with broadcasting, basic indexing, advanced indexing, and combinations of basic and advanced indexing. In this interface, if `A`, `B`, and `C` are RVs, then `A[B,C].shape == A.shape + B.shape`, and similarly if `B` or `C` are int / list of (list of) int / numpy array / slice.
 
         Second, all axes must be indexed. For example, if `A` is a RV with 3 axes, then `A[2]` will trigger an exception. The idea of this is to make code more legible and self-enforcing. Instead you must write `A[2, :, :]` or `A[2, ...]`.
 
@@ -187,17 +180,18 @@ class InfixRV(RV[OpU], Generic[OpU]):
 ####################################################################################################
 
 
-def constant(value: ArrayLike):
+def constant(value: ArrayLike) -> InfixRV[Constant]:
     """Create a constant RV
 
     Parameters
     ----------
     value: ArrayLike
-        value for the constant. Should be a numpy (or JAX) array or something castable to that, e.g. int / float / list of list of ints/floats.
+        value for the constant. Should be a numpy (or JAX) array or something castable
+        to that, e.g. int / float / list of list of ints/floats.
 
     Returns
     -------
-    InfixRV
+    out
         RV with Constant Op
 
     Examples
@@ -206,7 +200,6 @@ def constant(value: ArrayLike):
     InfixRV(Constant(7))
     >>> constant([0,1,2])
     InfixRV(Constant([0,1,2]))
-
     """
     return InfixRV(Constant(value))
 
@@ -218,7 +211,7 @@ def constant(value: ArrayLike):
 #     return False
 
 
-def makerv(x) -> RV:
+def makerv(x: RVLike) -> RV:
     """
     If the input is `RV`, then it just returns it. Otherwise, creates an InfixRV.
 
@@ -273,13 +266,9 @@ def _scalar_op_doc(OpClass):
     expected_parents = op._expected_parents
 
     if op.random:
-        __doc__ = f"""
-        Creates a {str(OpClass.__name__)} distributed RV.
-        """
+        __doc__ = f"Creates a {str(OpClass.__name__)} distributed RV."
     else:
-        __doc__ = f"""
-        Creates an RV by applying {str(OpClass.__name__)} to parents.
-        """
+        __doc__ = f"Creates an RV by applying {str(OpClass.__name__)} to parents."
 
     __doc__ += """
     
@@ -289,15 +278,14 @@ def _scalar_op_doc(OpClass):
 
     for p in expected_parents:
         __doc__ += f"""
-            {p}: RV_or_ArrayLike
-                {expected_parents[p]}. Must be scalar.
-    
-            """
+    {p}
+        {expected_parents[p]}. Must be scalar.
+    """
 
     __doc__ += f"""
     Returns
     -------
-    z: InfixRV
+    z: `InfixRV`
         Random variable with `z.op` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
     """
 
@@ -457,7 +445,7 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir._Shape) -> Op:
     # (will also need to create ir.Squeeze)
 
 
-def get_shape(arg: RV_or_ArrayLike):
+def get_shape(arg: RVLike):
     """If `arg` has a shape, attribute return it. Otherwise return the shape it would have if cast to an array. (No array is actually created.)
 
         Parameters
@@ -529,16 +517,21 @@ def scalar_fun_factory(OpClass, /):
 
     func_sig = (
         f"{op.name}"
-        + comma_separated([f"{a}:RV_or_ArrayLike" for a in expected_parents])
-        + " -> InfixRV"
+        + comma_separated([f"{a}:'RVLike'" for a in expected_parents])
+        + " -> InfixRV["
+        + f"'ir.{OpClass.__name__}'"
+        + "]"
     )
 
-    fun = makefun.create_function(func_sig, fun)
+    fun = makefun.create_function(
+        func_sig, fun, dict_globals={"RVLike", RVLike}
+    )  # useless?
     fun.__doc__ = _scalar_op_doc(OpClass)
+    fun.__module__ = "pangolin.interface"
     return fun
 
 
-def scalar_fun_factory1(OpClass) -> Callable[[RV_or_ArrayLike], InfixRV]:
+def scalar_fun_factory1(OpClass) -> Callable[[RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 1
     return fun
@@ -546,7 +539,7 @@ def scalar_fun_factory1(OpClass) -> Callable[[RV_or_ArrayLike], InfixRV]:
 
 def scalar_fun_factory2(
     OpClass,
-) -> Callable[[RV_or_ArrayLike, RV_or_ArrayLike], InfixRV]:
+) -> Callable[[RVLike, RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 2
     return fun
@@ -554,7 +547,7 @@ def scalar_fun_factory2(
 
 def scalar_fun_factory3(
     OpClass,
-) -> Callable[[RV_or_ArrayLike, RV_or_ArrayLike, RV_or_ArrayLike], InfixRV]:
+) -> Callable[[RVLike, RVLike, RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 3
     return fun
@@ -615,31 +608,40 @@ def sqrt(x):
 ####################################################################################################
 
 
-def matmul(a, b):
+def matmul(a: RVLike, b: RVLike) -> RV[ir.Matmul]:
     """
     Matrix product of two arrays. The behavior follows that of
-    [`numpy.matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)
+    `numpy.matmul <https://numpy.org/doc/stable/reference/generated/numpy.matmul.html>`_
     except that `a` and `b` must both be 1-D or 2-D arrays. In particular:
+
     * If `a` and `b` are both 1-D then this represents an inner-product.
     * If `a` is 1-D and `b` is 2-D then this represents vector/matrix multiplication
     * If `a` is 2-D and `b` is 1-D then this represents matrix/vector multiplication
     * If `a` and `b` are both 2-D then this represents matrix/matrix multiplication
+
+    Parameters
+    ----------
+    a
+        first argument (1d or 2d array)
+    b
+        second argument (1d or 2d array, matching shape of `a`)
     """
     return create_rv(ir.Matmul(), a, b)
 
 
-def inv(a):
+def inv(a: RVLike) -> RV[ir.Inv]:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
     return create_rv(ir.Inv(), a)
 
 
-def softmax(a):
+def softmax(a: RVLike) -> RV[ir.Softmax]:
     """
-    Take [softmax](https://en.wikipedia.org/wiki/Softmax_function) function. (TODO: conform to
-    syntax of [scipy.special.softmax](
-    https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.softmax.html))
+    Take `softmax <https://en.wikipedia.org/wiki/Softmax_function>`_ function.
+    (TODO: conform to
+    syntax of `scipy.special.softmax
+    <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.softmax.html>`_
 
     Parameters
     ----------
@@ -689,26 +691,61 @@ student_t = scalar_fun_factory3(ir.StudentT)
 ####################################################################################################
 
 
-def multi_normal(mean, cov):
-    """Create a multivariate normal distributed random variable. Call as `multi_normal(mean,cov)`"""
+def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
+    """
+    Create a multivariate normal distributed random variable.
+    Call as `multi_normal(mean,cov)`
+
+    Parameters
+    ----------
+    mean
+        mean (1D array)
+    cov
+        covariance (2D positive-definite array)
+    """
     return create_rv(ir.MultiNormal(), mean, cov)
 
 
-def categorical(theta):
-    """Create a [categorical](https://en.wikipedia.org/wiki/Categorical_distribution)-distributed
-    where `theta` is a vector of non-negative reals that sums to one."""
+def categorical(theta: RVLike) -> RV[ir.Categorical]:
+    """
+    Create a `categorical <https://en.wikipedia.org/wiki/Categorical_distribution>`_
+    distributed `RV` where `theta` is a vector of non-negative reals that sums to one.
+
+    Parameters
+    ----------
+    theta
+        positive event probabilities (should sum to one)
+    """
     return create_rv(ir.Categorical(), theta)
 
 
-def multinomial(n, p):
-    """Create a [multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution)-distributed
-    random variable. Call as `multinomial(n,p)` where `n` is the number of repetitions and `p` is a
-    vector of probabilities that sums to one."""
+def multinomial(n: RVLike, p: RVLike) -> RV[ir.Multinomial]:
+    """
+    Create a `multinomial <https://en.wikipedia.org/wiki/Multinomial_distribution>`_
+    distributed random variable. Call as `multinomial(n,p)` where `n` is the number of
+    repetitions and `p` is a vector of probabilities that sums to one.
+
+    Parameters
+    ----------
+    n
+        number of repetitions (scalar)
+    p
+        vector of probabilities (should sum to one)
+
+    """
     return create_rv(ir.Multinomial(), n, p)
 
 
-def dirichlet(alpha):
-    """Create a [Dirichlet](https://en.wikipedia.org/wiki/Dirichlet_distribution)-distributed
-    random variable. Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
+def dirichlet(alpha: RVLike) -> RV[ir.Dirichlet]:
+    """
+    Create a
+    `Dirichlet <https://en.wikipedia.org/wiki/Dirichlet_distribution>`_
+    distributed random variable.
+    Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
+
+    Parameters
+    ----------
+    alpha
+        concentration (vector of positive numbers)
     """
     return create_rv(ir.Dirichlet(), alpha)

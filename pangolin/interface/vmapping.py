@@ -4,7 +4,7 @@ from . import InfixRV
 from pangolin.ir import Op, OpNonrandom, RV, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RV_or_ArrayLike, constant, exp, log
+from .base import makerv, create_rv, RVLike, constant, exp, log
 from typing import Sequence, Type
 import jax.tree_util
 from pangolin.ir import split_shape
@@ -285,7 +285,7 @@ def generated_nodes(fun: FlatCallable, *args: RV) -> tuple[list[RV], list[RV]]:
             )
 
     all_abstract_vars = dag.upstream_nodes(
-        abstract_out, block_condition=lambda var: not is_abstract(var)
+        abstract_out, node_block=lambda var: not is_abstract(var)
     )
 
     all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node._n)
@@ -317,7 +317,7 @@ def vmap_eval_flat(
     f: FlatCallable,
     in_axes: Sequence[int | None],
     axis_size: int | None,
-    *args: RV_or_ArrayLike,
+    *args: RVLike,
 ):
     """
     This function (but not vmap itself) works on "flat" function f, meaning that each
@@ -421,20 +421,20 @@ def get_dummy_args(in_axes, args):
     return dummy_args
 
 
-def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
-    """@public
+def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callable:
+    """
     Vectorizing map. Create a function which maps `f` over argument axes.
 
     This function matches exactly the interface of [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html), although it doesn't provide some of the optional arguments `jax.vmap` does.
 
     Parameters
     ----------
-    f: Callable
+    f
         The function to vmap. Should take a pytree of `RV`s as inputs and return a pytree of `RV`s
         as outputs.
-    in_axes: Any
+    in_axes
         An int, None, or pytree with roots that are int or None. Specifies which axis of each RV should be mapped (if int) or that no axis shuld be mapped (if None). Can be a pytree matching the structure of all arguments to `f`. Or, can be a pytree that is a prefix to the pytree representing all arguments. By default, in_axes is zero, meaning all RVs are mapped over the first axis.
-    axis_size: int | None
+    axis_size
         An integer indicating the size of the axis to be mapped. This is optional unless all
         leaves of `in_axes` are `None`.
 
@@ -446,6 +446,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     Examples
     --------
     Here's the simplest possible example.
+
     >>> def fun(a):
     ...     return exp(a)
     >>> A = constant([0,1,2])
@@ -453,6 +454,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     InfixRV(VMap(Exp(), (0,), 3), InfixRV(Constant([0,1,2])))
 
     Multiple inputs are OK.
+
     >>> def fun(a,b):
     ...     return a*b
     >>> A = constant([1,2,3])
@@ -461,6 +463,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))
 
     Unmapped inputs are OK.
+
     >>> def fun(a,b):
     ...     return a*b
     >>> A = constant([1,2,3])
@@ -468,6 +471,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(7)))
 
     Multiple outputs are OK.
+
     >>> def fun(a):
     ...     return [exp(a), log(a)]
     >>> [out1, out2] = vmap(fun)(A)
@@ -477,6 +481,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     InfixRV(VMap(Log(), (0,), 3), InfixRV(Constant([1,2,3])))
 
     Pytree inputs and pytree in_axes are OK
+
     >>> def fun(x):
     ...     return x['cat']*x['dog']
     >>> x = {'cat': A, 'dog': constant(3)}
@@ -485,12 +490,14 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(3)))
 
     Pytree outputs are OK
+
     >>> def fun(a, b):
     ...     return {"add": a+b, "mul": a*b}
     >>> vmap(fun)(A, B)
     {'add': InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6]))), 'mul': InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))}
 
     Pytree in_axis prefixes are OK
+
     >>> def fun(x):
     ...     [a, (b,c)] = x
     ...     return (a*b)+c
@@ -517,6 +524,10 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None):
     (3,)  | c = vmap(mul, (0, None), 3)(a,b)
     ()    | d = 8
     (3,)  | e = vmap(add, (0, None), 3)(c,d)
+
+    See Also
+    --------
+    pangolin.ir.VMap
     """
 
     # TODO: support negative in_axes
