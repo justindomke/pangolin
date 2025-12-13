@@ -324,7 +324,7 @@ def _scalar_op_doc(OpClass):
     return __doc__
 
 
-def vmap_scalars_simple(op: Op, *parent_shapes: ir._Shape) -> Op:
+def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This only accepts a very limited amount of broadcasting: All parents shapes must
     either be *scalar* or *exactly equal*.
@@ -383,7 +383,7 @@ def vmap_scalars_simple(op: Op, *parent_shapes: ir._Shape) -> Op:
     return new_op
 
 
-def vmap_scalars_numpy(op: Op, *parent_shapes: ir._Shape) -> Op:
+def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This implements most of numpy-style scalar broadcasting. The only limitation is that broadcasting of singleton dimensions
     against non-singleton dimensions is not supported.

@@ -41,7 +41,7 @@ from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
 
-_Shape = tuple[int, ...]
+Shape = tuple[int, ...]
 
 ########################################################################################
 # The fundamental Op class
@@ -70,7 +70,7 @@ class Op(ABC):
         pass
 
     @abstractmethod
-    def get_shape(self, *parents_shapes: _Shape) -> _Shape:
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         Non-abstract :class:`Op` must provide this method, which takes the shape of each
         input and returns the shape of the output of this `Op`.
@@ -167,7 +167,7 @@ class Constant(OpNonrandom):
         self.value.flags.writeable = False  # make value immutable
         super().__init__()
 
-    def get_shape(self, *parents_shapes: _Shape) -> _Shape:
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         If `len(parents_shapes)>0`, raises `ValueError`. Otherwise, returns the
         shape of `value`.
@@ -246,7 +246,7 @@ class ScalarOp(Op):
     def num_parents(self) -> int:
         pass
 
-    def get_shape(self, *parents_shapes: _Shape):
+    def get_shape(self, *parents_shapes: Shape):
         """
         Checks that all parents have shape `()` and there are the correct number of
         parents. Always returns `()`.
@@ -489,7 +489,7 @@ class Matmul(OpNonrandom):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, a_shape: _Shape, b_shape: _Shape):
+    def get_shape(self, a_shape: Shape, b_shape: Shape):
         """
         Get the shape of applying a matmul to operators with shape `a_shape` and `b_shape`
 
@@ -967,7 +967,7 @@ class VMap(Op):
     def random(self):
         return self._random
 
-    def get_shape(self, *parents_shapes) -> _Shape:
+    def get_shape(self, *parents_shapes) -> Shape:
         if len(parents_shapes) != len(self.in_axes):
             raise ValueError(
                 f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}"
@@ -976,7 +976,7 @@ class VMap(Op):
         remaining_shapes, axis_size = get_sliced_shapes(
             parents_shapes, self.in_axes, self.axis_size
         )
-        dummy_shape: _Shape = self.base_op.get_shape(*remaining_shapes)
+        dummy_shape: Shape = self.base_op.get_shape(*remaining_shapes)
         return (axis_size,) + dummy_shape
 
     def __repr__(self):
@@ -1633,7 +1633,7 @@ class RV(dag.Node, Generic[OpT]):
         self._frozen = True
 
     @property
-    def shape(self) -> _Shape:
+    def shape(self) -> Shape:
         """
         The shape of the RV. (A tuple of ints.)
         """
