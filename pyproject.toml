@@ -5,6 +5,7 @@ description = "Probabilistic inference focused on fun"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "jax==0.4.38",
+    "jaxtyping",
     "numpy",
     "scipy",
     "numpyro",
