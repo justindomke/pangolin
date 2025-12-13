@@ -1,32 +1,37 @@
 """
 Basic code for operating on directed acyclic graphs (DAGs).
 None of these functions import or use any other parts of Pangolin.
-**End-users of Pangolin are not typically expected to use these functions directly**, though people designing new inference algorithms may find them useful.
+**End-users of Pangolin are not expected to use these functions directly**.
 """
 
 import jax.tree_util
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Optional
+from jaxtyping import PyTree
 
 
 class Node:
     """
-    The basic node class. This is just an object that remembers a set of parents.
+    The basic `Node` class. This is just an object that remembers a set of parents.
 
     Parameters
-    ----------
+    ==========
     *parents
-        The parents of this Node
+        parents of this node
     """
 
     def __init__(self, *parents: "Node"):
-        self.parents: tuple[Node] = parents
-        "The parents of this Node"
+        self._parents: tuple[Node] = parents
+
+    @property
+    def parents(self) -> tuple["Node"]:
+        "The parents of this node"
+        return self._parents
 
 
 def upstream_nodes_flat(
     nodes_flat: Sequence[Node],
-    node_block: Callable,
-    edge_block: Callable,
+    node_block: Callable[[Node], bool],
+    edge_block: Callable[[Node, Node], bool],
     upstream: list[Node],
 ):
     """
@@ -40,15 +45,9 @@ def upstream_nodes_flat(
     node_block
         should DFS be blocked from visting a node?
     edge_block
-        should DFS be blocked from following a link?
+        should DFS be blocked from following a link
     upstream
         list of nodes, destructively updated
-
-    Returns
-    -------
-    upstream
-        list of all nodes found, with a partial order so that parents always come
-        before children
     """
     # someday should have dual set / list for faster checking
     for node in nodes_flat:
@@ -59,20 +58,28 @@ def upstream_nodes_flat(
                 upstream_nodes_flat([p], node_block, edge_block, upstream)
         upstream.append(node)
 
-    return upstream
+
+def never_block(x: Node) -> bool:
+    return False
+
+
+def never_edge_block(x: Node, y: Node) -> bool:
+    return False
 
 
 def upstream_nodes(
-    nodes, node_block: Callable | None = None, edge_block: Callable | None = None
+    nodes: PyTree[Node],
+    node_block: Optional[Callable[[Node], bool]] = None,
+    edge_block: Optional[Callable[[Node, Node], bool]] = None,
 ) -> list[Node]:
     """
     Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
-    `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
+    `node_block(n)` and never follow an edge from `n` to `p` if `edge_block(n,p)`.
 
     Parameters
     ----------
-    nodes: PyTree[Node]
-        starting nodes
+    nodes_flat
+        single node or list of nodes or pytree of starting nodes
     node_block
         should DFS be blocked from visting a node? If None, then all nodes allowed.
     edge_block
@@ -85,16 +92,21 @@ def upstream_nodes(
         before children
     """
 
-    nodes_flat, _ = jax.tree_util.tree_flatten(nodes)
     if node_block is None:
-        node_block = lambda x: False
+        node_block = never_block
+
     if edge_block is None:
-        edge_block = lambda x, y: False
+        edge_block = never_edge_block
 
-    return upstream_nodes_flat(nodes_flat, node_block, edge_block, [])
+    nodes_flat, _ = jax.tree_util.tree_flatten(nodes)
+    upstream = []
+    upstream_nodes_flat(nodes_flat, node_block, edge_block, upstream)
+    return upstream
 
 
-def upstream_with_descendent_old(requested_nodes, given_nodes):
+def upstream_with_descendent_old(
+    requested_nodes: list[Node], given_nodes: list[Node]
+) -> list[Node]:
     """
     First, find all nodes that are upstream (inclusive) of `requested_nodes`
     Then, find all the nodes that are *downstream* (inclusive) of that set
@@ -128,7 +140,9 @@ def upstream_with_descendent_old(requested_nodes, given_nodes):
     return nodes
 
 
-def upstream_with_descendent(requested_nodes, given_nodes):
+def upstream_with_descendent(
+    requested_nodes: list[Node], given_nodes: list[Node]
+) -> list[Node]:
     """
     First, find all nodes that are upstream (inclusive) of `requested_nodes`
     Then, find all the nodes that are *downstream* (inclusive) of that set
@@ -140,19 +154,22 @@ def upstream_with_descendent(requested_nodes, given_nodes):
     return [n for n in all_nodes if n in has_descendent]
 
 
-def get_children(nodes, block_condition=None):
+def get_children(
+    nodes: PyTree[Node], block_condition: Optional[Callable[[Node], bool]] = None
+) -> dict[Node, Node]:
     all_nodes = upstream_nodes(nodes, block_condition)
     children = {}
     for n in all_nodes:
         children[n] = []
     for n in all_nodes:
         for p in n.parents:
+            # print(f"{hash(n)=} {hash(p)=}")
             if n not in children[p]:
                 children[p].append(n)
     return children
 
 
-def is_in(node, nodes):
+def is_in(node: Node, nodes: Sequence[Node]) -> bool:
     for p in nodes:
         # if id(node) == id(p) or node.id == p.id:
         if id(node) == id(p):
@@ -160,7 +177,7 @@ def is_in(node, nodes):
     return False
 
 
-def has_second_path(node, par_i):
+def has_second_path(node: Node, par_i: Node) -> bool:
     assert par_i < len(node.parents)
     other_parents = node.parents[:par_i] + node.parents[par_i + 1 :]
     return node.parents[par_i] in upstream_nodes(other_parents)
@@ -194,6 +211,6 @@ def has_second_path(node, par_i):
 #     return list(middle.keys())
 
 
-def get_graph(nodes, get_content, block_condition=None):
+def get_graph(nodes: PyTree[Node], get_content, block_condition=None):
     upstream = upstream_nodes(nodes, block_condition)
     return dict(zip(upstream, [get_content(n) for n in upstream]))
