@@ -23,7 +23,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx_autodoc_typehints",
+    # "sphinx_autodoc_typehints",
     # "myst_parser",
     # "autodoc2",
 ]
@@ -39,28 +39,57 @@ autodoc_packages = [
     },
 ]
 
+# very hard to get sphinx to document PyTree arguments
+# the current set of incantations is:
+# 1) Manually document any PyTree arguments
+# 2) Turn off napoleon_preprocess_types
+# 3) do not use autodoc_typehints extension (but do use autodoc)
+# 4) Turn on from __future__ import annotations
+
+
+# ALL napoleon options
+# https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html
+napoleon_google_docstring = True
 napoleon_numpy_docstring = True
-napoleon_google_docstring = False  # Set to True if you mix styles
-napoleon_include_init_with_doc = True
+napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
-napoleon_use_rtype = False
-
-autodoc_typehints = "description"
-autodoc_member_order = "bysource"
-default_role = "any"
-
-autodoc_type_aliases = {
-    "RVLike": "`RVLike`",
-    "ArrayLike": "ArrayLike",
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = False
+napoleon_type_aliases = None
+napoleon_attr_annotations = True
+napoleon_type_aliases = {
+    "Shape": "Shape",
+    "PyTree": "PyTree",
+    "PyTree[Node]": "PyTree[Node]",
 }
 
 
-# -- Options for HTML output -------------------------------------------------
+# autodoc options
+autodoc_typehints = "description"
+autodoc_member_order = "bysource"
+autodoc_inherit_docstrings = False
+
+
+default_role = "any"
+
+autodoc_type_aliases = {
+    "RVLike": "RVLike",
+    "ArrayLike": "ArrayLike",
+    "PyTree": "PyTree",
+}
+
+
+# Options for HTML output
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
-
 html_logo = "_static/pangolin-logo-small.png"
 
 source_suffix = {

@@ -9,7 +9,7 @@ from typing import Sequence, Type
 import jax.tree_util
 from pangolin.ir import split_shape
 
-from typing import Protocol, TypeVar, Any
+from typing import Protocol, TypeVar, Any, cast
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
@@ -150,8 +150,8 @@ def vmap_subgraph(
 
     for dummy_node in dummy_nodes:
         dummy_parents = dummy_node.parents
-        parents = [dummy_to_real[p] for p in dummy_parents]
-        my_in_axes = [dummy_mapped_axis[p] for p in dummy_parents]
+        parents = tuple(dummy_to_real[p] for p in dummy_parents)
+        my_in_axes = tuple(dummy_mapped_axis[p] for p in dummy_parents)
 
         no_mapped_axes = all(axis is None for axis in my_in_axes)
         # if no mapped axes AND non-random AND not in output, no need to map
@@ -267,7 +267,8 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
     # all generated nodes must have higher n
     n_before_call = RV._n
 
-    def is_abstract(rv: RV):
+    def is_abstract(rv: dag.Node):
+        rv = cast(RV, rv)
         # if not isinstance(rv, InfixRV):
         #    raise ValueError("Generated nodes found a node that is not an InfixRV")
         return rv._n >= n_before_call
@@ -289,6 +290,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, node_block=lambda var: not is_abstract(var)
     )
+    all_abstract_vars = cast(list[RV], all_abstract_vars)
 
     all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node._n)
 
@@ -417,7 +419,7 @@ def get_dummy_args(in_axes, args):
         return create_rv(op)
 
     dummy_args = util.tree_map_recurse_at_leaf(
-        get_dummy, in_axes, args, is_leaf=util.is_leaf_with_none
+        get_dummy, in_axes, args, is_leaf=util._is_leaf_with_none
     )
 
     return dummy_args
@@ -554,7 +556,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callabl
         flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
-            f, *dummy_args, is_leaf=util.is_leaf_with_none
+            f, *dummy_args, is_leaf=util._is_leaf_with_none
         )
         flat_args = flatten_inputs(*args)
         flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, *flat_args)

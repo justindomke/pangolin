@@ -1,7 +1,7 @@
 """
 This submodule contains internal utility functions.
 None of these functions import or use any other parts of Pangolin.
-**End-users of Pangolin are not typically expected to use these functions directly**, though people designing new inference algorithms may find them useful.
+**End-users of Pangolin are not typically expected to use these functions directly**.
 """
 
 from __future__ import annotations  # so it's possible to preserve type aliases
@@ -9,6 +9,7 @@ from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
 from typing import Sequence, Any, Callable, Iterable
+from jaxtyping import PyTree
 
 
 def comma_separated(
@@ -19,24 +20,17 @@ def comma_separated(
 ) -> str:
     """convenience function for turning seqences into comma separated strings.
 
-    Parameters
-    ----------
-    stuff
-        list to print
-    fun
-        function to apply to each item before printing
-    parens
-        do you want parentheses?
-    spaces
-        do you want spaces between items?
+    Args:
+        stuff: list to print
+        fun: function to apply to each item before printing
+        parens: do you want parentheses?
+        spaces: do you want spaces between items?
 
-    Returns
-    -------
-    out: str
+    Returns:
         string containing all items with commas between them
 
     Examples
-    --------
+    ========
     >>> comma_separated(['a', 'b', 'c'])
     '(a,b,c)'
     >>> comma_separated(['a', 'b', 'c'], lambda s: s + "0")
@@ -99,32 +93,29 @@ class VarNames:
         return varname
 
 
-def one_not_none(*args: Any) -> int:
-    """how many items are not None? (Should be named num_not_none)
+def num_not_none(*args: Any) -> int:
+    """how many items are not `None`? (Should be named num_not_none)
 
-    Parameters
-    ----------
-    *args
-        any number of arguments of any time
+    Args:
+        *args: any number of arguments of any times
 
-    Returns
-    -------
-    count: int
-        number of items that are non-None
+    Returns:
+        number of items that are non-`None`
 
 
     Examples
     --------
-    >>> one_not_none(1)
+    >>> num_not_none(1)
     1
-    >>> one_not_none(1,2)
+    >>> num_not_none(1,2)
     2
-    >>> one_not_none(1,None)
+    >>> num_not_none(1,None)
     1
-    >>> one_not_none(None,1,None)
+    >>> num_not_none(None,1,None)
     1
+    >>> num_not_none(None,"cat","dog",77,None)
+    3
     """
-    # TODO: should be num_not_none
 
     num = 0
     for arg in args:
@@ -137,14 +128,10 @@ def all_unique(a: Sequence) -> bool:
     """
     Are all items in a sequence unique?
 
-    Parameters
-    ----------
-    a
-        some sequence
+    Args:
+        a: some sequence
 
-    Returns
-    -------
-    bool
+    Returns:
         True if all items are unique, False otherwise.
     """
     return len(a) == len(set(a))
@@ -154,17 +141,12 @@ def intersects(A: Iterable, B: Iterable) -> bool:
     """
     Check if two collections have any common elements.
 
-    Parameters
-    ----------
-    A : iterable
-        First collection of elements.
-    B : iterable
-        Second collection of elements.
+    Args:
+        A: First collection of elements.
+        B: Second collection of elements.
 
-    Returns
-    -------
-    bool
-        True if A and B share at least one element, False otherwise.
+    Returns:
+        True if `A` and `B` share at least one element, False otherwise.
 
     Examples
     --------
@@ -178,7 +160,7 @@ def intersects(A: Iterable, B: Iterable) -> bool:
 
 
 class WriteOnceDict(dict):
-    """A dict where you can't overwrite entries
+    """A dict where you can't overwrite entries. Takes no parameters.
 
     Examples
     --------
@@ -201,24 +183,27 @@ class WriteOnceDict(dict):
 
 
 class WriteOnceDefaultDict(dict):
-    """A dict where you can't overwrite entries, with a default value
+    """A dict where you can't overwrite entries. If you access a value with no key,
+    `default_factory` is used to create a key/value pair automatically. Once you have
+    written to or accessed a key, it cannot be changed.
+
+    Args:
+        default_factory: function giving values for non-existent entries
 
     Examples
     --------
     >>> d = WriteOnceDefaultDict(lambda s : len(s))
+    >>> d['cat'] = 5
     >>> d['bob']
     3
-    >>> d['bob'] = 5
-    >>> d['bob']
+    >>> d['cat']
     5
-    >>> d['bob'] = 3
+    >>> d['bob'] = 5 # raises an error (as expected)
     Traceback (most recent call last):
     ValueError: Cannot overwrite existing key bob in WriteOnceDefaultDict
     """
 
-    # TODO: if an entry is accessed, should we freeze it so it can't be overwritten after that?
-
-    def __init__(self, default_factory):
+    def __init__(self, default_factory: Callable):
         self.default_factory = default_factory
         super().__init__()
 
@@ -230,32 +215,51 @@ class WriteOnceDefaultDict(dict):
         super().__setitem__(key, value)
 
     def __getitem__(self, key):
-        if key in self:
-            return super().__getitem__(key)
-        else:
-            return self.default_factory(key)
+        if key not in self:
+            self.__setitem__(key, self.default_factory(key))
+
+        return super().__getitem__(key)
 
 
-def is_leaf_with_none(xi):
+def _is_leaf_with_none(xi):
     # return (xi is None) or not isinstance(xi, (list, tuple, dict))
     return xi is None
 
 
-def tree_map_with_none_as_leaf(f, tree, *rest):
+def tree_map_with_none_as_leaf(f: Callable, tree: PyTree, *rest: PyTree):
     """
-    Call jax.tree_util.tree_map using a special is_leaf function that preserves None
+    Call jax.tree_util.tree_map using a special is_leaf function that preserves None.
+    This is exactly like
+    `jax.tree.map <https://docs.jax.dev/en/latest/_autosummary/jax.tree.map.html>`_
+    except that nodes with None are treated as leaves rather than as nonexistant.
+
+    Args:
+        f: function that takes `1 + len(rest)` arguments, to be applied to corresponding
+            leaves
+        tree: a pytree to be mapped over, with each leaf providing the first positional
+            argument to `f`
+        *rest: additional pytrees to be mapped over, each of which must either have
+            the same structure as `tree` or have `tree` as a prefix.
 
     Examples
     --------
-    >>> pytree = [0, (1, None)]
-    >>> tree_map_with_none_as_leaf(lambda x: x, pytree)
-    [0, (1, None)]
+    >>> f = lambda x: 0 if x is None else len(x)
+    >>> tree = ["cat", ("bear", None)]
+    >>> jax.tree_util.tree_map(f, tree)
+    [3, (4, None)]
+    >>> tree_map_with_none_as_leaf(f, tree)
+    [3, (4, 0)]
 
+    >>> f2 = lambda leaf, seq: f(leaf) + len(seq)
+    >>> tree1 = ["cat", ("bear", None)]
+    >>> tree2 = [[1,2,3,4,5], ([], [1,2,3,4,5])]
+    >>> tree_map_with_none_as_leaf(f2, tree1, tree2)
+    [8, (4, 5)]
     """
-    return jax.tree_util.tree_map(f, tree, *rest, is_leaf=is_leaf_with_none)
+    return jax.tree_util.tree_map(f, tree, *rest, is_leaf=_is_leaf_with_none)
 
 
-def tree_map_preserve_none(f, tree, *rest):
+def tree_map_preserve_none(f: Callable, tree: PyTree, *rest: PyTree):
     def new_f(*args):
         if all(arg is None for arg in args):
             return None
@@ -267,17 +271,17 @@ def tree_map_preserve_none(f, tree, *rest):
     return tree_map_with_none_as_leaf(new_f, tree, *rest)
 
 
-def tree_structure_with_none_as_lead(pytree):
+def tree_structure_with_none_as_lead(pytree: PyTree):
     import jax.tree_util
 
-    return jax.tree_util.tree_structure(pytree, is_leaf=is_leaf_with_none)
+    return jax.tree_util.tree_structure(pytree, is_leaf=_is_leaf_with_none)
 
 
-def tree_flatten_with_none_as_leaf(x):
+def tree_flatten_with_none_as_leaf(x: PyTree):
     import jax.tree_util
 
     # return jax.tree_util.tree_flatten(x, lambda xi: (xi is None) or not isinstance(x,(list,tuple,dict)) )
-    return jax.tree_util.tree_flatten(x, is_leaf=is_leaf_with_none)
+    return jax.tree_util.tree_flatten(x, is_leaf=_is_leaf_with_none)
 
 
 def same(x, y):
@@ -295,7 +299,7 @@ def same(x, y):
         return x == y
 
 
-def same_tree(x, y, is_leaf=None):
+def same_tree(x: PyTree, y: PyTree, is_leaf: Callable | None = None):
     """
     Check that x and y have same tree structure (including None) and that all leaves
     are equal. Arrays are equal regardless of if they come from regular numpy or jax
@@ -311,7 +315,7 @@ def same_tree(x, y, is_leaf=None):
     return all(same(xi, yi) for xi, yi in zip(leaves_x, leaves_y))
 
 
-def map_inside_tree(f, tree):
+def map_inside_tree(f: Callable, tree: PyTree):
     """
     Map a function over the leading axis for all leaf nodes inside a tree. If a None
     value is encountered at any input, it is presented to each function unchanged. If a
@@ -362,22 +366,24 @@ def map_inside_tree(f, tree):
         return rez
 
 
-def assert_all_leaves_instance_of(tree, type, is_leaf=None):
+def assert_all_leaves_instance_of(
+    tree: PyTree, type: type, is_leaf: Callable | None = None
+):
     for node in jax.tree_util.tree_flatten(tree, is_leaf)[0]:
         assert isinstance(node, type)
 
 
-def assert_all_leaves_instance_of_with_none(tree, type):
-    assert_all_leaves_instance_of(tree, type, is_leaf_with_none)
+def assert_all_leaves_instance_of_with_none(tree: PyTree, type: type):
+    assert_all_leaves_instance_of(tree, type, _is_leaf_with_none)
 
 
-def assert_is_sequence_of(seq, type):
+def assert_is_sequence_of(seq: Sequence, type: type):
     assert isinstance(seq, Sequence)
     for x in seq:
         assert isinstance(x, type)
 
 
-def num2str(id):
+def num2str(id: int) -> str:
     if id < 26:
         return chr(ord("`") + 1 + id)
     else:
@@ -400,9 +406,6 @@ def is_shape_tuple(a):
 ################################################################################
 
 
-PyTree = Any
-
-
 def tree_map_recurse_at_leaf(
     f: Callable[..., Any],
     tree: PyTree,
@@ -418,19 +421,19 @@ def tree_map_recurse_at_leaf(
 
     Parameters
     ----------
-    f : Callable[..., Any]
+    f
         The function to apply to the leaves. Its first argument will be a leaf
         from `tree`, and subsequent arguments will be corresponding leaves from
         `remaining_trees`. If broadcasting occurs, the first argument (`leaf_from_tree`)
         will be fixed for all leaves within the broadcasted subtree.
-    tree : PyTree
+    tree
         The primary PyTree. Its leaves will trigger the broadcasting behavior.
         It is expected to be a "prefix" or "smaller" structure compared to
         `remaining_trees` at corresponding paths.
-    *remaining_trees : PyTree
+    *remaining_trees
         One or more additional PyTrees to map over. These are expected to be
         "superset" structures relative to `tree` at corresponding paths.
-    is_leaf : Callable[[Any], bool], optional
+    is_leaf
         An optional callable that takes a single argument (a node in a PyTree)
         and returns `True` if that node should be considered a leaf (i.e.,
         `tree_map` should not recurse into it), and `False` otherwise.
@@ -498,7 +501,9 @@ def tree_map_recurse_at_leaf(
     )
 
 
-def tree_map_recurse_at_leaf_with_none_as_leaf(f, tree, *remaining_trees):
+def tree_map_recurse_at_leaf_with_none_as_leaf(
+    f: Callable, tree: PyTree, *remaining_trees: PyTree
+):
     """
     Examples
     --------
@@ -513,11 +518,11 @@ def tree_map_recurse_at_leaf_with_none_as_leaf(f, tree, *remaining_trees):
     {'cat': 3, 'dog': 3}
     """
     return tree_map_recurse_at_leaf(
-        f, tree, *remaining_trees, is_leaf=is_leaf_with_none
+        f, tree, *remaining_trees, is_leaf=_is_leaf_with_none
     )
 
 
-def flatten_fun(f, *args, is_leaf=None):
+def flatten_fun(f: Callable, *args: Any, is_leaf: Callable[[Any], bool] | None = None):
     "get a new function that takes a single input (which is a list)"
 
     out = f(*args)
@@ -542,15 +547,20 @@ def flatten_fun(f, *args, is_leaf=None):
     return flat_f, flatten_input, unflatten_output
 
 
-def _check_tree_consistency(*args):
-    trees = [jax.tree_util.tree_structure(args, is_leaf=is_leaf_with_none)]
+def _check_tree_consistency(*args: PyTree):
+    trees = [jax.tree_util.tree_structure(args, is_leaf=_is_leaf_with_none)]
     # trees = [tree_structure_with_none(args)]
     for t in trees:
         assert t == trees[0]
 
 
-def dual_flatten(pytree1, pytree2):
+def dual_flatten(pytree1: PyTree, pytree2: PyTree) -> PyTree:
     """
+    Args:
+        pytree1: first pytree
+        pytree2: second pytree, must have same structure as `pytree1` or at least have
+            the structure of `pytree1` as a prefix
+
     Examples
     --------
     >>> pytree1 = (0,[1,2])
@@ -586,13 +596,11 @@ def dual_flatten(pytree1, pytree2):
 def short_pytree_string(treedef):
     "Get a string for a JAX PyTreeDef without printing PyTreeDef and scaring the noobs"
     s = str(treedef)
-    assert s[:10] == "PyTreeDef(", "fdjhdj"
-    assert s[-1] == ")"
-    return s[10:-1]
+    return s
 
 
 # TODO: Move to jax backend
-def assimilate_vals(vars, vals):
+def assimilate_vals(vars: PyTree, vals: PyTree) -> PyTree[jnp.ndarray]:
     """
     convert `vals` to a pytree of arrays with the same shape as `vars`
     The purpose of this is when users might provide lists / tuples
@@ -724,27 +732,19 @@ def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
     using `np.allclose` and returns `True` if all leaves are close, `False`
     otherwise.
 
-    Parameters
-    ----------
-    a : PyTree
-        The first PyTree to compare.
-    b : PyTree
-        The second PyTree to compare.
-    **kwargs : dict, optional
-        Additional keyword arguments to be passed directly to `np.allclose`.
-        Common arguments include `rtol` (relative tolerance) and `atol`
-        (absolute tolerance).
+    Args:
+        a: The first PyTree to compare.
+        b: The second PyTree to compare.
+        **kwargs:  Additional keyword arguments to be passed directly to `np.allclose`.
+            Common arguments include `rtol` (relative tolerance) and `atol`
+            (absolute tolerance).
 
-    Returns
-    -------
-    bool
+    Returns:
         `True` if the structures match and all corresponding leaves are close.
         `False` if the structures match but any leaves are not close.
 
-    Raises
-    ------
-    ValueError
-        If the PyTree structures of `a` and `b` are not identical.
+    Raises:
+        ValueError: If the PyTree structures of `a` and `b` are not identical.
 
     Examples
     --------
@@ -794,7 +794,7 @@ def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
 import inspect
 
 
-def get_positional_args(target_func, *args, **kwargs):
+def get_positional_args(target_func: Callable, *args: Any, **kwargs: Any):
     """
     Transforms a mix of positional and keyword arguments into a list of
     purely positional arguments for a target function.
@@ -810,32 +810,22 @@ def get_positional_args(target_func, *args, **kwargs):
     are invalid for `target_func` (e.g., missing required arguments,
     unexpected arguments).
 
-    Parameters
-    ----------
-    target_func : callable
-        The function whose signature will be used to transform and order
-        the arguments.
-    *args : tuple
-        Positional arguments to be transformed.
-    **kwargs : dict
-        Keyword arguments to be transformed.
+    Args:
+        target_func : The function whose signature will be used to transform and order
+            the arguments.
+        *args: Positional arguments to be transformed.
+        **kwargs Keyword arguments to be transformed.
 
-    Returns
-    -------
-    list
+    Returns:
         A list of arguments in the correct positional order for `target_func`.
 
-    Raises
-    ------
-    ValueError
-        If `target_func` has keyword-only arguments.
-    TypeError
-        If the provided `*args` and `**kwargs` do not match the signature
-        of `target_func`.
+    Raises:
+        ValueError: If `target_func` has keyword-only arguments.
+        TypeError: If the provided `*args` and `**kwargs` do not match the signature
+            of `target_func`.
 
-    See Also
-    --------
-    inspect.signature : For detailed information on function signature inspection.
+    See Also:
+        inspect.signature: For detailed information on function signature inspection.
 
     Examples
     --------

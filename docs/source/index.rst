@@ -11,8 +11,9 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   util
+   simple
    dag
+   util
    ir
    interface
    jax_backend

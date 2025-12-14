@@ -1,4 +1,4 @@
-from pangolin.ir import Composite, RV
+from pangolin.ir import Composite, RV, Shape
 from pangolin.interface import InfixRV, makerv, normal, create_rv
 from .vmapping import generated_nodes, AbstractOp
 from pangolin import util
@@ -6,7 +6,7 @@ import jax.tree_util
 from typing import Callable
 
 
-def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
+def make_composite(flat_fun: Callable[..., RV], *input_shapes: Shape):
     """
     Given a function and input shapes, create a composite Op representing that function.
     Crucially, it *is* allowed for `fun` to depend on variables declared elsewhere through a closure.
@@ -20,7 +20,7 @@ def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
     ----------
     flat_fun
         A function that takes RVs as inputs and returns a single RV
-    input_shapes: tuple[int, ...]
+    input_shapes
         shapes for each explicit input to `fun`
 
     Returns
@@ -92,7 +92,7 @@ def make_composite(flat_fun: Callable[..., RV], *input_shapes: tuple[int, ...]):
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
 
-def composite_flat(flat_fun: Callable[..., RV]):
+def composite_flat(flat_fun: Callable[..., RV]) -> Callable[..., RV[Composite]]:
     """Turn a function into a new function that returns a single Composite RV
 
     Parameters
@@ -134,7 +134,7 @@ def composite_flat(flat_fun: Callable[..., RV]):
     return myfun
 
 
-def composite(fun):
+def composite(fun: Callable) -> Callable[..., RV[Composite]]:
     """Turn a function into a new function that returns a single Composite RV. Typically this would be used to create autoregressive distributions via the `autoregressive` function, rather than called directly by the user.
 
     Parameters

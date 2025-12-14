@@ -266,7 +266,7 @@ def autoregressive(
         flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
         flat_fun, flatten_inputs, unflatten_output = util.flatten_fun(
-            fun, init, *dummy_args, is_leaf=util.is_leaf_with_none
+            fun, init, *dummy_args, is_leaf=util._is_leaf_with_none
         )
         new_flat_fun = lambda *args: flat_fun(*args)[0]  # don't return list
         return autoregressive_flat(new_flat_fun, length, flat_in_axes)(init, *flat_args)

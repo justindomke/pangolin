@@ -21,9 +21,9 @@ RVLike: TypeAlias = RV | ArrayLike
 # TODO: Change return types to InfixRV?
 # TODO: Shorten InfixRV name?
 
-####################################################################################################
+########################################################################################
 # config
-####################################################################################################
+########################################################################################
 
 SCALAR_BROADCASTING = [os.getenv("SCALAR_BROADCASTING", "simple")]
 
@@ -45,15 +45,23 @@ class ScalarBroadcasting:
         SCALAR_BROADCASTING[0] = self.old_mode
 
 
-####################################################################################################
+########################################################################################
 # The core InfixRV class. Like an RV except has infix operations
-####################################################################################################
+########################################################################################
 
 OpU = TypeVar("OpU", bound=Op)
 
 
 class InfixRV(RV[OpU], Generic[OpU]):
-    """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix operations.
+    """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
+    operations.
+
+    This is a generic type, so you may write `InfixRV[OpClass]` as a type hint.
+
+    Args:
+        op: The Op defining this class.
+        *parents
+
 
     Examples
     --------
@@ -74,7 +82,7 @@ class InfixRV(RV[OpU], Generic[OpU]):
 
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op: OpU, *parents):
+    def __init__(self, op: OpU, *parents: RV):
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -372,7 +380,7 @@ def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
     if array_shape is None:
         return op
 
-    in_axes = [0 if shape == array_shape else None for shape in parent_shapes]
+    in_axes = tuple(0 if shape == array_shape else None for shape in parent_shapes)
 
     new_op = op
     for size in reversed(array_shape):
@@ -431,7 +439,7 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
                 my_axis = 0
             in_axes.append(my_axis)
 
-        new_op = VMap(new_op, in_axes, size)
+        new_op = VMap(new_op, tuple(in_axes), size)
 
     assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
 
@@ -487,13 +495,13 @@ def get_shape(arg: RVLike):
 
     """
 
-    if hasattr(arg, "shape"):
-        return arg.shape  # type: ignore
+    if isinstance(arg, RV):
+        return arg.shape
     else:
         return np.shape(arg)
 
 
-def scalar_fun_factory(OpClass, /):
+def scalar_fun_factory(OpClass: type[Op], /):
     import makefun
 
     op = OpClass()
@@ -531,22 +539,20 @@ def scalar_fun_factory(OpClass, /):
     return fun
 
 
-def scalar_fun_factory1(OpClass) -> Callable[[RVLike], InfixRV]:
+def scalar_fun_factory1(OpClass: type[Op]) -> Callable[[RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 1
     return fun
 
 
-def scalar_fun_factory2(
-    OpClass,
-) -> Callable[[RVLike, RVLike], InfixRV]:
+def scalar_fun_factory2(OpClass: type[Op]) -> Callable[[RVLike, RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 2
     return fun
 
 
 def scalar_fun_factory3(
-    OpClass,
+    OpClass: type[Op],
 ) -> Callable[[RVLike, RVLike, RVLike], InfixRV]:
     fun = scalar_fun_factory(OpClass)
     assert len(inspect.signature(fun).parameters) == 3

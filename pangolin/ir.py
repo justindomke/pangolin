@@ -1,17 +1,31 @@
 """
-The pangolin IR. Note that users of pangolin are not expected to interact with this module directly. The core abstractions are:
+The pangolin IR for defining joint distributions over collections of random variables.
+Note that while it is certainly possible to define probabilistic model directly in terms
+of this IR, it is quite a "low-level" notation, and **end-users of Pangolin are not
+typically expected to manipulate this IR directly**. Instead, users would typically
+use an "interface" that provides a friendlier way of creating these models.
 
-1. :class:`Op` s represent conditional distributions or deterministic functions.
-2. :class:`RV` s represent random variables. Each contains a single :class:`Op` and a list of parent :class:`RV` s.
+This IR only *represents* groups of dependent random variables. All actual functionality
+is left to inference engines.
 
-Notes on this IR:
+The two core abstractions in the IR are `Op` and `RV`. An `Op` represents a simple
+function or conditional distribution, while an `RV` consists of a single `Op` and
+a (possibly empty) tuple of parent `Op`. An `RV` represents a random variable.
+Each `RV` contains a single `Op` and a (possibly empty) tuple of parent `RV`. Thus,
+the IR is essentially just a directed graph where each node is a RV with a single `Op`.
 
-* The IR is only *represents* groups of dependent random variables. All actual functionality is left to inference engines.
-* All RVs and Ops are immutable. Nothing is allowed to change after initialization, no exceptions.
-* All RVs have static shapes. The shape of an RV is recursively determined by its Op and the shapes of its parent RVs.
-* There is no notion of a "model". In Pangolin you just directly manipulate RVs.
-* RVs do not have names. In Pangolin you manipulate them based on their identity. You can of course assign an RV to a variable with a name if you want, or you can put RVs into tuples or lists or dicts. But Pangolin never sees any of that.
+That's the whole IR. Unlike in Pyro / NumPyro / PyMC / Tensorflow Probability,
+Random variables do not have names, and there is no notion of a "model" class.
+In Pangolin you just work with RVs. You can assign those RVs to named variables
+or put them into tuples or lists or dicts if you want. But that's up to you.
 
+Other notes:
+
+* All RVs and Ops are immutable. Nothing is allowed to change after initialization.
+* All RVs have static shapes. The shape of an RV is recursively determined by its Op and
+  the shapes of its parent RVs.    
+
+  
 Types of `Op`:
 
 ============================ ============
@@ -35,13 +49,17 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Type, Sequence, Self, Literal, Tuple, Any
+from typing import Type, Sequence, Self, Literal, Tuple, Any, cast
 from collections.abc import Callable
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
+from jaxtyping import PyTree
 
 Shape = tuple[int, ...]
+"""
+A `Shape` is just a tuple of ints
+"""
 
 ########################################################################################
 # The fundamental Op class
@@ -53,6 +71,27 @@ class Op(ABC):
     Abstract base class for operators. An `Op` represents a deterministic function or
     conditional distribution. All functionality for sampling or evaluating densities is
     left to inference backends. This is frozen after initialization.
+
+    Simple `Op` typically have no parameters. For example, `Add()` just represents
+    scalar addition. The `Op` itself does not indicate what variables are being
+    added together. Similarly, `Normal()` just represents a normal distribution, but
+    it does not itself indicate what the mean and scale of that distribution are.
+
+    An `Op` must provide an `__eq__` method that indicates *mathematical* equality.
+    Thus, if `op1 = Normal()` and `op2 = Normal()` then, `op1 == op2`, even though
+    `op1` and `op2` are distinct objects. For simple `Op` that take no parameters,
+    this is done just by comparing types. For complex `Op` that take parameters, this
+    should be overriden.
+
+    An `Op` must also provide a boolean `random` attribute indicating if it is a
+    conditional distribution (`True`) or a deterministic function (`False`).
+
+    An `Op` must also a `get_parents` method to determine the shape of the output of the
+    Op given the shapes of the parents. This method is needed because some types of `Op`
+    (e.g. multivariate normal distributions) can have different shapes depending on the
+    shapes of the parents. It is also expected that the `get_shape` method will do error
+    checking—e.g. verify that the correct number of parents are provided and the shapes of
+    the parents are coherent with each other.
     """
 
     _frozen = False
@@ -64,32 +103,33 @@ class Op(ABC):
     @abstractmethod
     def random(self) -> bool:
         """
-        An `Op` must provide this property, which should be `True` for
-        conditional distributions and `False` for deterministic functions.
+        Is this class a distribution (`True`) or a deterministic function (`False`)
         """
         pass
 
     @abstractmethod
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
-        Non-abstract :class:`Op` must provide this method, which takes the shape of each
-        input and returns the shape of the output of this `Op`.
-        This method is needed because some types of `Op` (e.g. multivariate normal
-        distributions) can have different shapes depending on the shapes of the parents.
-        It is also expected that an implementation will do error checking
-        —e.g. verify that the correct number of parents are provided and the shapes of
-        the parents are coherent with each other.
+        Given the shapes of parents, what is the shape of the output of this Op?
+
+        Args:
+            parents_shapes: Shape of each parent
+
+        Returns:
+            shape of output of this op
+
+        Raises:
+            TypeError: If an incorrect number of parents are provided.
+            ValueError: If the shapes of the parents are incoherent.
         """
         pass
 
     def __eq__(self, other: Op) -> bool:
         """
-        `Op` s must provide an `__eq__` method that tests for *mathematical*
-        *equality*, not if the ops occupy the same place in memory. For example, if
-        `d1 = Normal()` and `d2 = Normal()` then `d1 == d2`.
-        This base class provides an implementation that simply tests if the two types
-        are the same. If an `Op` takes parameters (e.g. `VMap`), this
-        must be overridden.
+        Are `self` and `other` *mathematically* equal?
+
+        Args:
+            other: op to compare to.
         """
         return type(self) is type(other)
 
@@ -119,26 +159,26 @@ class Op(ABC):
 
 class OpRandom(Op):
     """
-    This is just an `Op` where `op.random==True`.
+    Just an `Op` where `op.random==True`.
     """
 
     @property
-    def random(self):
+    def random(self) -> bool:
         """
-        Always `True`.
+        `True`.
         """
         return True
 
 
 class OpNonrandom(Op):
     """
-    This is just an `Op` where `op.random==False`.
+    Just an `Op` where `op.random==False`.
     """
 
     @property
-    def random(self):
+    def random(self) -> bool:
         """
-        Always `False`.
+        `False`.
         """
         return False
 
@@ -237,24 +277,16 @@ class ScalarOp(Op):
     An `Op` expecting scalar inputs and producing a single scalar output.
     """
 
-    def __init__(self):
-        """"""
-        super().__init__()
-
     @property
     @abstractmethod
-    def num_parents(self) -> int:
+    def _num_parents(self) -> int:
         pass
 
-    def get_shape(self, *parents_shapes: Shape):
-        """
-        Checks that all parents have shape `()` and there are the correct number of
-        parents. Always returns `()`.
-        """
-        if len(parents_shapes) != self.num_parents:
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
+        if len(parents_shapes) != self._num_parents:
             raise TypeError(
                 f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
-                f" {self.num_parents}."
+                f" {self._num_parents}."
             )
         for shape in parents_shapes:
             if shape != ():
@@ -263,14 +295,9 @@ class ScalarOp(Op):
                 )
         return ()
 
-    # TODO: delete?
-    def __eq__(self, other):
-        "Returns true only if the two classes are exactly the same"
-        return type(self) is type(other)
-
     # TODO: simplify?
     def __hash__(self):
-        return hash((self.name, self.random, self.num_parents))
+        return hash((self.name, self.random, self._num_parents))
 
 
 ################################################################################
@@ -321,7 +348,7 @@ def _get_scalar_op_docstring(op_info):
     expected_parents = op_info.expected_parents
 
     s = f"Represents a {name} `Op`. Takes no parameters. When used in an RV, expects\
-        {len(expected_parents)} scalar parent(s)."
+        {len(expected_parents)} scalar parent(s):"
     if expected_parents:
         s += "\n\n"
     for parent_name in expected_parents:
@@ -371,13 +398,13 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
         ScalarOp.__init__(self)
 
     @property
-    def prop_num_parents(self):
+    def prop_num_parents(self) -> int:
         return num_parents
 
     prop_num_parents.__doc__ = f"{num_parents}"
 
     @property
-    def prop_random(self):
+    def prop_random(self) -> bool:
         return random
 
     prop_random.__doc__ = f"{random}"
@@ -396,7 +423,7 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
             "__doc__": __doc__,
             "_expected_parents": expected_parents,
             "random": prop_random,
-            "num_parents": prop_num_parents,
+            "_num_parents": prop_num_parents,
             # "_num_parents": num_parents,
             "_notes": notes,
             # "__qualname__": f"ScalarOp.{name}",  # crucial for docs?
@@ -770,13 +797,18 @@ StudentT = _scalar_op_factory(
 class VecMatOp(OpRandom):
     """
     Convenience class to create "vec mat" distributions that take as input a vector of
-    length N, a matrix of size NxN and is a vector of length N
+    length N, a matrix of size NxN and is a vector of length N. Takes no parameters.
     """
 
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, vec_shape, mat_shape):
+    # def get_shape(self, vec_shape: Shape, mat_shape: Shape) -> Shape:
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
+        if len(parents_shapes) != 2:
+            raise TypeError("VecMatOp expected 2 parents")
+        vec_shape, mat_shape = parents_shapes
+
         if len(vec_shape) != 1:
             raise ValueError("first parameter must be a vector.")
         if len(mat_shape) != 2:
@@ -791,29 +823,27 @@ class VecMatOp(OpRandom):
 
 class MultiNormal(VecMatOp):
     """
-    MultiNormal distribution parameterized in terms of the mean and covariance.
+    Create a MultiNormal distribution. Takes no parameters.
+
+    When used in an RV, expects two parents: The mean and covariance.
     """
 
     def __init__(self):
-        """
-        Create a MultiNormal instance. Takes no parameters.
-        """
+        """ """
         super().__init__()
 
 
 class Categorical(OpRandom):
     """
-    Categorical distribution parameterized in terms of a 1-d vector of weights.
+    Create a Categorical distribution. Takes no parameters.
+
+    When used in an RV, expects one parents: A 1-D vector of weights.
     """
 
     def __init__(self):
-        """
-        Create a Categorical instance. Takes no parameters.
-        """
         super().__init__()
 
-    def get_shape(self, weights_shape):
-        """"""
+    def get_shape(self, weights_shape: Shape) -> Shape:
         assert isinstance(weights_shape, tuple)
         if len(weights_shape) != 1:
             raise ValueError(
@@ -825,18 +855,19 @@ class Categorical(OpRandom):
 
 class Multinomial(OpRandom):
     """
-    Multinomial distribution parameterized in terms of the number of observations `n` (a scalar)
-    and a vector of probabilities `p` (1-D).
+    Create a Multinomial Op. Takes no parameters.
+
+    When used in an RV, a multinomial op expects a first parent `n` (a scalar)
+    indicating the number of observations and a second parent `p` indicating a vector
+    of probabilities (a 1D array). Note that this is different from Stan (which doesn't
+    need `n` to be passed).
     """
 
     def __init__(self):
-        """
-        Create a Multinomial instance. Takes no parameters.
-        Note: parameterization is different from Stan (which doesn't need n to be passed)
-        """
         super().__init__()
 
-    def get_shape(self, n_shape, p_shape):
+    def get_shape(self, n_shape: Shape, p_shape: Shape) -> Shape:
+
         if n_shape != ():
             raise ValueError("First input to Multinomial op must be scalar")
         if len(p_shape) != 1:
@@ -845,15 +876,17 @@ class Multinomial(OpRandom):
 
 
 class Dirichlet(OpRandom):
-    """Dirichlet distribution parameterized in terms of the concentration"""
+    """Create a Dirichlet Op. Takes no parameters.
+
+    When used in an RV, a Dirichlet op expects one parent, namely the concentration
+    """
 
     def __init__(self):
-        """
-        Create a Dirichlet instance. Takes no parameters.
-        """
+        """ """
         super().__init__()
 
-    def get_shape(self, concentration_shape):
+    def get_shape(self, concentration_shape: Shape) -> Shape:
+        """ """
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
         return concentration_shape
@@ -864,7 +897,7 @@ class Dirichlet(OpRandom):
 ################################################################################
 
 
-def split_shape(shape, i):
+def split_shape(shape: Shape, i: int | None) -> tuple[Shape, int | None]:
     if i is None:
         new_shape = shape
         new_axis_size = None
@@ -875,7 +908,9 @@ def split_shape(shape, i):
     return new_shape, new_axis_size
 
 
-def get_sliced_shapes(shapes, in_axes, axis_size):
+def get_sliced_shapes(
+    shapes: Sequence[Shape], in_axes: tuple[int | None, ...], axis_size: int | None
+) -> tuple[list[Shape], int]:
     axis_size = axis_size
     remaining_shapes = []
     for i, shape in zip(in_axes, shapes, strict=True):
@@ -891,7 +926,20 @@ def get_sliced_shapes(shapes, in_axes, axis_size):
 
 class VMap(Op):
     """
-    Represents a `VMap` Op. That's *one specific* op vectorized over some number of arguments.
+    Create a `VMap` Op. That's *one specific* op vectorized over some number of arguments.
+
+    All arguments here are heavily inspired by
+    `jax.lax.vmap <https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html>`_
+    although note that `VMap` only maps a single `Op`. (The `vmap` function in the
+    interfaces elsewhere takes an arbitrary function and transforms it into a graph of
+    RVs with `VMap` `Op`s.)
+
+    Args:
+        base_op: The `Op` to be mapped
+        in_axes: What axis to map for each argument of the op (each can be a
+            non-negative int or `None`)
+        axis_size: The size of the mapped axis/axes. Optional unless all elements of
+            `in_axes` are `None`.
 
     Examples
     --------
@@ -926,24 +974,10 @@ class VMap(Op):
     def __init__(
         self,
         base_op: Op,
-        in_axes: tuple[int | None, ...] | list[int | None],
+        in_axes: tuple[int | None, ...],
         axis_size: int | None = None,
     ):
-        """
-        Create a `VMap` Op. All arguments here are heavily inspired by [`jax.lax.vmap`](
-        https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html) although note that
-        `VMap` only maps a single `Op`. (The `vmap` function in the interfaces elsewhere takes an arbitrary
-        function and transforms it into a graph of RVs with `VMap` `Op`s.)
-        Parameters
-        ----------
-        base_op: Op
-            The `Op` to be mapped
-        in_axes: tuple[int | None, ...] | list[int | None, ...]
-            What axis to map for each argument of the op (each can be a non-negative int or
-            `None`)
-        axis_size: int | None
-            The size of the mapped axis/axes. Optional unless all elements of `in_axes` are `None`.
-        """
+        """ """
 
         assert isinstance(base_op, Op)
         if isinstance(in_axes, list):
@@ -964,10 +998,19 @@ class VMap(Op):
         super().__init__()
 
     @property
-    def random(self):
+    def random(self) -> bool:
+        """
+        Equal to `base_op.random`
+        """
+
         return self._random
 
-    def get_shape(self, *parents_shapes) -> Shape:
+    def get_shape(self, *parents_shapes: Shape) -> Shape:
+        """
+        Expects shapes corresponding to the shapes expected by `base_op` but with extra
+        axes as dictated by `axis_size`.
+        """
+
         if len(parents_shapes) != len(self.in_axes):
             raise ValueError(
                 f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}"
@@ -1691,7 +1734,7 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=None)
-def equal(A: RV, B: RV) -> bool:
+def rv_equal(A: RV, B: RV) -> bool:
     """
     Are ``A`` and ``B`` *distributionally* equal? That is, are they guaranteed to always have the same value? This is defined by the following rules:
 
@@ -1700,12 +1743,9 @@ def equal(A: RV, B: RV) -> bool:
 
     This function is implemented using caching. This doesn't change the results since :class:`RV` s and :class:`Op` s are immutable.
 
-    Parameters
-    ----------
-    A
-        the first RV to be compared
-    B
-        the second RV to be compared
+    Args:
+        A: the first RV to be compared
+        B: the second RV to be compared
 
     Examples
     --------
@@ -1713,29 +1753,29 @@ def equal(A: RV, B: RV) -> bool:
     >>> b = RV(Constant(0.5))
     >>> c = RV(Constant(0.7))
     >>> # same object always equal
-    >>> equal(a, a)
+    >>> rv_equal(a, a)
     True
     >>> # equivalent non-random ops, all (nonexistent) parents equal
-    >>> equal(a, b)
+    >>> rv_equal(a, b)
     True
     >>> # non-equivalent ops always non-equal
-    >>> equal(a, c)
+    >>> rv_equal(a, c)
     False
 
     >>> # with random op, always non-equal unless same object
-    >>> equal(RV(Bernoulli(), a), RV(Bernoulli(), a))
+    >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), a))
     False
-    >>> equal(RV(Bernoulli(), a), RV(Bernoulli(), b))
+    >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), b))
     False
-    >>> equal(RV(Bernoulli(), a), RV(Bernoulli(), c))
+    >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), c))
     False
 
     >>> # with non-random op, equal if ops equal and parents recursively equal
-    >>> equal(RV(Exp(), a), RV(Exp(), a))
+    >>> rv_equal(RV(Exp(), a), RV(Exp(), a))
     True
-    >>> equal(RV(Exp(), a), RV(Exp(), b))
+    >>> rv_equal(RV(Exp(), a), RV(Exp(), b))
     True
-    >>> equal(RV(Exp(), a), RV(Exp(), c))
+    >>> rv_equal(RV(Exp(), a), RV(Exp(), c))
     False
     """
     if A.op.random:
@@ -1744,7 +1784,7 @@ def equal(A: RV, B: RV) -> bool:
         return (
             A.op == B.op
             and len(A.parents) == len(B.parents)
-            and all(equal(a, b) for a, b in zip(A.parents, B.parents))
+            and all(rv_equal(a, b) for a, b in zip(A.parents, B.parents))
         )
 
     # >>> equal(RV(Normal(), a, c), RV(Normal(), a, c)) # random op, same objects
@@ -1764,14 +1804,14 @@ def equal(A: RV, B: RV) -> bool:
 ################################################################################
 
 
-def print_upstream(*vars, **named_vars: RV):
+def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     """Prints all upstream variables in a friendly readable format.
 
     Parameters
     ----------
-    *vars: `PyTree[RV]`
-        any number of pytrees containing random `RV`
-    **named_vars
+    vars
+        any number of pytrees containing `RV`
+    named_vars
         single `RV` s as keyword arguments, will be printed with those names
 
     Examples
@@ -1819,6 +1859,7 @@ def print_upstream(*vars, **named_vars: RV):
 
     all_vars = jax.tree_util.tree_leaves([vars, named_vars])
     nodes = dag.upstream_nodes(all_vars)
+    nodes = cast(list[RV], nodes)  # list[Node] -> list[RV]
 
     if all_vars == []:
         print("[empty vars, nothing to print]")
