@@ -301,9 +301,9 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
             where_var = args.index(abstract_var)
             concrete_var = args[where_var]
         else:
+            parents = cast(tuple[RV], abstract_var.parents)
             new_parents = tuple(
-                abstract_to_concrete[p] if is_abstract(p) else p
-                for p in abstract_var.parents
+                abstract_to_concrete[p] if is_abstract(p) else p for p in parents
             )
             concrete_var = create_rv(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var
@@ -585,7 +585,9 @@ def convert_args(rv_type: Type[RV], *args: RV):
     """
     abstract_args = {}
     for a in args:
-        new_parents = [abstract_args[p] if p in abstract_args else p for p in a.parents]
+        new_parents: list[RV] = [
+            abstract_args[p] if p in abstract_args else p for p in a.parents
+        ]
         abstract_a = rv_type(a.op, *new_parents)
         abstract_args[a] = abstract_a
     return tuple(abstract_args[a] for a in args)
