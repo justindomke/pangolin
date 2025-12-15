@@ -8,11 +8,13 @@ from pangolin import ir
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, Sequence
-from pangolin.util import comma_separated
+from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING
+from pangolin.util import comma_separated, camel_case_to_snake_case
 import inspect
 from typing import Generic, TypeAlias
 import os
+import sys
+import inspect
 
 RVLike: TypeAlias = RV | ArrayLike
 
@@ -48,6 +50,7 @@ class ScalarBroadcasting:
 ########################################################################################
 # The core InfixRV class. Like an RV except has infix operations
 ########################################################################################
+
 
 OpU = TypeVar("OpU", bound=Op)
 
@@ -257,9 +260,58 @@ def makerv(x: RVLike) -> RV:
 #     else:
 #         return InfixRV(Constant(x))
 
-####################################################################################################
-# Helpers to make scalar functions
-####################################################################################################
+
+def get_shape(arg: RVLike):
+    """If `arg` has a shape, attribute return it. Otherwise return the shape it would have if cast to an array. (No array is actually created.)
+
+        Parameters
+    ----------
+    arg : array_like
+        Input data, in any form that can be converted to an array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples
+        of lists, and ndarrays.
+
+    Returns
+    -------
+    shape : tuple of ints
+        Shape of the array that would result from casting `arg` to an array.
+        Each element of the tuple gives the size of the corresponding dimension.
+
+    See Also
+    --------
+    numpy.shape : Return the shape of an array
+
+    Examples
+    --------
+    >>> get_shape([[1, 2, 3], [4, 5, 6]])
+    (2, 3)
+
+    >>> get_shape(np.array([[1, 2, 3], [4, 5, 6]]))
+    (2, 3)
+
+    >>> get_shape(constant([[1, 2, 3], [4, 5, 6]]))
+    (2, 3)
+
+    >>> get_shape(42)  # Scalar
+    ()
+
+    >>> get_shape([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    (2, 2, 2)
+
+    >>> get_shape([[], [], []])
+    (3, 0)
+
+    """
+
+    if isinstance(arg, RV):
+        return arg.shape
+    else:
+        return np.shape(arg)
+
+
+########################################################################################
+# Auto-generate interface functions for all scalar Ops
+########################################################################################
 
 
 def create_rv(op, *args) -> InfixRV:
@@ -280,20 +332,16 @@ def _scalar_op_doc(OpClass):
 
     __doc__ += """
     
-    Parameters
-    ----------
+    Args:
     """
 
     for p in expected_parents:
         __doc__ += f"""
-    {p}
-        {expected_parents[p]}. Must be scalar.
+        {p}: {expected_parents[p]}. Must be scalar.
     """
 
     __doc__ += f"""
-    Returns
-    -------
-    z: `InfixRV`
+    Returns:
         Random variable with `z.op` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
     """
 
@@ -453,55 +501,7 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
     # (will also need to create ir.Squeeze)
 
 
-def get_shape(arg: RVLike):
-    """If `arg` has a shape, attribute return it. Otherwise return the shape it would have if cast to an array. (No array is actually created.)
-
-        Parameters
-    ----------
-    arg : array_like
-        Input data, in any form that can be converted to an array. This
-        includes lists, lists of tuples, tuples, tuples of tuples, tuples
-        of lists, and ndarrays.
-
-    Returns
-    -------
-    shape : tuple of ints
-        Shape of the array that would result from casting `arg` to an array.
-        Each element of the tuple gives the size of the corresponding dimension.
-
-    See Also
-    --------
-    numpy.shape : Return the shape of an array
-
-    Examples
-    --------
-    >>> get_shape([[1, 2, 3], [4, 5, 6]])
-    (2, 3)
-
-    >>> get_shape(np.array([[1, 2, 3], [4, 5, 6]]))
-    (2, 3)
-
-    >>> get_shape(constant([[1, 2, 3], [4, 5, 6]]))
-    (2, 3)
-
-    >>> get_shape(42)  # Scalar
-    ()
-
-    >>> get_shape([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
-    (2, 2, 2)
-
-    >>> get_shape([[], [], []])
-    (3, 0)
-
-    """
-
-    if isinstance(arg, RV):
-        return arg.shape
-    else:
-        return np.shape(arg)
-
-
-def scalar_fun_factory(OpClass: type[Op], /):
+def scalar_fun_factory(OpClass: type[ScalarOp], /):
     import makefun
 
     op = OpClass()
@@ -527,7 +527,7 @@ def scalar_fun_factory(OpClass: type[Op], /):
         f"{op.name}"
         + comma_separated([f"{a}:'RVLike'" for a in expected_parents])
         + " -> InfixRV["
-        + f"'ir.{OpClass.__name__}'"
+        + f"ir.{OpClass.__name__}"
         + "]"
     )
 
@@ -539,44 +539,30 @@ def scalar_fun_factory(OpClass: type[Op], /):
     return fun
 
 
-####################################################################################################
-# Arithmetic
-####################################################################################################
+if TYPE_CHECKING:
+    # stubs so type-checker doesn't fail on InfixRV
+    def add(a: RVLike, b: RVLike) -> InfixRV: ...
+    def sub(a: RVLike, b: RVLike) -> InfixRV: ...
+    def mul(a: RVLike, b: RVLike) -> InfixRV: ...
+    def div(a: RVLike, b: RVLike) -> InfixRV: ...
+    def pow(a: RVLike, b: RVLike) -> InfixRV: ...
 
-add = scalar_fun_factory(ir.Add)
-sub = scalar_fun_factory(ir.Sub)
-mul = scalar_fun_factory(ir.Mul)
-div = scalar_fun_factory(ir.Div)
 
-####################################################################################################
-# Trigonometry
-####################################################################################################
+def _populate_scalar_funs():
+    module = sys.modules[__name__]
 
-arccos = scalar_fun_factory(ir.Arccos)
-arccosh = scalar_fun_factory(ir.Arccosh)
-arcsin = scalar_fun_factory(ir.Arcsin)
-arcsinh = scalar_fun_factory(ir.Arcsinh)
-arctan = scalar_fun_factory(ir.Arctan)
-arctanh = scalar_fun_factory(ir.Arctanh)
-cos = scalar_fun_factory(ir.Cos)
-cosh = scalar_fun_factory(ir.Cosh)
-sin = scalar_fun_factory(ir.Sin)
-sinh = scalar_fun_factory(ir.Sinh)
-tan = scalar_fun_factory(ir.Tan)
-tanh = scalar_fun_factory(ir.Tanh)
+    for name, cls in vars(ir).items():
+        if (
+            isinstance(cls, type)
+            and issubclass(cls, ir.ScalarOp)
+            and not inspect.isabstract(cls)
+        ):
+            print(cls, name)
+            setattr(module, camel_case_to_snake_case(name), scalar_fun_factory(cls))
 
-####################################################################################################
-# Other scalar function
-####################################################################################################
 
-pow = scalar_fun_factory(ir.Pow)
-abs = scalar_fun_factory(ir.Abs)
-exp = scalar_fun_factory(ir.Exp)
-inv_logit = scalar_fun_factory(ir.InvLogit)
-log = scalar_fun_factory(ir.Log)
-loggamma = scalar_fun_factory(ir.Loggamma)
-logit = scalar_fun_factory(ir.Logit)
-step = scalar_fun_factory(ir.Step)
+_populate_scalar_funs()
+
 
 expit = scalar_fun_factory(ir.InvLogit)
 expit.__doc__ = "Equivalent to `inv_logit`"
@@ -584,14 +570,18 @@ sigmoid = scalar_fun_factory(ir.InvLogit)
 sigmoid.__doc__ = "Equivalent to `inv_logit`"
 
 
-def sqrt(x):
-    "sqrt(x) is an alias for pow(x,0.5)"
+def sqrt(x: RVLike) -> InfixRV[ir.Pow]:
+    """
+    Take a square root.
+
+    sqrt(x) is an alias for pow(x,0.5)
+    """
     return pow(x, 0.5)
 
 
-####################################################################################################
+########################################################################################
 # Multivariate funs
-####################################################################################################
+########################################################################################
 
 
 def matmul(a: RVLike, b: RVLike) -> RV[ir.Matmul]:
@@ -653,28 +643,9 @@ def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
     return create_rv(ir.Sum(axis), x)
 
 
-####################################################################################################
-# Scalar distributions
-####################################################################################################
-
-normal = scalar_fun_factory(ir.Normal)
-normal_prec = scalar_fun_factory(ir.NormalPrec)
-lognormal = scalar_fun_factory(ir.Lognormal)
-cauchy = scalar_fun_factory(ir.Cauchy)
-bernoulli = scalar_fun_factory(ir.Bernoulli)
-bernoulli_logit = scalar_fun_factory(ir.BernoulliLogit)
-binomial = scalar_fun_factory(ir.Binomial)
-uniform = scalar_fun_factory(ir.Uniform)
-beta = scalar_fun_factory(ir.Beta)
-beta_binomial = scalar_fun_factory(ir.BetaBinomial)
-exponential = scalar_fun_factory(ir.Exponential)
-gamma = scalar_fun_factory(ir.Gamma)
-poisson = scalar_fun_factory(ir.Poisson)
-student_t = scalar_fun_factory(ir.StudentT)
-
-####################################################################################################
+########################################################################################
 # Multivariate dists
-####################################################################################################
+########################################################################################
 
 
 def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
