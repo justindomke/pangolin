@@ -8,7 +8,7 @@ from pangolin import ir
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, cast, Sequence
+from typing import TypeVar, Type, Callable, Sequence
 from pangolin.util import comma_separated
 import inspect
 from typing import Generic, TypeAlias

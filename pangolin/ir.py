@@ -1623,11 +1623,10 @@ def index_orthogonal_no_slices(A, *index_arrays):
 
 from typing import TypeVar, Generic
 
-OpT = TypeVar("OpT", bound=Op)  # TODO: covariant=True? does it matter?
+OpT = TypeVar("OpT", bound=Op, covariant=True)  # TODO: covariant=True? does it matter?
 
 
 class RV(dag.Node, Generic[OpT]):
-    # class RV(dag.Node):
     """
     A `RV` is essentially just an `Op` and a tuple of parent `RV`.
 
@@ -1662,6 +1661,8 @@ class RV(dag.Node, Generic[OpT]):
 
     """
 
+    # _parents: RV # should add this?
+
     _frozen = False
     _n = 1  # convenient to store order all RVs were created
 
@@ -1671,7 +1672,6 @@ class RV(dag.Node, Generic[OpT]):
         self._n = RV._n
         RV._n += 1
         self.op = op
-        "The `Op` corresponding to this `RV`."
         super().__init__(*parents)
         self._frozen = True
 
@@ -1859,7 +1859,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
 
     all_vars = jax.tree_util.tree_leaves([vars, named_vars])
     nodes = dag.upstream_nodes(all_vars)
-    nodes = cast(list[RV], nodes)  # list[Node] -> list[RV]
+    # nodes = cast(list[RV], nodes)  # list[Node] -> list[RV]
 
     if all_vars == []:
         print("[empty vars, nothing to print]")

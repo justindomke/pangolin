@@ -9,7 +9,7 @@ from typing import Sequence, Type
 import jax.tree_util
 from pangolin.ir import split_shape
 
-from typing import Protocol, TypeVar, Any, cast
+from typing import Protocol, TypeVar, Any
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
@@ -93,7 +93,7 @@ def vmap_subgraph(
     roots_axes
         the axes along which the roots should be vectorized
     axis_size
-        the axis size for all mapped nodes (optional unless
+        the axis size for all mapped nodes (optional unless no args vmapped)
 
     Returns
     -------
@@ -267,13 +267,12 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
     # all generated nodes must have higher n
     n_before_call = RV._n
 
-    def is_abstract(rv: dag.Node):
-        rv = cast(RV, rv)
+    def is_abstract(rv: RV) -> bool:
         # if not isinstance(rv, InfixRV):
         #    raise ValueError("Generated nodes found a node that is not an InfixRV")
         return rv._n >= n_before_call
 
-    abstract_out = fun(*args)
+    abstract_out: list[RV[AbstractOp]] = fun(*args)
 
     if not isinstance(abstract_out, list):
         raise ValueError("generated_nodes must take a function that returns a list")
@@ -290,7 +289,6 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
     all_abstract_vars = dag.upstream_nodes(
         abstract_out, node_block=lambda var: not is_abstract(var)
     )
-    all_abstract_vars = cast(list[RV], all_abstract_vars)
 
     all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node._n)
 
@@ -301,9 +299,9 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
             where_var = args.index(abstract_var)
             concrete_var = args[where_var]
         else:
-            parents = cast(tuple[RV], abstract_var.parents)
             new_parents = tuple(
-                abstract_to_concrete[p] if is_abstract(p) else p for p in parents
+                abstract_to_concrete[p] if is_abstract(p) else p
+                for p in abstract_var.parents
             )
             concrete_var = create_rv(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var
