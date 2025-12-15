@@ -539,68 +539,48 @@ def scalar_fun_factory(OpClass: type[Op], /):
     return fun
 
 
-def scalar_fun_factory1(OpClass: type[Op]) -> Callable[[RVLike], InfixRV]:
-    fun = scalar_fun_factory(OpClass)
-    assert len(inspect.signature(fun).parameters) == 1
-    return fun
-
-
-def scalar_fun_factory2(OpClass: type[Op]) -> Callable[[RVLike, RVLike], InfixRV]:
-    fun = scalar_fun_factory(OpClass)
-    assert len(inspect.signature(fun).parameters) == 2
-    return fun
-
-
-def scalar_fun_factory3(
-    OpClass: type[Op],
-) -> Callable[[RVLike, RVLike, RVLike], InfixRV]:
-    fun = scalar_fun_factory(OpClass)
-    assert len(inspect.signature(fun).parameters) == 3
-    return fun
-
-
 ####################################################################################################
 # Arithmetic
 ####################################################################################################
 
-add = scalar_fun_factory2(ir.Add)
-sub = scalar_fun_factory2(ir.Sub)
-mul = scalar_fun_factory2(ir.Mul)
-div = scalar_fun_factory2(ir.Div)
+add = scalar_fun_factory(ir.Add)
+sub = scalar_fun_factory(ir.Sub)
+mul = scalar_fun_factory(ir.Mul)
+div = scalar_fun_factory(ir.Div)
 
 ####################################################################################################
 # Trigonometry
 ####################################################################################################
 
-arccos = scalar_fun_factory1(ir.Arccos)
-arccosh = scalar_fun_factory1(ir.Arccosh)
-arcsin = scalar_fun_factory1(ir.Arcsin)
-arcsinh = scalar_fun_factory1(ir.Arcsinh)
-arctan = scalar_fun_factory1(ir.Arctan)
-arctanh = scalar_fun_factory1(ir.Arctanh)
-cos = scalar_fun_factory1(ir.Cos)
-cosh = scalar_fun_factory1(ir.Cosh)
-sin = scalar_fun_factory1(ir.Sin)
-sinh = scalar_fun_factory1(ir.Sinh)
-tan = scalar_fun_factory1(ir.Tan)
-tanh = scalar_fun_factory1(ir.Tanh)
+arccos = scalar_fun_factory(ir.Arccos)
+arccosh = scalar_fun_factory(ir.Arccosh)
+arcsin = scalar_fun_factory(ir.Arcsin)
+arcsinh = scalar_fun_factory(ir.Arcsinh)
+arctan = scalar_fun_factory(ir.Arctan)
+arctanh = scalar_fun_factory(ir.Arctanh)
+cos = scalar_fun_factory(ir.Cos)
+cosh = scalar_fun_factory(ir.Cosh)
+sin = scalar_fun_factory(ir.Sin)
+sinh = scalar_fun_factory(ir.Sinh)
+tan = scalar_fun_factory(ir.Tan)
+tanh = scalar_fun_factory(ir.Tanh)
 
 ####################################################################################################
 # Other scalar function
 ####################################################################################################
 
-pow = scalar_fun_factory2(ir.Pow)
-abs = scalar_fun_factory1(ir.Abs)
-exp = scalar_fun_factory1(ir.Exp)
-inv_logit = scalar_fun_factory1(ir.InvLogit)
-log = scalar_fun_factory1(ir.Log)
-loggamma = scalar_fun_factory1(ir.Loggamma)
-logit = scalar_fun_factory1(ir.Logit)
-step = scalar_fun_factory1(ir.Step)
+pow = scalar_fun_factory(ir.Pow)
+abs = scalar_fun_factory(ir.Abs)
+exp = scalar_fun_factory(ir.Exp)
+inv_logit = scalar_fun_factory(ir.InvLogit)
+log = scalar_fun_factory(ir.Log)
+loggamma = scalar_fun_factory(ir.Loggamma)
+logit = scalar_fun_factory(ir.Logit)
+step = scalar_fun_factory(ir.Step)
 
-expit = scalar_fun_factory1(ir.InvLogit)
+expit = scalar_fun_factory(ir.InvLogit)
 expit.__doc__ = "Equivalent to `inv_logit`"
-sigmoid = scalar_fun_factory1(ir.InvLogit)
+sigmoid = scalar_fun_factory(ir.InvLogit)
 sigmoid.__doc__ = "Equivalent to `inv_logit`"
 
 
@@ -677,20 +657,20 @@ def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
 # Scalar distributions
 ####################################################################################################
 
-normal = scalar_fun_factory2(ir.Normal)
-normal_prec = scalar_fun_factory2(ir.NormalPrec)
-lognormal = scalar_fun_factory2(ir.Lognormal)
-cauchy = scalar_fun_factory2(ir.Cauchy)
-bernoulli = scalar_fun_factory1(ir.Bernoulli)
-bernoulli_logit = scalar_fun_factory1(ir.BernoulliLogit)
-binomial = scalar_fun_factory2(ir.Binomial)
-uniform = scalar_fun_factory2(ir.Uniform)
-beta = scalar_fun_factory2(ir.Beta)
-beta_binomial = scalar_fun_factory3(ir.BetaBinomial)
-exponential = scalar_fun_factory1(ir.Exponential)
-gamma = scalar_fun_factory2(ir.Gamma)
-poisson = scalar_fun_factory1(ir.Poisson)
-student_t = scalar_fun_factory3(ir.StudentT)
+normal = scalar_fun_factory(ir.Normal)
+normal_prec = scalar_fun_factory(ir.NormalPrec)
+lognormal = scalar_fun_factory(ir.Lognormal)
+cauchy = scalar_fun_factory(ir.Cauchy)
+bernoulli = scalar_fun_factory(ir.Bernoulli)
+bernoulli_logit = scalar_fun_factory(ir.BernoulliLogit)
+binomial = scalar_fun_factory(ir.Binomial)
+uniform = scalar_fun_factory(ir.Uniform)
+beta = scalar_fun_factory(ir.Beta)
+beta_binomial = scalar_fun_factory(ir.BetaBinomial)
+exponential = scalar_fun_factory(ir.Exponential)
+gamma = scalar_fun_factory(ir.Gamma)
+poisson = scalar_fun_factory(ir.Poisson)
+student_t = scalar_fun_factory(ir.StudentT)
 
 ####################################################################################################
 # Multivariate dists
