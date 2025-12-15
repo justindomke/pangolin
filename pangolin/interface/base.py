@@ -186,9 +186,9 @@ class InfixRV(RV[OpU], Generic[OpU]):
         return index(self, *idx)
 
 
-####################################################################################################
+########################################################################################
 # makerv
-####################################################################################################
+########################################################################################
 
 
 def constant(value: ArrayLike) -> InfixRV[Constant]:
@@ -314,7 +314,7 @@ def get_shape(arg: RVLike):
 ########################################################################################
 
 
-def create_rv(op, *args) -> InfixRV:
+def create_rv(op: OpU, *args) -> InfixRV[OpU]:
     args = tuple(makerv(a) for a in args)
     # args = tuple(a if isinstance(a,RV) else constant(a) for a in args)
     op.get_shape(*[a.shape for a in args])  # checks shapes
@@ -624,7 +624,7 @@ def softmax(a: RVLike) -> RV[ir.Softmax]:
     a
         1-D vector
     """
-    return create_rv(ir.Inv(), a)
+    return create_rv(ir.Softmax(), a)
 
 
 def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
