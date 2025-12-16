@@ -51,33 +51,33 @@ class Broadcasting(Enum):
     If broadcasting is set to NUMPY, then inputs are broadcast against each other
     NumPy-style and the resulting shape is the shape of the output.
 
-    Suppose `f(a,b,c)` is a scalar function. Then here is how broadcasting behaves:
+    Suppose ``f(a,b,c)`` is a scalar function. Then here is how broadcasting behaves:
 
-    +-----------------------------------+--------+----------+-----------+
-    |                                   | Broadcasting mode             |
-    +                                   +--------+----------+-----------+
-    |                                   | OFF    | SIMPLE   | NUMPY     |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `a.shape` | `b.shape` | `c.shape` | `f(a,b,c).shape`              |
-    +===========+===========+===========+========+==========+===========+
-    | `()`      | `()`      | `()`      | `()`   | `()`     | `()`      |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,)`    | `()`      | `()`      | ✖️     | `(5,)`   | `(5,)`    |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,)`    | `(5,)`    | `()`      | ✖️     | `(5,)`   | `(5,)`    |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,)`    | `(5,)`    | `(5,)`    | ✖️     | `(5,)`   | `(5,)`    |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,9)`   | `()`      | `()`      | ✖️     | `(5,9)`  | `(5,9)`   |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,9)`   | `(5,9)`   | `()`      | ✖️     | `(5,9)`  | `(5,9)`   |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,9)`   | `(5,9)`   | `(5,9)`   | ✖️     | `(5,9)`  | `(5,9)`   |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(9,)`    | `(5,9)`   | `()`      | ✖️     | ✖️       | `(5,9)`   |
-    +-----------+-----------+-----------+--------+----------+-----------+
-    | `(5,)`    | `(6,)`    | `()`      | ✖️     | ✖️       | ✖️        |
-    +-----------+-----------+-----------+--------+----------+-----------+
+    +-----------------------------------------+--------+-----------+-----------+
+    |                                         | Broadcasting mode              |
+    +                                         +--------+-----------+-----------+
+    |                                         | OFF    | SIMPLE    | NUMPY     |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``a.shape`` | ``b.shape`` | ``c.shape`` | ``f(a,b,c).shape``             |
+    +=============+=============+=============+========+===========+===========+
+    | ``()``      | ``()``      | ``()``      | ``()`` | ``()``    | ``()``    |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,)``    | ``()``      | ``()``      | n/a    | ``(5,)``  | ``(5,)``  |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,)``    | ``(5,)``    | ``()``      | n/a    | ``(5,)``  | ``(5,)``  |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,)``    | ``(5,)``    | ``(5,)``    | n/a    | ``(5,)``  | ``(5,)``  |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,9)``   | ``()``      | ``()``      | n/a    | ``(5,9)`` | ``(5,9)`` |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,9)``   | ``(5,9)``   | ``()``      | n/a    | ``(5,9)`` | ``(5,9)`` |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,9)``   | ``(5,9)``   | ``(5,9)``   | n/a    | ``(5,9)`` | ``(5,9)`` |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(9,)``    | ``(5,9)``   | ``()``      | n/a    | n/a       | ``(5,9)`` |
+    +-------------+-------------+-------------+--------+-----------+-----------+
+    | ``(5,)``    | ``(6,)``    | ``()``      | n/a    | n/a       | n/a       |
+    +-------------+-------------+-------------+--------+-----------+-----------+
 
     This interface does not (currently) support automatic broadcasting for non-scalar
     functions.
@@ -171,7 +171,7 @@ class Config:
     ----------
     broadcasting
         Controls broadcasting behavior for scalar operations.
-        Default: `ScalarBroadcasting.OFF`.
+        Default: `Broadcasting.OFF`.
 
     Warning:
         Do not instantiate this class directly. Use the `config` module attribute.
@@ -227,21 +227,21 @@ def override(**kwargs):
 
 def broadcasting_off():
     """
-    Temprarily turn scalar broadcasting off. Alias for `override(broadcasting=Broadcasting.OFF)`
+    Temprarily turn scalar broadcasting off. Alias for ``override(broadcasting=Broadcasting.OFF)``
     """
     return override(broadcasting=Broadcasting.OFF)
 
 
 def broadcasting_simple():
     """
-    Temprarily use simple scalar broadcasting. Alias for `override(broadcasting=Broadcasting.SIMPLE)`
+    Temprarily use simple scalar broadcasting. Alias for ``override(broadcasting=Broadcasting.SIMPLE)``
     """
     return override(broadcasting=Broadcasting.SIMPLE)
 
 
 def broadcasting_numpy():
     """
-    Temprarily use numpy-scalar broadcasting. Alias for `override(broadcasting=Broadcasting.NUMPY)`
+    Temprarily use numpy-scalar broadcasting. Alias for ``override(broadcasting=Broadcasting.NUMPY)``
     """
     return override(broadcasting=Broadcasting.NUMPY)
 
@@ -258,7 +258,7 @@ class InfixRV(RV[OpU], Generic[OpU]):
     """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
     operations.
 
-    This is a generic type, so you may write `InfixRV[OpClass]` as a type hint.
+    This is a generic type, so you may write ``InfixRV[OpClass]`` as a type hint.
 
     Args:
         op: The Op defining this class.
@@ -336,13 +336,13 @@ class InfixRV(RV[OpU], Generic[OpU]):
 
     def __getitem__(self, idx: _IdxType | tuple[_IdxType, ...]):
         """
-        You can index an `RV` with the `[]` operators, e.g. as `A[B,C]`.
+        You can index an `RV` with the ``[]`` operator, e.g. as ``A[B,C]``.
 
         Note that indexing with this interface is different (and simpler) than NumPy or JAX:
 
-        First, indexing is by default fully-orthogonal. This is done to avoid the `utter insanity <https://numpy.org/doc/stable/user/basics.indexing.html>`_ that is NumPy indexing with broadcasting, basic indexing, advanced indexing, and combinations of basic and advanced indexing. In this interface, if `A`, `B`, and `C` are RVs, then `A[B,C].shape == A.shape + B.shape`, and similarly if `B` or `C` are int / list of (list of) int / numpy array / slice.
+        First, indexing is by default fully-orthogonal. This is done to avoid the `utter insanity <https://numpy.org/doc/stable/user/basics.indexing.html>`_ that is NumPy indexing with broadcasting, basic indexing, advanced indexing, and combinations of basic and advanced indexing. In this interface, if ``A``, ``B``, and ``C`` are RVs, then ``A[B,C].shape == A.shape + B.shape``, and similarly if ``B`` or ``C`` are int / list of (list of) int / numpy array / slice.
 
-        Second, all axes must be indexed. For example, if `A` is a RV with 3 axes, then `A[2]` will trigger an exception. The idea of this is to make code more legible and self-enforcing. Instead you must write `A[2, :, :]` or `A[2, ...]`.
+        Second, all axes must be indexed. For example, if ``A`` is a RV with 3 axes, then ``A[2]`` will trigger an exception. The idea of this is to make code more legible and self-enforcing. Instead you must write ``A[2, :, :]`` or ``A[2, ...]``.
 
         Examples
         --------
@@ -395,7 +395,7 @@ def constant(value: ArrayLike) -> InfixRV[Constant]:
 
     Parameters
     ----------
-    value: ArrayLike
+    value
         value for the constant. Should be a numpy (or JAX) array or something castable
         to that, e.g. int / float / list of list of ints/floats.
 
@@ -541,7 +541,7 @@ def _scalar_op_doc(OpClass):
 
     __doc__ += f"""
     Returns:
-        Random variable with `z.op` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
+        Random variable with ``z.op`` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
     """
 
     from .. import util
@@ -829,19 +829,19 @@ def matmul(a: RVLike, b: RVLike) -> RV[ir.Matmul]:
     """
     Matrix product of two arrays. The behavior follows that of
     `numpy.matmul <https://numpy.org/doc/stable/reference/generated/numpy.matmul.html>`_
-    except that `a` and `b` must both be 1-D or 2-D arrays. In particular:
+    except that ``a`` and ``b`` must both be 1-D or 2-D arrays. In particular:
 
-    * If `a` and `b` are both 1-D then this represents an inner-product.
-    * If `a` is 1-D and `b` is 2-D then this represents vector/matrix multiplication
-    * If `a` is 2-D and `b` is 1-D then this represents matrix/vector multiplication
-    * If `a` and `b` are both 2-D then this represents matrix/matrix multiplication
+    * If ``a`` and ``b`` are both 1-D then this represents an inner-product.
+    * If ``a`` is 1-D and ``b`` is 2-D then this represents vector/matrix multiplication
+    * If ``a`` is 2-D and ``b`` is 1-D then this represents matrix/vector multiplication
+    * If ``a`` and ``b`` are both 2-D then this represents matrix/matrix multiplication
 
     Parameters
     ----------
     a
         first argument (1d or 2d array)
     b
-        second argument (1d or 2d array, matching shape of `a`)
+        second argument (1d or 2d array, matching shape of ``a``)
     """
     return create_rv(ir.Matmul(), a, b)
 
@@ -892,7 +892,7 @@ def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
 def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
     """
     Create a multivariate normal distributed random variable.
-    Call as `multi_normal(mean,cov)`
+    Call as ``multi_normal(mean, cov)``
 
     Parameters
     ----------
@@ -907,7 +907,7 @@ def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
 def categorical(theta: RVLike) -> RV[ir.Categorical]:
     """
     Create a `categorical <https://en.wikipedia.org/wiki/Categorical_distribution>`_
-    distributed `RV` where `theta` is a vector of non-negative reals that sums to one.
+    distributed `RV` where ``theta`` is a vector of non-negative reals that sums to one.
 
     Parameters
     ----------
@@ -920,8 +920,7 @@ def categorical(theta: RVLike) -> RV[ir.Categorical]:
 def multinomial(n: RVLike, p: RVLike) -> RV[ir.Multinomial]:
     """
     Create a `multinomial <https://en.wikipedia.org/wiki/Multinomial_distribution>`_
-    distributed random variable. Call as `multinomial(n,p)` where `n` is the number of
-    repetitions and `p` is a vector of probabilities that sums to one.
+    distributed random variable. Call as ``multinomial(n,p)`` where ``n`` is the number of repetitions and ``p`` is a vector of probabilities that sums to one.
 
     Parameters
     ----------
@@ -937,9 +936,9 @@ def multinomial(n: RVLike, p: RVLike) -> RV[ir.Multinomial]:
 def dirichlet(alpha: RVLike) -> RV[ir.Dirichlet]:
     """
     Create a
-    `Dirichlet <https://en.wikipedia.org/wiki/Dirichlet_distribution>`_
+    `Dirichlet <https://en.wikipedia.org/wiki/Dirichlet_distribution>`__
     distributed random variable.
-    Call as `dirichlet(alpha)` where `alpha` is a 1-D vector of positive reals.
+    Call as ``dirichlet(alpha)`` where ``alpha`` is a 1-D vector of positive reals.
 
     Parameters
     ----------

@@ -3,7 +3,7 @@ The pangolin IR for defining joint distributions over collections of random vari
 Note that while it is certainly possible to define probabilistic model directly in terms
 of this IR, it is quite a "low-level" notation, and **end-users of Pangolin are not
 typically expected to manipulate this IR directly**. Instead, users would typically
-use an "interface" that provides a friendlier way of creating these models.
+use an `pangolin.interface` that provides a friendlier way of creating these models.
 
 This IR only *represents* groups of dependent random variables. All actual functionality
 is left to inference engines.
@@ -74,19 +74,19 @@ class Op(ABC):
 
     Simple `Op` typically have no parameters. For example, `Add()` just represents
     scalar addition. The `Op` itself does not indicate what variables are being
-    added together. Similarly, `Normal()` just represents a normal distribution, but
+    added together. Similarly, ``Normal()`` just represents a normal distribution, but
     it does not itself indicate what the mean and scale of that distribution are.
 
     An `Op` must provide an `__eq__` method that indicates *mathematical* equality.
-    Thus, if `op1 = Normal()` and `op2 = Normal()` then, `op1 == op2`, even though
-    `op1` and `op2` are distinct objects. For simple `Op` that take no parameters,
+    Thus, if ``op1 = Normal()`` and ``op2 = Normal()`` then, ``op1 == op2``, even though
+    ``op1`` and ``op2`` are distinct objects. For simple `Op` that take no parameters,
     this is done just by comparing types. For complex `Op` that take parameters, this
     should be overriden.
 
     An `Op` must also provide a boolean `random` attribute indicating if it is a
-    conditional distribution (`True`) or a deterministic function (`False`).
+    conditional distribution (``True``) or a deterministic function (``False``).
 
-    An `Op` must also a `get_parents` method to determine the shape of the output of the
+    An `Op` must also a ``get_parents`` method to determine the shape of the output of the
     Op given the shapes of the parents. This method is needed because some types of `Op`
     (e.g. multivariate normal distributions) can have different shapes depending on the
     shapes of the parents. It is also expected that the `get_shape` method will do error
@@ -103,7 +103,7 @@ class Op(ABC):
     @abstractmethod
     def random(self) -> bool:
         """
-        Is this class a distribution (`True`) or a deterministic function (`False`)
+        Is this class a distribution (``True``) or a deterministic function (``False``)
         """
         pass
 
@@ -126,7 +126,7 @@ class Op(ABC):
 
     def __eq__(self, other: Op) -> bool:
         """
-        Are `self` and `other` *mathematically* equal?
+        Are ``self`` and ``other`` *mathematically* equal?
 
         Args:
             other: op to compare to.
@@ -159,26 +159,26 @@ class Op(ABC):
 
 class OpRandom(Op):
     """
-    Just an `Op` where `op.random==True`.
+    Just an `Op` where ``op.random==True``.
     """
 
     @property
     def random(self) -> bool:
         """
-        `True`.
+        ``True``.
         """
         return True
 
 
 class OpNonrandom(Op):
     """
-    Just an `Op` where `op.random==False`.
+    Just an `Op` where ``op.random==False``.
     """
 
     @property
     def random(self) -> bool:
         """
-        `False`.
+        ``False``.
         """
         return False
 
@@ -192,7 +192,7 @@ class Constant(OpNonrandom):
     """
     Represents a "constant" distribution. Has no parents. Data is always stored
     as a numpy array. If you want to live dangerously, you may be able to switch to
-    jax's version of numpy by setting `ir.np = jax.numpy`.
+    jax's version of numpy by setting ``ir.np = jax.numpy``.
 
     Parameters
     ----------
@@ -209,8 +209,8 @@ class Constant(OpNonrandom):
 
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
-        If `len(parents_shapes)>0`, raises `ValueError`. Otherwise, returns the
-        shape of `value`.
+        If ``len(parents_shapes)>0``, raises ``ValueError``. Otherwise, returns the
+        shape of ``value``.
         """
         if len(parents_shapes) != 0:
             raise ValueError(
@@ -220,8 +220,8 @@ class Constant(OpNonrandom):
 
     def __eq__(self, other: Op) -> bool:
         """
-        Returns `True` if `other` is of type `Constant` and `other.value` is exactly
-        the same as `self.value`.
+        Returns ``True`` if ``other`` is of type ``Constant`` and ``other.value`` is
+        exactly the same as ``self.value``.
         """
         if isinstance(other, Constant):
             if (
@@ -379,7 +379,7 @@ Examples
             for note in op_info.notes:
                 s += note + "\n\n"
         if op_info.wikipedia:
-            s += f"`wikipedia definition <{op_info.wikipedia}>`_\n"
+            s += f"`wikipedia definition <{op_info.wikipedia}>`__\n"
 
     return s
 
@@ -486,7 +486,7 @@ Loggamma = _scalar_op_factory(
     random=False,
     expected_parents=1,
     notes=[
-        "Do we want [`scipy.special.loggamma`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html) or [`scipy.special.gammaln`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html)? These are different!"
+        "Do we want `scipy.special.loggamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html>`__ or `scipy.special.gammaln <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html>`__? These are different!"
     ],
 )
 Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
@@ -499,7 +499,7 @@ Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)
 
 class Matmul(OpNonrandom):
     """
-    A class that does matrix multiplication, following the rules of `numpy.matmul`.
+    A class that does matrix multiplication, following the rules of ``numpy.matmul``.
     Currently only 1d and 2d arrays are supported.
 
     Examples
@@ -516,9 +516,9 @@ class Matmul(OpNonrandom):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, a_shape: Shape, b_shape: Shape):
+    def get_shape(self, a_shape: Shape, b_shape: Shape) -> Shape:
         """
-        Get the shape of applying a matmul to operators with shape `a_shape` and `b_shape`
+        Get the shape of applying a matmul to given shapes.
 
         Parameters
         ----------
@@ -526,11 +526,6 @@ class Matmul(OpNonrandom):
             shape of first argument
         b_shape:
             shape of second argument
-
-        Returns
-        -------
-        tuple[int, ...]
-            resulting shape
 
         Examples
         --------
@@ -857,10 +852,10 @@ class Multinomial(OpRandom):
     """
     Create a Multinomial Op. Takes no parameters.
 
-    When used in an RV, a multinomial op expects a first parent `n` (a scalar)
-    indicating the number of observations and a second parent `p` indicating a vector
+    When used in an RV, a multinomial op expects a first parent ``n`` (a scalar)
+    indicating the number of observations and a second parent ``p`` indicating a vector
     of probabilities (a 1D array). Note that this is different from Stan (which doesn't
-    need `n` to be passed).
+    need ``n`` to be passed).
     """
 
     def __init__(self):
@@ -926,20 +921,20 @@ def get_sliced_shapes(
 
 class VMap(Op):
     """
-    Create a `VMap` Op. That's *one specific* op vectorized over some number of arguments.
+    Create a ``VMap`` Op. That's *one specific* op vectorized over some number of arguments.
 
     All arguments here are heavily inspired by
-    `jax.lax.vmap <https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html>`_
-    although note that `VMap` only maps a single `Op`. (The `vmap` function in the
-    interfaces elsewhere takes an arbitrary function and transforms it into a graph of
-    RVs with `VMap` `Op`s.)
+    `jax.lax.vmap <https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html>`__
+    although note that ``VMap`` only maps a single `Op`. (The ``vmap`` function in the
+    interface elsewhere takes an arbitrary function and transforms it into a graph of
+    RVs with `VMap` `Op` .)
 
     Args:
         base_op: The `Op` to be mapped
         in_axes: What axis to map for each argument of the op (each can be a
-            non-negative int or `None`)
+            non-negative int or ``None``)
         axis_size: The size of the mapped axis/axes. Optional unless all elements of
-            `in_axes` are `None`.
+            ``in_axes`` are ``None``.
 
     Examples
     --------
@@ -1000,15 +995,15 @@ class VMap(Op):
     @property
     def random(self) -> bool:
         """
-        Equal to `base_op.random`
+        Equal to ``base_op.random``
         """
 
         return self._random
 
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
-        Expects shapes corresponding to the shapes expected by `base_op` but with extra
-        axes as dictated by `axis_size`.
+        Expects shapes corresponding to the shapes expected by ``base_op`` but with
+        extra axes as dictated by ``axis_size``.
         """
 
         if len(parents_shapes) != len(self.in_axes):
@@ -1031,9 +1026,8 @@ class VMap(Op):
 
     def __str__(self):
         """
-        Return a string representation of the VMap op. Just like `__repr__`` except (1) uses str
-        for calling the recursive distribution and (2) uses a symbol '∅' instead of `None` for
-        representing unmapped args
+        Return a string representation of the VMap op. Just like ``__repr__`` except
+        uses str for calling the recursive distribution.
         """
         # this is kind of overkill but whatever...
         # new_in_axes = jax.tree_util.tree_map(
@@ -1356,7 +1350,7 @@ class Index(OpNonrandom):
 
         Most people don't realize that this is how numpy works:
 
-        Numpy rules say that if you have "advanced indices" (like `i`) above
+        Numpy rules say that if you have "advanced indices" (like ``i``) above
         and they are *separated by a slice* then the dimension for the advanced
         index goes at the start. (This is what happens in the second case above.)
         Otherwise, all the indices go to the location of the first advanced index.

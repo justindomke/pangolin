@@ -425,25 +425,23 @@ def get_dummy_args(in_axes, args):
 
 def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callable:
     """
-    Vectorizing map. Create a function which maps `f` over argument axes.
+    Vectorizing map. Create a function which maps ``f`` over argument axes.
 
-    This function matches exactly the interface of [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html), although it doesn't provide some of the optional arguments `jax.vmap` does.
+    This function matches exactly the interface of `jax.vmap <https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html>`_, although it doesn't provide some of the optional arguments ``jax.vmap`` does.
 
     Parameters
     ----------
     f
-        The function to vmap. Should take a pytree of `RV`s as inputs and return a pytree of `RV`s
-        as outputs.
+        The function to vmap. Should take a pytree of `RV` as inputs and return a pytree of `RV` as outputs.
     in_axes
-        An int, None, or pytree with roots that are int or None. Specifies which axis of each RV should be mapped (if int) or that no axis shuld be mapped (if None). Can be a pytree matching the structure of all arguments to `f`. Or, can be a pytree that is a prefix to the pytree representing all arguments. By default, in_axes is zero, meaning all RVs are mapped over the first axis.
+        An int, None, or pytree with roots that are int or None. Specifies which axis of each RV should be mapped (if int) or that no axis shuld be mapped (if None). Can be a pytree matching the structure of all arguments to ``f``. Or, can be a pytree that is a prefix to the pytree representing all arguments. By default, in_axes is zero, meaning all RVs are mapped over the first axis.
     axis_size
-        An integer indicating the size of the axis to be mapped. This is optional unless all
-        leaves of `in_axes` are `None`.
+        An integer indicating the size of the axis to be mapped. This is optional unless all leaves of ``in_axes`` are ``None``.
 
     Returns
     -------
     vec_f
-        batched/vectorized version of `f` with arguments matching those of `f` with extra axes at positions indicated by `in_axes` and a return value that corresponds to that of `f` but with an extra axis in the first position.
+        batched/vectorized version of ``f`` with arguments matching those of ``f`` with extra axes at positions indicated by ``in_axes`` and a return value that corresponds to that of ``f`` but with an extra axis in the first position.
 
     Examples
     --------

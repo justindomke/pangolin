@@ -94,13 +94,13 @@ class VarNames:
 
 
 def num_not_none(*args: Any) -> int:
-    """how many items are not `None`? (Should be named num_not_none)
+    """how many items are not ``None``?
 
     Args:
-        *args: any number of arguments of any times
+        args: any number of arguments of any times
 
     Returns:
-        number of items that are non-`None`
+        number of items that are non-``None``
 
 
     Examples
@@ -146,7 +146,7 @@ def intersects(A: Iterable, B: Iterable) -> bool:
         B: Second collection of elements.
 
     Returns:
-        True if `A` and `B` share at least one element, False otherwise.
+        True if ``A`` and ``B`` share at least one element, False otherwise.
 
     Examples
     --------
@@ -184,7 +184,7 @@ class WriteOnceDict(dict):
 
 class WriteOnceDefaultDict(dict):
     """A dict where you can't overwrite entries. If you access a value with no key,
-    `default_factory` is used to create a key/value pair automatically. Once you have
+    ``default_factory`` is used to create a key/value pair automatically. Once you have
     written to or accessed a key, it cannot be changed.
 
     Args:
@@ -230,16 +230,16 @@ def tree_map_with_none_as_leaf(f: Callable, tree: PyTree, *rest: PyTree):
     """
     Call jax.tree_util.tree_map using a special is_leaf function that preserves None.
     This is exactly like
-    `jax.tree.map <https://docs.jax.dev/en/latest/_autosummary/jax.tree.map.html>`_
+    `jax.tree.map <https://docs.jax.dev/en/latest/_autosummary/jax.tree.map.html>`__
     except that nodes with None are treated as leaves rather than as nonexistant.
 
     Args:
-        f: function that takes `1 + len(rest)` arguments, to be applied to corresponding
-            leaves
+        f: function that takes ``1 + len(rest)`` arguments, to be applied to
+            corresponding leaves
         tree: a pytree to be mapped over, with each leaf providing the first positional
-            argument to `f`
-        *rest: additional pytrees to be mapped over, each of which must either have
-            the same structure as `tree` or have `tree` as a prefix.
+            argument to ``f``
+        rest: additional pytrees to be mapped over, each of which must either have
+            the same structure as ``tree`` or have ``tree`` as a prefix.
 
     Examples
     --------
@@ -413,45 +413,47 @@ def tree_map_recurse_at_leaf(
     is_leaf: Callable[[Any], bool] | None = None,
 ) -> PyTree:
     """
-    Applies a function `f` to corresponding leaves of `tree` and `*remaining_trees`.
+    Applies a function ``f`` to corresponding leaves of ``tree`` and
+    ``*remaining_trees``.
 
-    This function implements a "recursive broadcast" behavior. If `tree` has a leaf
-    at a path where any of `remaining_trees` has a subtree, that `tree` leaf is
-    "broadcast" to all leaves of the corresponding subtree in `remaining_trees`.
+    This function implements a "recursive broadcast" behavior. If ``tree`` has a leaf
+    at a path where any of ``remaining_trees`` has a subtree, that ``tree`` leaf is
+    "broadcast" to all leaves of the corresponding subtree in ``remaining_trees``.
 
     Parameters
     ----------
     f
         The function to apply to the leaves. Its first argument will be a leaf
-        from `tree`, and subsequent arguments will be corresponding leaves from
-        `remaining_trees`. If broadcasting occurs, the first argument (`leaf_from_tree`)
-        will be fixed for all leaves within the broadcasted subtree.
+        from ``tree``, and subsequent arguments will be corresponding leaves from
+        ``remaining_trees``. If broadcasting occurs, the first argument
+        (``leaf_from_tree``) will be fixed for all leaves within the broadcasted
+        subtree.
     tree
         The primary PyTree. Its leaves will trigger the broadcasting behavior.
         It is expected to be a "prefix" or "smaller" structure compared to
-        `remaining_trees` at corresponding paths.
-    *remaining_trees
+        ``remaining_trees`` at corresponding paths.
+    remaining_trees
         One or more additional PyTrees to map over. These are expected to be
-        "superset" structures relative to `tree` at corresponding paths.
+        "superset" structures relative to ``tree`` at corresponding paths.
     is_leaf
         An optional callable that takes a single argument (a node in a PyTree)
-        and returns `True` if that node should be considered a leaf (i.e.,
-        `tree_map` should not recurse into it), and `False` otherwise.
-        This function is applied to both the outer and inner `jax.tree_map` calls.
-        If `None`, JAX's default leaf detection is used.
+        and returns ``True`` if that node should be considered a leaf (i.e.,
+        ``tree_map`` should not recurse into it), and ``False`` otherwise.
+        This function is applied to both the outer and inner ``jax.tree_map`` calls.
+        If ``None``, JAX's default leaf detection is used.
 
     Returns
     -------
     PyTree
-        A new PyTree with the results of `f` application. Its structure will
-        match that of the first PyTree in `remaining_trees` (or `tree` if
-        `remaining_trees` is empty).
+        A new PyTree with the results of ``f`` application. Its structure will
+        match that of the first PyTree in ``remaining_trees`` (or ``tree`` if
+        ``remaining_trees`` is empty).
 
     Notes
     -----
-    - If `tree` has a subtree at a path where one of `remaining_trees` has a leaf,
-      `jax.tree_map` will raise a `ValueError` due to a structural mismatch.
-    - This function leverages nested `jax.tree_map` calls for conciseness.
+    - If ``tree`` has a subtree at a path where one of ``remaining_trees`` has a leaf,
+      ``jax.tree_map`` will raise a ``ValueError`` due to a structural mismatch.
+    - This function leverages nested ``jax.tree_map`` calls for conciseness.
 
 
     Examples
@@ -558,8 +560,8 @@ def dual_flatten(pytree1: PyTree, pytree2: PyTree) -> PyTree:
     """
     Args:
         pytree1: first pytree
-        pytree2: second pytree, must have same structure as `pytree1` or at least have
-            the structure of `pytree1` as a prefix
+        pytree2: second pytree, must have same structure as ``pytree1`` or at least have
+            the structure of ``pytree1`` as a prefix
 
     Examples
     --------
@@ -602,9 +604,9 @@ def short_pytree_string(treedef):
 # TODO: Move to jax backend
 def assimilate_vals(vars: PyTree, vals: PyTree) -> PyTree[jnp.ndarray]:
     """
-    convert `vals` to a pytree of arrays with the same shape as `vars`
+    convert ``vals`` to a pytree of arrays with the same shape as ``vars``
     The purpose of this is when users might provide lists / tuples
-    that should be auto-casted to a pytree of arrays. (Without `vars`
+    that should be auto-casted to a pytree of arrays. (Without ``vars``
     it would be impossible to tell a list of arrays of the same length
     from a big array with one more dimension.)
     """
@@ -677,7 +679,7 @@ def swapped_list(lst, i, j):
 
 def first(lst, cond, default=None):
     """
-    get first element of `lst` satisfying `cond` or if none then `default`
+    get first element of ``lst`` satisfying ``cond`` or if none then ``default``
     """
     return next((x for x in lst if cond(x)), default)
 
@@ -729,22 +731,22 @@ def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
 
     This function first verifies that the two PyTrees have the exact same
     structure. If they do, it then compares each corresponding leaf node (array)
-    using `np.allclose` and returns `True` if all leaves are close, `False`
+    using ``np.allclose`` and returns ``True`` if all leaves are close, ``False``
     otherwise.
 
     Args:
         a: The first PyTree to compare.
         b: The second PyTree to compare.
-        **kwargs:  Additional keyword arguments to be passed directly to `np.allclose`.
-            Common arguments include `rtol` (relative tolerance) and `atol`
+        kwargs:  Additional keyword arguments to be passed directly to ``np.allclose`.
+            Common arguments include ``rtol`` (relative tolerance) and ``atol``
             (absolute tolerance).
 
     Returns:
-        `True` if the structures match and all corresponding leaves are close.
-        `False` if the structures match but any leaves are not close.
+        ``True`` if the structures match and all corresponding leaves are close.
+        ``False`` if the structures match but any leaves are not close.
 
     Raises:
-        ValueError: If the PyTree structures of `a` and `b` are not identical.
+        ValueError: If the PyTree structures of ``a`` and ``b`` are not identical.
 
     Examples
     --------
@@ -799,33 +801,30 @@ def get_positional_args(target_func: Callable, *args: Any, **kwargs: Any):
     Transforms a mix of positional and keyword arguments into a list of
     purely positional arguments for a target function.
 
-    This function inspects the signature of `target_func` to correctly
+    This function inspects the signature of ``target_func`` to correctly
     map and order the provided arguments. It ensures that the resulting
-    list of positional arguments, when passed to `target_func`, will
+    list of positional arguments, when passed to ``target_func``, will
     produce the identical outcome as the original call with mixed arguments.
 
-    Raises a `ValueError` if `target_func` contains any keyword-only
+    Raises a ``ValueError`` if ``target_func`` contains any keyword-only
     arguments, as these cannot be represented in a purely positional call.
-    Raises a `TypeError` if the provided arguments (`*args`, `**kwargs`)
-    are invalid for `target_func` (e.g., missing required arguments,
+    Raises a ``TypeError`` if the provided arguments (``*args``, ``**kwargs``)
+    are invalid for ``target_func`` (e.g., missing required arguments,
     unexpected arguments).
 
     Args:
         target_func : The function whose signature will be used to transform and order
             the arguments.
-        *args: Positional arguments to be transformed.
-        **kwargs Keyword arguments to be transformed.
+        args: Positional arguments to be transformed.
+        kwargs: Keyword arguments to be transformed.
 
     Returns:
-        A list of arguments in the correct positional order for `target_func`.
+        A list of arguments in the correct positional order for ``target_func``.
 
     Raises:
-        ValueError: If `target_func` has keyword-only arguments.
-        TypeError: If the provided `*args` and `**kwargs` do not match the signature
-            of `target_func`.
-
-    See Also:
-        inspect.signature: For detailed information on function signature inspection.
+        ValueError: If ``target_func`` has keyword-only arguments.
+        TypeError: If the provided ``*args`` and ``**kwargs`` do not match the signature
+            of ``target_func``.
 
     Examples
     --------

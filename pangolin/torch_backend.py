@@ -6,15 +6,14 @@ plain-old pytorch functions.
 will not use this functionality, pangolin does not install pytorch as a requirement by
 default. This might lead you to get this error:
 
-```
-ImportError: Using torch backend requires torch to be installed
-```
+``ImportError: Using torch backend requires torch to be installed``
 
 To fix this, either install pangolin with the pytorch requirements
-(e.g. with `uv sync --extra torch`) or manually install pytorch and funtorch yourself
-(e.g. with `pip install torch funtorch` or `uv pip install torch funtorch`).
+(e.g. with ``uv sync --extra torch``) or manually install pytorch and funtorch yourself
+(e.g. with ``pip install torch funtorch`` or ``uv pip install torch funtorch``).
 """
 
+from __future__ import annotations
 import numpy as np
 from typing import (
     Callable,
@@ -26,6 +25,7 @@ from pangolin import ir
 from pangolin.ir import Op, RV
 from numpy.typing import ArrayLike
 from pangolin import dag, util
+from jaxtyping import PyTree
 
 try:
     import torch
@@ -847,24 +847,24 @@ def flatten_args_torch(
 ################################################################################
 
 
-def ancestor_sample(vars, size: Optional[int] = None):
+def ancestor_sample(vars: PyTree[RV], size: Optional[int] = None):
     """
     Draw exact samples!
 
     Parameters
     ----------
-    vars: `PyTree[RV]`
+    vars
         a PyTree of `RV` s to sample
     size
-        number of samples to draw (default of `None` is just a single sample)
+        number of samples to draw (default of ``None`` is just a single sample)
 
     Returns
     -------
     out
-        `PyTree` matching structure of `vars`, but with `torch.tensor` in place
-        of `RV`. If `size` is `None`, then each tensor will have the same shape as the
-        corresponding `RV`. Otherwise, each tensor will have an extra dimension of size
-        `size` appended at the beginning.
+        PyTree matching structure of ``vars``, but with ``torch.tensor`` in place
+        of `RV`. If ``size`` is ``None``, then each tensor will have the same shape as
+        the corresponding ``RV``. Otherwise, each tensor will have an extra dimension
+        of size ``size`` appended at the beginning.
 
     Examples
     --------
@@ -922,13 +922,13 @@ def ancestor_sampler(vars):
     Parameters
     ----------
     vars
-        a pytree of `RV`s to sample
+        a pytree of `RV` to sample
 
 
     Returns
     -------
     out
-        callable to create a sample matching the structure and shape of `vars`
+        callable to create a sample matching the structure and shape of ``vars``
 
 
     Examples
@@ -944,7 +944,7 @@ def ancestor_sampler(vars):
 
     You can do normal torch stuff with it, e.g. vmap. But note that limitations
     in pytorch mean that you must pass some kind of dummy argument and pass
-    `randomness='different'` to get independent samples.
+    ``randomness='different'`` to get independent samples.
 
     >>> print(torch.vmap(lambda dummy: fun(), randomness='different')(torch.ones(3)))
     [{'cat': tensor([1.5000, 1.5000, 1.5000])}, tensor([3., 3., 3.])]
@@ -978,9 +978,9 @@ def ancestor_log_prob(*vars, **kwvars):
     Parameters
     ----------
     vars
-        pytrees of `RV`s
+        pytrees of `RV`
     kwargs
-        more pytrees of `RV`s
+        more pytrees of `RV`
 
     Returns
     -------

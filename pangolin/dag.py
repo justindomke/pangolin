@@ -42,8 +42,9 @@ def upstream_nodes_flat(
     upstream: list[NodeT],
 ):
     """
-    Do a DFS starting at all the nodes in `nodes_flat`. But never visit nodes if
-    `node_block(n)` and never follow an edge from `n` to `p` if `link_block(n,p)`.
+    Do a DFS starting at all the nodes in ``nodes_flat``. But never visit nodes if
+    ``node_block(n)`` and never follow an edge from ``n`` to ``p`` if
+    ``link_block(n,p)``.
 
     Args:
         nodes_flat: starting nodes
@@ -69,18 +70,18 @@ def upstream_nodes(
     edge_block: Callable[..., bool] | None = None,
 ) -> list[NodeT]:  # type: ignore (type checker confused by PyTree[NodeT])
     """
-    Do a DFS of all ancestors starting at all the nodes in `nodes_flat`.
+    Do a DFS of all ancestors starting at all the nodes in ``nodes``.
 
     Args:
         nodes
             Single node or list/pytree of node
         node_block
-            Function defining which nodes to block from inclusion. If `node_block(node)`
-            is True, then `node` is not visited. (Defalt: Don't block.)
+            Function defining which nodes to block from inclusion. If
+            ``node_block(node)`` is True, then ``node`` is not visited. (Defalt: Don't block.)
         edge_block
             Function defining which edges should not be followed.  If
-            `edge_block(node, parent)` is true, then don't follow edge from `node` to
-            `parent`. (Defalt: Don't block)
+            ``edge_block(node, parent)`` is true, then don't follow edge from ``node`` to
+            ``parent``. (Defalt: Don't block)
 
     Returns:
         List of upstream nodes in topological order
@@ -105,9 +106,9 @@ def upstream_with_descendent_old(
     requested_nodes: list[NodeT], given_nodes: list[NodeT]
 ) -> list[NodeT]:
     """
-    First, find all nodes that are upstream (inclusive) of `requested_nodes`
+    First, find all nodes that are upstream (inclusive) of ``requested_nodes``
     Then, find all the nodes that are *downstream* (inclusive) of that set
-    that have a descendant in `given_nodes`
+    that have a descendant in ``given_nodes``
 
     args:
         requested_nodes: nodes to search above
@@ -145,9 +146,9 @@ def upstream_with_descendent(
     requested_nodes: list[NodeT], given_nodes: list[NodeT]
 ) -> list[NodeT]:
     """
-    First, find all nodes that are upstream (inclusive) of `requested_nodes`
+    First, find all nodes that are upstream (inclusive) of ``requested_nodes``
     Then, find all the nodes that are *downstream* (inclusive) of that set
-    that have a descendant in `given_nodes`
+    that have a descendant in ``given_nodes``
     """
 
     all_nodes = upstream_nodes(requested_nodes + given_nodes)
@@ -162,8 +163,8 @@ def get_children(
     Get all children for all upstream nodes
 
     Args:
-        nodes: Starting nodes (as in `get_upstream`)
-        node_block: Block condition (as in `get_upstream`)
+        nodes: Starting nodes (as in ``get_upstream``)
+        node_block: Block condition (as in ``get_upstream``)
 
     Return:
         Dictionary mapping each upstream node to a list of children of that node

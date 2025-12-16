@@ -1,5 +1,5 @@
 dag Module
-=========
+==========
 
 .. automodule:: pangolin.dag
    :members:

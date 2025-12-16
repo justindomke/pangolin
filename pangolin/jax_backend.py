@@ -15,6 +15,7 @@ from jax.scipy import special as jspecial
 from jax import nn as jnn
 from jax import Array as JaxArray
 from pangolin import dag, util
+from jaxtyping import PyTree
 
 __all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 
@@ -515,26 +516,28 @@ def fill_in(
 ################################################################################
 
 
-def ancestor_sample(vars, key: Optional[JaxArray] = None, size: Optional[int] = None):
+def ancestor_sample(
+    vars: PyTree[RV], key: Optional[JaxArray] = None, size: Optional[int] = None
+):
     """
     Draw exact samples!
 
     Parameters
     ----------
-    vars: `PyTree[RV]`
-        a PyTree of `RV` s to sample
+    vars
+        a Pytree of `RV` to sample
     key
-        a JAX `PRNGKey` or `None` (default)
+        a JAX ``PRNGKey`` or ``None`` (default)
     size
-        number of samples to draw (default of `None` is just a single sample)
+        number of samples to draw (default of ``None`` is just a single sample)
 
     Returns
     -------
     out
-        `PyTree` matching structure of `vars`, but with `jax.ndarray` arrays in place
-        of `RV`. If `size` is `None`, then each array will have the same shape as the
-        corresponding `RV`. Otherwise, each array will have an extra dimension of size
-        `size` appended at the beginning.
+        Pytree matching structure of ``vars``, but with ``jax.ndarray`` arrays in place
+        of `RV`. If ``size`` is ``None``, then each array will have the same shape as
+        the corresponding `RV`. Otherwise, each array will have an extra dimension of
+        size ``size`` appended at the beginning.
 
     Examples
     --------
@@ -586,20 +589,20 @@ def ancestor_sample(vars, key: Optional[JaxArray] = None, size: Optional[int] = 
     return unflatten(flat_samps)
 
 
-def ancestor_sampler(vars) -> Callable[[JaxArray], Any]:
+def ancestor_sampler(vars: PyTree[RV]) -> Callable[[JaxArray], Any]:
     """
     Compiles a pytree of RVs into a plain-old JAX function that takes a PNGKey and returns a pytree with the same structure containing a joint sample from the distribution of those RVs.
 
     Parameters
     ----------
-    vars: `PyTree[RV]`
-        a PyTree of `RV` s to sample
+    vars
+        Pytree of `RV` to sample
 
     Returns
     -------
     out
-        function mapping a JAX `PRNGKey` to a sample in the forms of a `PyTree` of
-        `jax.ndarray` matching the structure and shape of `vars`
+        function mapping a JAX ``PRNGKey`` to a sample in the form of a pytree of
+        ``jax.ndarray`` matching the structure and shape of ``vars``
 
 
     Examples
@@ -637,22 +640,22 @@ def ancestor_sampler(vars) -> Callable[[JaxArray], Any]:
     return sampler
 
 
-def ancestor_log_prob(*vars, **kwvars) -> Callable:
+def ancestor_log_prob(*vars: PyTree[RV], **kwvars: PyTree[RV]) -> Callable:
     """
-    Given a pytree of vars, create a plain-old JAX function to compute log_probabilities
+    Given a pytree of vars, create a plain-old JAX function to compute log probabilities
 
     Parameters
     ----------
-    *vars: `PyTree[RV]`
-        pytrees of `RV`s
-    **kwargs: `PyTree[RV]`
-        more pytrees of `RV`s
+    vars
+        pytrees of `RV`
+    kwargs
+        more pytrees of `RV`, given as keyword arguments
 
     Returns
     -------
     out
-        log_prob function that expects `jax.ndarray` arguments matching `vars` and
-        `kwargs` and returning a scalar.
+        log-prob function that expects ``jax.ndarray`` arguments matching ``vars`` and
+        ``kwargs`` and returning a scalar.
 
 
     Examples
@@ -685,7 +688,6 @@ def ancestor_log_prob(*vars, **kwvars) -> Callable:
     >>> fun = ancestor_log_prob(x, cat=y)
     >>> fun(0.0, cat=[0.0, 0.5, 0.1])
     Array(-3.8057542, dtype=...)
-
     """
 
     all_vars = (vars, kwvars)

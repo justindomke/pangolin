@@ -23,6 +23,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    # "sphinx.ext.intersphinx",
     # "sphinx_autodoc_typehints",
     # "myst_parser",
     # "autodoc2",
@@ -69,12 +70,12 @@ napoleon_type_aliases = {
     "PyTree[Node]": "PyTree[Node]",
 }
 
-
 # autodoc options
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 autodoc_inherit_docstrings = False
-
+# autodoc_preserve_defaults = True
+# autodoc_typehints_format = "short"
 
 default_role = "any"
 
@@ -83,6 +84,11 @@ autodoc_type_aliases = {
     "ArrayLike": "ArrayLike",
     "PyTree": "PyTree",
 }
+
+# intersphinx_mapping = {
+#     "python": ("https://docs.python.org/3", None),
+#     "numpy": ("https://numpy.org/doc/stable/", None),
+# }
 
 
 # Options for HTML output

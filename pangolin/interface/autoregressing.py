@@ -170,26 +170,27 @@ def autoregressive(
     ----------
     fun
         Function to call repeatedly to define the distribution.
-        Must take `carry` as the first input.
+        Must take ``carry`` as the first input.
         Must return a single `RV`.
-        Can only create a single *random* RV, which must be the final output.
-        But can create an arbitrary number of *non*-random RVs.
+        Can only create a single *random* `RV`, which must be the final output.
+        But can create an arbitrary number of *non*-random `RV`.
         Can optionally take extra inputs that will be mapped.
     length
-        Length of autoregressive. Can be `None` if any inputs are mapped along some axis.
+        Length of autoregressive. Can be ``None`` if any inputs are mapped along some axis.
     in_axes
-        What axis to map each input other than `carry` over (or `None` if non-mapped).
-        As with `vmap`, can be a `PyTree[RV]` corresponding to the structure of all
-        inputs other than `carry`.
+        What axis to map each input other than ``carry`` over (or ``None`` if
+        non-mapped).
+        As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
+        inputs other than ``carry``.
 
     Returns
     -------
     auto_fun
-        Function that takes some number of PyTrees of `RV` with mapped axes and produces a single `RV[Autoregressive]`
+        Function that takes some number of pytrees of `RV` with mapped axes and produces a single ``RV[Autoregressive]``
 
     Examples
     --------
-    Distribution where `z[i] ~ normal(exp(z[i-1]), 1)`.
+    Distribution where ``z[i] ~ normal(exp(z[i-1]), 1)``.
 
     >>> x = constant(3.3)
     >>> def fun(carry):
@@ -212,7 +213,7 @@ def autoregressive(
     >>> z.op.in_axes
     ()
 
-    Distribution where `z[i] ~ exponential(z[i-1]*y[i])`
+    Distribution where ``z[i] ~ exponential(z[i-1]*y[i])``
 
     >>> x = constant(3.3)
     >>> y = constant([1,2,3])
@@ -295,7 +296,7 @@ def autoregress(length: int | None = None, in_axes: Any = 0) -> Callable:
     length
         the number of repetitions
     in_axes
-        axis to map arguments other than `carry` over
+        axis to map arguments other than ``carry`` over
 
     Examples
     --------

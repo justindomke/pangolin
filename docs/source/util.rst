@@ -1,5 +1,5 @@
 util Module
-=========
+===========
 
 .. automodule:: pangolin.util
    :members:

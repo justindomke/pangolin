@@ -1,11 +1,12 @@
 """
 This module defines a convenient interface to call
-`blackjax <https://blackjax-devs.github.io/blackjax/>`_ 
-to do inference. You could of course just call `jax_backend.ancestor_log_prob` to get
-a plain jax function and then call blackjax yourself. But this module abstracts away 
-all the details.
+`Blackjax <https://blackjax-devs.github.io/blackjax/>`_ 
+to do inference. You could of course just call `pangolin.jax_backend.ancestor_log_prob`
+to get a plain jax function and then call Blackjax yourself. But this module abstracts
+away all the details.
 """
 
+from __future__ import annotations
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
@@ -20,7 +21,7 @@ from typing import (
     Optional,
 )
 from pangolin import ir
-from pangolin.ir import Op, RV
+from pangolin.ir import Op, RV, ArrayLike
 from numpy.typing import ArrayLike
 from numpyro import distributions as dist
 from jax.scipy import special as jspecial
@@ -28,6 +29,7 @@ from jax import nn as jnn
 from pangolin import dag, util
 from pangolin import jax_backend
 import blackjax
+from jaxtyping import PyTree
 
 __all__ = ["sample", "E", "var", "std", "Calculate", "inf_until_match"]
 
@@ -61,7 +63,7 @@ def run_nuts(log_prob, key, initial_state, num_samples):
 def sample_flat(
     vars: list[RV],
     given_vars: list[RV],
-    given_vals: list[ArrayLike],
+    given_vals: list,
     *,
     niter: int,
 ) -> list[jnp.ndarray]:
@@ -76,11 +78,11 @@ def sample_flat(
 
     Parameters
     ----------
-    vars: list[RV]
+    vars
         The RVs you want to sample from
-    given: list[RV]
+    given
         The RVs you want to condition on
-    vals:
+    vals
         The values for the conditioned RVs
     niter: int, optional
         The number of iterations / samples to draw
@@ -175,36 +177,28 @@ class Calculate:
 
     def sample(
         self,
-        vars,
-        given_vars=None,
-        given_vals=None,
+        vars: PyTree[RV],
+        given_vars: PyTree[RV] = None,
+        given_vals: PyTree[ArrayLike] = None,
         reduce_fn: Optional[Callable] = None,
         **options,
     ):
         """
         Draw samples!
 
-        Parameters
-        ----------
-        vars: `PyTree[RV]`
-            A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
-        given_vars: `PyTree[RV]`
-            A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-            Or `None` if no conditioning variables.
-        given_vals: `PyTree[ArrayLike]`
-            An `ArrayLike` or list/tuple of `ArrayLike` or pytree of `ArrayLike`
-            representing observed values. Must match the structure and shape of
-            `given_vars`.
-        reduce_fn
-            Function to apply to each leaf node in samples before returning. This is
-            used to create `E`, `var`, etc. (If `None`, does nothing.)
-        **options
-            extra options to pass to sampler
+        Args:
+            vars: A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
+            given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+                ``None`` indicates no conditioning variables.
+            given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
+                ``ArrayLike`` representing observed values. Must match the structure and
+                shape of ``given_vars``.
+            reduce_fn:  Function to apply to each leaf node in samples before returning.
+                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
+            options: extra options to pass to sampler
 
-        Returns
-        -------
-        samps
-            A `pytree` of JAX arrays matching structure and shape of `vars` but with one
+        Returns:
+            Pytree of JAX arrays matching structure and shape of ``vars`` but with one
             extra dimension at the start, containing the samples.
 
         Examples
@@ -247,31 +241,32 @@ class Calculate:
 
         return unflatten(flat_samps)
 
-    def E(self, vars, given_vars=None, given_vals=None, **options):
+    def E(
+        self,
+        vars: PyTree[RV],
+        given_vars: PyTree[RV] = None,
+        given_vals: PyTree[ArrayLike] = None,
+        **options,
+    ):
         """
         Compute (conditional) expected values. This is just a thin wrapper that calls
         `sample` and then reduces by taking the mean.
 
-        Parameters
-        ----------
-        vars: `PyTree[RV]`
-            A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
-        given_vars: `PyTree[RV]`
-            A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-            Or `None` if no conditioning variables.
-        given_vals: `PyTree[ArrayLike]`
-            An `ArrayLike` or list/tuple of `ArrayLike` or pytree of `ArrayLike`
-            representing observed values. Must match the structure and shape of
-            `given_vars`.
-        **options
-            extra options to pass to sampler
+        Args:
+            vars: A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
+            given_vars:  A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+                ``None`` indicates no conditioning variables.
+            given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
+                ``ArrayLike`` representing observed values. Must match the structure and
+                shape of ``given_vars``.
+            reduce_fn:  Function to apply to each leaf node in samples before returning.
+                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
+            options: extra options to pass to sampler
 
+        Returns:
+            Pytree of JAX arrays matching structure and shape of ``vars``, containing
+                the expectations.
 
-        Returns
-        -------
-        expectations: `PyTree[jnp.ndarray]`
-            A pytree of JAX arrays matching structure and shape of `vars`, containing
-            the expectations.
 
         Examples
         --------
@@ -288,12 +283,24 @@ class Calculate:
             vars, given_vars, given_vals, lambda x: np.mean(x, axis=0), **options
         )
 
-    def var(self, vars, given_vars=None, given_vals=None, **options):
+    def var(
+        self,
+        vars: PyTree[RV],
+        given_vars: PyTree[RV] = None,
+        given_vals: PyTree[ArrayLike] = None,
+        **options,
+    ):
         return self.sample(
             vars, given_vars, given_vals, lambda x: np.var(x, axis=0), **options
         )
 
-    def std(self, vars, given_vars=None, given_vals=None, **options):
+    def std(
+        self,
+        vars: PyTree[RV],
+        given_vars: PyTree[RV] = None,
+        given_vals: PyTree[ArrayLike] = None,
+        **options,
+    ):
         return self.sample(
             vars, given_vars, given_vals, lambda x: np.std(x, axis=0), **options
         )
@@ -303,9 +310,21 @@ default = {"niter": 1000}
 
 calc = Calculate(default)
 sample = calc.sample
+"""
+Default version of `Calculate.sample` that draws 1000 samples.
+"""
 E = calc.E
+"""
+Default version of `Calculate.E` that uses 1000 samples.
+"""
 var = calc.var
+"""
+Default version of `Calculate.var` that uses 1000 samples.
+"""
 std = calc.std
+"""
+Default version of `Calculate.std` that uses 1000 samples.
+"""
 
 
 def inf_until_match(

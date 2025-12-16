@@ -11,7 +11,6 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   simple
    dag
    util
    ir
