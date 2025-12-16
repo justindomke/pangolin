@@ -128,7 +128,7 @@ __all__ = [
     "autoregressive",
     "autoregress",
     "index",
-    "normal",  # type: ignore
+    "normal",
     "normal_prec",
     "lognormal",
     "cauchy",
@@ -157,7 +157,7 @@ __all__ = [
     "arctanh",
     "cos",
     "cosh",
-    "exp",  # type: ignore
+    "exp",
     "inv_logit",
     "expit",
     "sigmoid",
@@ -185,6 +185,7 @@ __all__ = [
     "print_upstream",
     "RVLike",
     "Broadcasting",
+    "Config",
     "config",
     "override",
 ]

@@ -6,7 +6,7 @@ interface Module
    :undoc-members:
    :show-inheritance:
    :special-members: True
-   :exclude-members: InfixRV, Broadcasting, override
+   :exclude-members: InfixRV, Broadcasting, Config, override
 
 .. autoclass:: pangolin.interface.InfixRV
    :members:
@@ -15,7 +15,9 @@ interface Module
 .. autoclass:: pangolin.interface.Broadcasting
    :members:
 
+.. autoclass:: pangolin.interface.Config
+   :members:
+
 .. autodata:: pangolin.interface.config
-   :annotation:
 
 .. autofunction:: pangolin.interface.override
