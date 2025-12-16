@@ -140,7 +140,7 @@ def test_double_vmap_eval():
 
 def test_vmap_eval1():
     "should fail because of incoherent axes sizes"
-    with pi.broadcasting_off():
+    with pi.override(broadcasting="off"):
         try:
             y = vmap_eval_flat(
                 lambda loc, scale: [normal(loc, scale)],

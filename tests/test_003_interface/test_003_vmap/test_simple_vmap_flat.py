@@ -157,7 +157,7 @@ def test_double_nicer():
 
 def test_1():
     "should fail because of incoherent axes sizes"
-    with pi.broadcasting_off():
+    with pi.override(broadcasting="off"):
         try:
             y = vmap_flat(lambda loc, scale: [normal(loc, scale)], (None, None), 5)(
                 np.zeros(3),

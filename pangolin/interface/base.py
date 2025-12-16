@@ -8,14 +8,14 @@ from pangolin import ir
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING
+from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING, get_type_hints
 from pangolin.util import comma_separated, camel_case_to_snake_case
 import inspect
 from typing import Generic, TypeAlias, Final
 import os
 import sys
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
 from contextlib import contextmanager
 
@@ -137,19 +137,18 @@ class Broadcasting(Enum):
 
     Restore to default
 
-    >> pi.config.broadcasting = pi.Broadcasting.SIMPLE
+    >>> pi.config.broadcasting = pi.Broadcasting.SIMPLE
 
     You can also change this behavior temporarily in a code block by using the
-    `broadcasting_off`, `broadcasting_simple`, and `broadcasting_numpy`
-    context managers.
+    `override` context manager.
 
     >>> from pangolin import interface as pi
-    >>> with pi.broadcasting_off():
+    >>> with pi.override(broadcasting="off"):
     ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
     Traceback (most recent call last):
     ...
     ValueError: Normal op got parent shapes ((3,), (5, 3)) not all scalar.
-    >>> with pi.broadcasting_numpy():
+    >>> with pi.override(broadcasting="numpy"):
     ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
     ...     x.shape
     (5, 3)
@@ -165,16 +164,9 @@ class Broadcasting(Enum):
 class Config:
     """Global configuration for Pangolin interface.
 
-    Access via `config`.
-
-    Attributes
-    ----------
-    broadcasting
-        Controls broadcasting behavior for scalar operations.
-        Default: `Broadcasting.OFF`.
-
-    Warning:
-        Do not instantiate this class directly. Use the `config` module attribute.
+    Attributes:
+        broadcasting (Broadcasting): Controls broadcasting behavior for scalar
+            operations. Default: `Broadcasting.OFF`.
 
     See Also
     --------
@@ -184,8 +176,7 @@ class Config:
     broadcasting: Broadcasting = Broadcasting.SIMPLE
 
 
-config: Final[Config] = Config()
-config.__doc__ = """The singleton configuration instance. Use this instead of instantiating `Config`."""
+config: Config = Config()
 
 
 @contextmanager
@@ -193,12 +184,12 @@ def override(**kwargs):
     """
     Temporarily override config values.
 
-    A context manager that sets config values for the duration of
+    A context manager that sets `config` values for the duration of
     the block, then restores the original values on exit.
 
     Args:
-        kwargs: Config attribute names and their temporary values.
-            See :class:`Config` for available options.
+        kwargs: Attribute names and their temporary values.
+            See `config` for available options.
 
     Raises:
         AttributeError: If a key doesn't match a config attribute.
@@ -208,42 +199,29 @@ def override(**kwargs):
         >>> from pangolin.interface import override, Broadcasting
         >>> config.broadcasting
         <Broadcasting.SIMPLE: 'simple'>
-        >>> with override(broadcasting=Broadcasting.OFF):
+        >>> with override(broadcasting="off"):
         ...     config.broadcasting
         <Broadcasting.OFF: 'off'>
         >>> config.broadcasting
         <Broadcasting.SIMPLE: 'simple'>
     """
+    type_hints = get_type_hints(Config)
+
     originals = {}
     for key, value in kwargs.items():
         originals[key] = getattr(config, key)
-        setattr(config, key, value)
+        expected_type = type_hints[key]
+        if isinstance(value, expected_type):
+            setattr(config, key, value)
+        else:
+            cast_value = expected_type(value)
+            setattr(config, key, cast_value)
+
     try:
         yield
     finally:
         for key, value in originals.items():
             setattr(config, key, value)
-
-
-def broadcasting_off():
-    """
-    Temprarily turn scalar broadcasting off. Alias for ``override(broadcasting=Broadcasting.OFF)``
-    """
-    return override(broadcasting=Broadcasting.OFF)
-
-
-def broadcasting_simple():
-    """
-    Temprarily use simple scalar broadcasting. Alias for ``override(broadcasting=Broadcasting.SIMPLE)``
-    """
-    return override(broadcasting=Broadcasting.SIMPLE)
-
-
-def broadcasting_numpy():
-    """
-    Temprarily use numpy-scalar broadcasting. Alias for ``override(broadcasting=Broadcasting.NUMPY)``
-    """
-    return override(broadcasting=Broadcasting.NUMPY)
 
 
 ########################################################################################
@@ -531,12 +509,14 @@ def _scalar_op_doc(OpClass):
 
     __doc__ += """
     
+    All arguments must either be scalar or mutually broadcastable according to the
+
     Args:
     """
 
     for p in expected_parents:
         __doc__ += f"""
-        {p}: {expected_parents[p]}. Must be scalar.
+        {p}: {expected_parents[p]}
     """
 
     __doc__ += f"""

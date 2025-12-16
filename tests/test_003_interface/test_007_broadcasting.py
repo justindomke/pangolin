@@ -35,7 +35,7 @@ def test_unary_op_off():
     from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir, interface
 
-    with interface.broadcasting_off():
+    with interface.override(broadcasting="off"):
 
         for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
 
@@ -57,7 +57,7 @@ def test_unary_op_simple():
     from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir, interface
 
-    with interface.broadcasting_simple():
+    with interface.override(broadcasting="simple"):
 
         for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
 
@@ -74,7 +74,7 @@ def test_unary_op_numpy():
     from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir, interface
 
-    with interface.broadcasting_numpy():
+    with interface.override(broadcasting="numpy"):
         for fun, op in [(exp, ir.Exp()), (bernoulli, ir.Bernoulli())]:
 
             a = constant(0.5)
@@ -90,7 +90,7 @@ def test_binary_op_off():
     from pangolin.interface import add, constant, normal
     from pangolin import ir, interface
 
-    with interface.broadcasting_off():
+    with interface.override(broadcasting="off"):
 
         for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
             a = constant(1)
@@ -119,7 +119,7 @@ def test_binary_op_simple():
     from pangolin.interface import add, constant, normal
     from pangolin import ir, interface
 
-    with interface.broadcasting_simple():
+    with interface.override(broadcasting="simple"):
 
         for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
             a = constant(1)
@@ -146,7 +146,7 @@ def test_binary_op_numpy():
     from pangolin.interface import add, constant, normal
     from pangolin import ir, interface
 
-    with interface.broadcasting_numpy():
+    with interface.override(broadcasting="numpy"):
 
         for fun, op in [(add, ir.Add()), (normal, ir.Normal())]:
             a = constant(1)
@@ -176,7 +176,7 @@ def test_tertiary_op_off():
     from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir, interface
 
-    with interface.broadcasting_off():
+    with interface.override(broadcasting="off"):
 
         for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:
             a = constant(1.5)
@@ -203,7 +203,7 @@ def test_tertiary_op_simple():
     from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir, interface
 
-    with interface.broadcasting_simple():
+    with interface.override(broadcasting="simple"):
 
         for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:
             a = constant(1.5)
@@ -235,7 +235,7 @@ def test_tertiary_op_numpy():
     from pangolin.interface import student_t, beta_binomial, constant
     from pangolin import ir, interface
 
-    with interface.broadcasting_numpy():
+    with interface.override(broadcasting="numpy"):
 
         for fun, op in [(student_t, ir.StudentT()), (beta_binomial, ir.BetaBinomial())]:
             a = constant(1.5)
@@ -261,7 +261,7 @@ def test_autoregressive_broadcasting():
     from pangolin import interface as pi
     from jax import numpy as jnp
 
-    with pi.broadcasting_simple():
+    with pi.override(broadcasting="simple"):
 
         start = jnp.zeros(2)
         scale = pi.constant(1.0)
@@ -281,11 +281,11 @@ def test_broadcasting_manager():
 
     assert pi.config.broadcasting == pi.Broadcasting.SIMPLE
 
-    with pi.broadcasting_off():
+    with pi.override(broadcasting="off"):
         assert pi.config.broadcasting == pi.Broadcasting.OFF
 
-    with pi.broadcasting_simple():
+    with pi.override(broadcasting="simple"):
         assert pi.config.broadcasting == pi.Broadcasting.SIMPLE
 
-    with pi.broadcasting_numpy():
+    with pi.override(broadcasting="numpy"):
         assert pi.config.broadcasting == pi.Broadcasting.NUMPY

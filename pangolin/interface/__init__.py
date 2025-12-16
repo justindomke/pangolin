@@ -185,12 +185,8 @@ __all__ = [
     "print_upstream",
     "RVLike",
     "Broadcasting",
-    "Config",
     "config",
     "override",
-    "broadcasting_off",
-    "broadcasting_simple",
-    "broadcasting_numpy",
 ]
 
 
