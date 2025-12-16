@@ -2,7 +2,7 @@
 This module defines a friendly interface for creating models in the Pangolin IR.
 
 Example
-=======
+-------
 
 Take the following model:
 
@@ -59,11 +59,31 @@ Control flow                 :func:`vmap` :func:`composite` :func:`autoregressiv
 Indexing                     :func:`index` (or :func:`InfixRV.__getitem__` / `[]` operator)
 ============================ ======
 
-Automatic casting of arguments
-------------------------------
+Auto-casting
+------------
 
-See `RVLike`.
+Most functions take `RVLike` arguments, meaning either an `RV` or something that can
+be cast to a NumPy array. In the latter case, it is implicitly cast to a constant RV.
+For example, `categorical` takes an `RVLike` argument, so instead of tediously writin
+this:
 
+>>> probs_list = [0.1, 0.2, 0.7]
+>>> probs_array = np.array(probs_list)
+>>> probs_rv = constant(probs_array)
+>>> x = categorical(probs_rv)
+
+You can simply write:
+
+>>> x = categorical([0.1, 0.2, 0.7])
+
+Broadcasting
+------------
+
+Do you love broadcasting? Do you hate broadcasting? Are you lukewarm about broadcasting?
+Well, good news. In this interface, you can configure how broadcasting works. You can
+use "simple" broadcasting, you can use full NumPy-style broadcasting, or
+you can turn broadcasting off completely. See `Broadcasting` for details.
+ 
 API docs
 ------------------------------
 
@@ -72,7 +92,6 @@ API docs
 from __future__ import annotations
 from .base import *
 from .base import RVLike
-
 
 # from . import vmap
 # from . import vmap
@@ -109,7 +128,7 @@ __all__ = [
     "autoregressive",
     "autoregress",
     "index",
-    "normal",
+    "normal",  # type: ignore
     "normal_prec",
     "lognormal",
     "cauchy",
@@ -138,7 +157,7 @@ __all__ = [
     "arctanh",
     "cos",
     "cosh",
-    "exp",
+    "exp",  # type: ignore
     "inv_logit",
     "expit",
     "sigmoid",
@@ -164,8 +183,14 @@ __all__ = [
     "autoregressing",
     "indexing",
     "print_upstream",
-    "ScalarBroadcasting",
     "RVLike",
+    "Broadcasting",
+    "Config",
+    "config",
+    "override",
+    "broadcasting_off",
+    "broadcasting_simple",
+    "broadcasting_numpy",
 ]
 
 

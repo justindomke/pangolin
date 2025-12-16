@@ -11,10 +11,13 @@ import numpy as np
 from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING
 from pangolin.util import comma_separated, camel_case_to_snake_case
 import inspect
-from typing import Generic, TypeAlias
+from typing import Generic, TypeAlias, Final
 import os
 import sys
 import inspect
+from dataclasses import dataclass
+from enum import Enum
+from contextlib import contextmanager
 
 RVLike: TypeAlias = RV | ArrayLike
 
@@ -27,24 +30,220 @@ RVLike: TypeAlias = RV | ArrayLike
 # config
 ########################################################################################
 
-SCALAR_BROADCASTING = [os.getenv("SCALAR_BROADCASTING", "simple")]
 
-_broadcasting_modes = ["off", "simple", "numpy"]
+class Broadcasting(Enum):
+    """
+    Broadcasting behavior for scalar functions.
+
+    Used to change broadcasting behavior via `config`.
+
+    .. code-block:: python
+
+        >>> config.broadcasting = Broadcasting.OFF    # no broadcasting
+        >>> config.broadcasting = Broadcasting.SIMPLE # simple broadcasting (default)
+        >>> config.broadcasting = Broadcasting.NUMPY  # numpy-style broadcasting
 
 
-class ScalarBroadcasting:
-    def __init__(self, mode):
-        if mode not in _broadcasting_modes:
-            raise ValueError(f"mode must be in {_broadcasting_modes}")
-        self.new_mode = mode  # Store the mode to set
+    Broadcasting applies to "all-scalar" functions where all inputs and outputs are scalar.
+    If broadcasting is set to OFF, all inputs must actually be scalar, and the output is
+    scalar. If broadcasting is set to SIMPLE, then inputs can be non-scalar, but all
+    non-scalar inputs must have *exactly* the same shape, which is the shape of the output
+    If broadcasting is set to NUMPY, then inputs are broadcast against each other
+    NumPy-style and the resulting shape is the shape of the output.
 
-    def __enter__(self):
-        self.old_mode = SCALAR_BROADCASTING[0]  # Store the current global value
-        SCALAR_BROADCASTING[0] = self.new_mode  # Set the global to the new mode
-        return self
+    Suppose `f(a,b,c)` is a scalar function. Then here is how broadcasting behaves:
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        SCALAR_BROADCASTING[0] = self.old_mode
+    +-----------------------------------+--------+----------+-----------+
+    |                                   | Broadcasting mode             |
+    +                                   +--------+----------+-----------+
+    |                                   | OFF    | SIMPLE   | NUMPY     |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `a.shape` | `b.shape` | `c.shape` | `f(a,b,c).shape`              |
+    +===========+===========+===========+========+==========+===========+
+    | `()`      | `()`      | `()`      | `()`   | `()`     | `()`      |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,)`    | `()`      | `()`      | ✖️     | `(5,)`   | `(5,)`    |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,)`    | `(5,)`    | `()`      | ✖️     | `(5,)`   | `(5,)`    |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,)`    | `(5,)`    | `(5,)`    | ✖️     | `(5,)`   | `(5,)`    |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,9)`   | `()`      | `()`      | ✖️     | `(5,9)`  | `(5,9)`   |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,9)`   | `(5,9)`   | `()`      | ✖️     | `(5,9)`  | `(5,9)`   |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,9)`   | `(5,9)`   | `(5,9)`   | ✖️     | `(5,9)`  | `(5,9)`   |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(9,)`    | `(5,9)`   | `()`      | ✖️     | ✖️       | `(5,9)`   |
+    +-----------+-----------+-----------+--------+----------+-----------+
+    | `(5,)`    | `(6,)`    | `()`      | ✖️     | ✖️       | ✖️        |
+    +-----------+-----------+-----------+--------+----------+-----------+
+
+    This interface does not (currently) support automatic broadcasting for non-scalar
+    functions.
+
+
+    Attributes:
+        OFF: No broadcasting at all. Scalar functions only accept scalar arguments.
+        SIMPLE: Simple broadcasting only. Arguments can be any shape, but non-scalar
+            must have exactly the same shape.
+        NUMPY: NumPy-style broadcasting. The only limitation is that broadcasting
+            of singleton dimensions against non-singleton dimensions is not currently
+            supported.
+
+    Examples
+    --------
+
+    No broadcasting
+
+    >>> from pangolin import interface as pi
+    >>> pi.config.broadcasting = pi.Broadcasting.OFF
+    >>> pi.student_t(0,1,1).shape # doctest: +ELLIPSIS
+    ()
+    >>> pi.student_t(0,np.ones(5),1).shape # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+        ...
+    ValueError: StudentT op got parent shapes ((), (5,), ()) not all scalar.
+
+    Simple broadcasting
+
+    >>> pi.config.broadcasting = pi.Broadcasting.SIMPLE
+    >>> pi.student_t(0,1,1).shape
+    ()
+    >>> pi.student_t(0,np.ones(5),1).shape
+    (5,)
+    >>> pi.student_t(0,np.ones((5,3)),1).shape
+    (5, 3)
+    >>> pi.student_t(0,np.ones((5,3)),np.ones((5,3))).shape
+    (5, 3)
+    >>> pi.student_t(0,np.ones(3),np.ones((5,3))).shape
+    Traceback (most recent call last):
+        ...
+    ValueError: Can't broadcast non-matching shapes (5, 3) and (3,)
+
+    NumPy broadcasting
+
+    >>> pi.config.broadcasting = pi.Broadcasting.NUMPY
+    >>> pi.student_t(0,1,1).shape
+    ()
+    >>> pi.student_t(0,np.ones(5),1).shape
+    (5,)
+    >>> pi.student_t(0,np.ones((5,3)),1).shape
+    (5, 3)
+    >>> pi.student_t(0,np.ones((5,3)),np.ones((5,3))).shape
+    (5, 3)
+    >>> pi.student_t(0,np.ones(3),np.ones((5,3))).shape
+    (5, 3)
+
+    Restore to default
+
+    >> pi.config.broadcasting = pi.Broadcasting.SIMPLE
+
+    You can also change this behavior temporarily in a code block by using the
+    `broadcasting_off`, `broadcasting_simple`, and `broadcasting_numpy`
+    context managers.
+
+    >>> from pangolin import interface as pi
+    >>> with pi.broadcasting_off():
+    ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
+    Traceback (most recent call last):
+    ...
+    ValueError: Normal op got parent shapes ((3,), (5, 3)) not all scalar.
+    >>> with pi.broadcasting_numpy():
+    ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
+    ...     x.shape
+    (5, 3)
+
+    """
+
+    OFF = "off"
+    SIMPLE = "simple"
+    NUMPY = "numpy"
+
+
+@dataclass
+class Config:
+    """Global configuration for Pangolin interface.
+
+    Access via `config`.
+
+    Attributes
+    ----------
+    broadcasting
+        Controls broadcasting behavior for scalar operations.
+        Default: `ScalarBroadcasting.OFF`.
+
+    Warning:
+        Do not instantiate this class directly. Use the `config` module attribute.
+
+    See Also
+    --------
+    override : Context manager for temporary config changes.
+    """
+
+    broadcasting: Broadcasting = Broadcasting.SIMPLE
+
+
+config: Final[Config] = Config()
+config.__doc__ = """The singleton configuration instance. Use this instead of instantiating `Config`."""
+
+
+@contextmanager
+def override(**kwargs):
+    """
+    Temporarily override config values.
+
+    A context manager that sets config values for the duration of
+    the block, then restores the original values on exit.
+
+    Args:
+        kwargs: Config attribute names and their temporary values.
+            See :class:`Config` for available options.
+
+    Raises:
+        AttributeError: If a key doesn't match a config attribute.
+        ValueError: If a value is invalid for that config option.
+
+    Example:
+        >>> from pangolin.interface import override, Broadcasting
+        >>> config.broadcasting
+        <Broadcasting.SIMPLE: 'simple'>
+        >>> with override(broadcasting=Broadcasting.OFF):
+        ...     config.broadcasting
+        <Broadcasting.OFF: 'off'>
+        >>> config.broadcasting
+        <Broadcasting.SIMPLE: 'simple'>
+    """
+    originals = {}
+    for key, value in kwargs.items():
+        originals[key] = getattr(config, key)
+        setattr(config, key, value)
+    try:
+        yield
+    finally:
+        for key, value in originals.items():
+            setattr(config, key, value)
+
+
+def broadcasting_off():
+    """
+    Temprarily turn scalar broadcasting off. Alias for `override(broadcasting=Broadcasting.OFF)`
+    """
+    return override(broadcasting=Broadcasting.OFF)
+
+
+def broadcasting_simple():
+    """
+    Temprarily use simple scalar broadcasting. Alias for `override(broadcasting=Broadcasting.SIMPLE)`
+    """
+    return override(broadcasting=Broadcasting.SIMPLE)
+
+
+def broadcasting_numpy():
+    """
+    Temprarily use numpy-scalar broadcasting. Alias for `override(broadcasting=Broadcasting.NUMPY)`
+    """
+    return override(broadcasting=Broadcasting.NUMPY)
 
 
 ########################################################################################
@@ -441,8 +640,9 @@ def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
 
 def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
-    This implements most of numpy-style scalar broadcasting. The only limitation is that broadcasting of singleton dimensions
-    against non-singleton dimensions is not supported.
+    This implements most of numpy-style scalar broadcasting. The only limitation is that
+    broadcasting of singleton dimensions against non-singleton dimensions is not
+    supported.
 
     Parameters
     ----------
@@ -501,27 +701,65 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
     # (will also need to create ir.Squeeze)
 
 
-def scalar_fun_factory(OpClass: type[ScalarOp], /):
+# def scalar_fun_factory(OpClass: type[ScalarOp], /):
+#     import makefun
+
+#     op = OpClass()
+#     expected_parents = op._expected_parents  # type: ignore
+
+#     def fun(*args, **kwargs):
+#         if SCALAR_BROADCASTING[0] == "off":
+#             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
+#         elif SCALAR_BROADCASTING[0] == "simple":
+#             positional_args = args + tuple(kwargs[a] for a in kwargs)
+#             parent_shapes = [get_shape(arg) for arg in positional_args]
+#             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
+#             return create_rv(vmapped_op, *positional_args)
+#         elif SCALAR_BROADCASTING[0] == "numpy":
+#             positional_args = args + tuple(kwargs[a] for a in kwargs)
+#             parent_shapes = [get_shape(arg) for arg in positional_args]
+#             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
+#             return create_rv(vmapped_op, *positional_args)
+#         else:
+#             raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
+
+#     func_sig = (
+#         f"{op.name}"
+#         + comma_separated([f"{a}:'RVLike'" for a in expected_parents])
+#         + " -> InfixRV["
+#         + f"ir.{OpClass.__name__}"
+#         + "]"
+#     )
+
+#     fun = makefun.create_function(
+#         func_sig, fun, dict_globals={"RVLike", RVLike}
+#     )  # useless?
+#     fun.__doc__ = _scalar_op_doc(OpClass)
+#     fun.__module__ = "pangolin.interface"
+#     return fun
+
+
+def scalar_fun_factory(OpClass: type[ScalarOp]):
     import makefun
 
     op = OpClass()
     expected_parents = op._expected_parents  # type: ignore
 
     def fun(*args, **kwargs):
-        if SCALAR_BROADCASTING[0] == "off":
+        if config.broadcasting == Broadcasting.OFF:
             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
-        elif SCALAR_BROADCASTING[0] == "simple":
+        elif config.broadcasting == Broadcasting.SIMPLE:
             positional_args = args + tuple(kwargs[a] for a in kwargs)
             parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
-        elif SCALAR_BROADCASTING[0] == "numpy":
+        elif config.broadcasting == Broadcasting.NUMPY:
             positional_args = args + tuple(kwargs[a] for a in kwargs)
             parent_shapes = [get_shape(arg) for arg in positional_args]
             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
             return create_rv(vmapped_op, *positional_args)
         else:
-            raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
+            raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
 
     func_sig = (
         f"{op.name}"
@@ -541,11 +779,11 @@ def scalar_fun_factory(OpClass: type[ScalarOp], /):
 
 if TYPE_CHECKING:
     # stubs so type-checker doesn't fail on InfixRV
-    def add(a: RVLike, b: RVLike) -> InfixRV: ...
-    def sub(a: RVLike, b: RVLike) -> InfixRV: ...
-    def mul(a: RVLike, b: RVLike) -> InfixRV: ...
-    def div(a: RVLike, b: RVLike) -> InfixRV: ...
-    def pow(a: RVLike, b: RVLike) -> InfixRV: ...
+    def add(a: RVLike, b: RVLike) -> InfixRV[ir.Add]: ...
+    def sub(a: RVLike, b: RVLike) -> InfixRV[ir.Sub]: ...
+    def mul(a: RVLike, b: RVLike) -> InfixRV[ir.Mul]: ...
+    def div(a: RVLike, b: RVLike) -> InfixRV[ir.Div]: ...
+    def pow(a: RVLike, b: RVLike) -> InfixRV[ir.Pow]: ...
 
 
 def _populate_scalar_funs():
@@ -557,8 +795,11 @@ def _populate_scalar_funs():
             and issubclass(cls, ir.ScalarOp)
             and not inspect.isabstract(cls)
         ):
-            print(cls, name)
-            setattr(module, camel_case_to_snake_case(name), scalar_fun_factory(cls))
+            setattr(
+                module,
+                camel_case_to_snake_case(name),
+                scalar_fun_factory(cls),
+            )
 
 
 _populate_scalar_funs()

@@ -11,6 +11,7 @@ from pangolin.interface.vmapping import (
     vmap,
 )
 import numpy as np
+from pangolin import interface as pi
 
 
 def test_vmap_eval_simple():
@@ -139,7 +140,7 @@ def test_double_vmap_eval():
 
 def test_vmap_eval1():
     "should fail because of incoherent axes sizes"
-    with ScalarBroadcasting("off"):
+    with pi.broadcasting_off():
         try:
             y = vmap_eval_flat(
                 lambda loc, scale: [normal(loc, scale)],

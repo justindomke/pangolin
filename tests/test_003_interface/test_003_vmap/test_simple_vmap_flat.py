@@ -12,6 +12,7 @@ from pangolin.interface.vmapping import (
     vmap_flat,
 )
 import numpy as np
+import pangolin.interface as pi
 
 
 def test_simple():
@@ -156,7 +157,7 @@ def test_double_nicer():
 
 def test_1():
     "should fail because of incoherent axes sizes"
-    with ScalarBroadcasting("off"):
+    with pi.broadcasting_off():
         try:
             y = vmap_flat(lambda loc, scale: [normal(loc, scale)], (None, None), 5)(
                 np.zeros(3),
