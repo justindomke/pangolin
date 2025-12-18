@@ -40,7 +40,7 @@ stddevs = [15, 10, 16, 11, 9, 11, 10, 18]
 
 # define model
 mu = pi.normal(0,10)                                             # μ ~ normal(0,10)
-tau = pi.exp(pg.normal(5,1))                                     # τ ~ lognormal(5,1)
+tau = pi.exp(pi.normal(5,1))                                     # τ ~ lognormal(5,1)
 theta = [pi.normal(mu,tau) for i in range(num_schools)]          # θ[i] ~ normal(μ,τ)
 y = [pi.normal(theta[i],stddevs[i]) for i in range(num_schools)] # y[i] ~ normal(θ[i],stddevs[i])
 
