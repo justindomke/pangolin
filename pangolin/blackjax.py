@@ -305,6 +305,42 @@ class Calculate:
             vars, given_vars, given_vals, lambda x: np.std(x, axis=0), **options
         )
 
+    def sample_arviz(
+        self,
+        vars: dict[str, RV],
+        given_vars: PyTree[RV] = None,
+        given_vals: PyTree[ArrayLike] = None,
+        **options,
+    ):
+        """This is an **experimental** function to draw samples in
+        `ArviZ <https://www.arviz.org/en/latest/>`__ format.
+
+        Note: ArviZ is not installed with pangolin by default: You must install it
+        manually.
+
+        Args:
+            vars: dictionary mapping names to individual random variables
+                given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+                ``None`` indicates no conditioning variables.
+            given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
+                given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
+                ``ArrayLike`` representing observed values. Must match the structure and
+                shape of ``given_vars``.
+            reduce_fn:  Function to apply to each leaf node in samples before returning.
+                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
+            options: extra options to pass to sampler
+        """
+
+        try:
+            from arviz import convert_to_inference_data
+        except ImportError:
+            raise ImportError("To use this method you must install arviz manually")
+
+        samps = self.sample(vars, given_vars, given_vals, **options)
+        samps_with_none = {key: samps[key][None, ...] for key in samps}
+        dataset = convert_to_inference_data(samps_with_none)
+        return dataset
+
 
 default = {"niter": 1000}
 
@@ -324,6 +360,11 @@ Default version of `Calculate.var` that uses 1000 samples.
 std = calc.std
 """
 Default version of `Calculate.std` that uses 1000 samples.
+"""
+
+sample_arviz = calc.sample_arviz
+"""
+Default version of `Calculate.sample_arviz` that uses 1000 samples.
 """
 
 
