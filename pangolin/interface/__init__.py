@@ -54,7 +54,7 @@ Other scalar functions       :func:`pow` (or infix ``**``) :func:`sqrt` :func:`a
 Linear algebra               :func:`matmul` (or infix ``@``) :func:`inv`
 Other multivariate functions :func:`sum` :func:`softmax`
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
-Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet`
+Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
 Control flow                 :func:`vmap` :func:`composite` :func:`autoregressive` :func:`autoregress`
 Indexing                     :func:`index` (or :func:`InfixRV.__getitem__` / ``[]`` operator)
 ============================ ======
@@ -173,6 +173,7 @@ __all__ = [
     "categorical",
     "multinomial",
     "dirichlet",
+    "wishart",
     "matmul",
     "inv",
     "softmax",

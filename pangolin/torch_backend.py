@@ -114,6 +114,7 @@ simple_dists: dict[Type[Op], Callable] = {
     ir.Poisson: wrap(dist.Poisson),
     ir.StudentT: wrap(dist.StudentT),
     ir.Uniform: wrap(dist.Uniform),
+    ir.Wishart: wrap(dist.Wishart),
 }
 
 ################################################################################

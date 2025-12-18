@@ -80,6 +80,7 @@ simple_dists: dict[Type[Op], Callable] = {
     ir.Poisson: dist.Poisson,
     ir.StudentT: dist.StudentT,
     ir.Uniform: dist.Uniform,
+    ir.Wishart: dist.Wishart,
 }
 
 ################################################################################

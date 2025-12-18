@@ -958,3 +958,18 @@ def dirichlet(alpha: RVLike) -> RV[ir.Dirichlet]:
         concentration (vector of positive numbers)
     """
     return create_rv(ir.Dirichlet(), alpha)
+
+
+def wishart(nu: RVLike, S: RVLike) -> RV[ir.Wishart]:
+    """
+    Create a
+    `Wishart <https://en.wikipedia.org/wiki/Wishar_distribution>`__
+    distributed random variable.
+
+    Args:
+        nu: degress of freedom (scalar)
+        S: scale matrix (symmetric posisitive definite)
+
+    """
+    # TODO: Support regular / inverse / cholesky wishart
+    return create_rv(ir.Wishart(), nu, S)

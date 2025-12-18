@@ -887,6 +887,29 @@ class Dirichlet(OpRandom):
         return concentration_shape
 
 
+class Wishart(OpRandom):
+    """
+    Create a Wishart op. Takes no parameters.
+
+    When used in an RV, expects two parameters: nu (degrees of freedom, scalar) and
+    S (symmetric positive-definite scale matrix)
+    """
+
+    def __init__(self):
+        """ """
+        super().__init__()
+
+    def get_shape(self, nu_shape: Shape, S_shape: Shape) -> Shape:
+        """ """
+        if nu_shape != ():
+            raise ValueError("degrees of freedom for Wishart must be scalar.")
+
+        if len(S_shape) != 2:
+            raise ValueError("scale for Wishart must be square.")
+
+        return S_shape
+
+
 ################################################################################
 # VMap
 ################################################################################

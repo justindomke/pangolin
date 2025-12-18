@@ -1,3 +1,5 @@
+**2025.12.18:** Add Wishart
+
 **2025.12.16:** Improve typing + API docs, clear interface+docs for user-configuration of broadcasting 
 
 **2025.12.12:** Update API docs to use Sphinx, be somewhat less chaotic.
