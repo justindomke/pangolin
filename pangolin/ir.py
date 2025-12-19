@@ -49,7 +49,7 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Type, Sequence, Self, Literal, Tuple, Any, cast
+from typing import Type, Sequence, Self, Literal, Tuple, Any, cast, TYPE_CHECKING
 from collections.abc import Callable
 from pangolin import util, dag
 import numpy as np
@@ -446,41 +446,104 @@ def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarO
 
 
 ################################################################################
+# type checking block to aid static typing
+################################################################################
+
+if TYPE_CHECKING:
+    "Stubs for type checkers"
+
+    class ConcreteScalarOp(ScalarOp):
+        """
+        Convinces type checker that all necessary stuff is implemented.
+        """
+
+        def random(self): ...
+        def _num_parents(self): ...
+
+    class Add(ConcreteScalarOp): ...
+
+    class Sub(ConcreteScalarOp): ...
+
+    class Mul(ConcreteScalarOp): ...
+
+    class Div(ConcreteScalarOp): ...
+
+    class Pow(ConcreteScalarOp): ...
+
+    class Arccos(ConcreteScalarOp): ...
+
+    class Arccosh(ConcreteScalarOp): ...
+
+    class Arcsin(ConcreteScalarOp): ...
+
+    class Arcsinh(ConcreteScalarOp): ...
+
+    class Arctan(ConcreteScalarOp): ...
+
+    class Arctanh(ConcreteScalarOp): ...
+
+    class Cos(ConcreteScalarOp): ...
+
+    class Cosh(ConcreteScalarOp): ...
+
+    class Sin(ConcreteScalarOp): ...
+
+    class Sinh(ConcreteScalarOp): ...
+
+    class Tan(ConcreteScalarOp): ...
+
+    class Tanh(ConcreteScalarOp): ...
+
+    class Abs(ConcreteScalarOp): ...
+
+    class Exp(ConcreteScalarOp): ...
+
+    class InvLogit(ConcreteScalarOp): ...
+
+    class Log(ConcreteScalarOp): ...
+
+    class Logit(ConcreteScalarOp): ...
+
+    class Loggamma(ConcreteScalarOp): ...
+
+    class Step(ConcreteScalarOp): ...
+
+
+################################################################################
 # Arithmetic
 ################################################################################
 
-Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)
-Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)
-Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)
-Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)
-Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)
+Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)  # type: ignore
+Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)  # type: ignore
+Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)  # type: ignore
+Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)  # type: ignore
+Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)  # type: ignore
 
 ################################################################################
 # Trigonometry
 ################################################################################
 
-Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)
-Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)
-Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)
-Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)
-Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)
-Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)
-Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)
-Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)
-Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)
-Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)
-Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)
-Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)
-
+Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)  # type: ignore
+Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)  # type: ignore
+Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)  # type: ignore
+Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)  # type: ignore
+Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)  # type: ignore
+Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)  # type: ignore
+Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)  # type: ignore
+Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)  # type: ignore
+Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)  # type: ignore
+Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)  # type: ignore
+Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)  # type: ignore
+Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)  # type: ignore
 
 ################################################################################
 # Other scalar functions
 ################################################################################
 
-Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)
-Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)
-InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)
-Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)
+Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)  # type: ignore
+Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)  # type: ignore
+InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)  # type: ignore
+Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)  # type: ignore
 Loggamma = _scalar_op_factory(
     name="Loggamma",
     random=False,
@@ -488,9 +551,9 @@ Loggamma = _scalar_op_factory(
     notes=[
         "Do we want `scipy.special.loggamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html>`__ or `scipy.special.gammaln <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html>`__? These are different!"
     ],
-)
-Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)
-Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)
+)  # type: ignore
+Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)  # type: ignore
+Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)  # type: ignore
 
 ################################################################################
 # Linear Algebra
