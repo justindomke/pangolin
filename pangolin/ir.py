@@ -49,7 +49,7 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Sequence, Callable, cast
+from typing import Sequence, Callable, Self, cast
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
@@ -95,7 +95,8 @@ class Op(ABC):
     """
 
     _frozen = False
-    _random: bool | Callable[..., bool]
+    _random: bool | Callable[[Self], bool]
+    _get_shape: Callable[..., Shape]
 
     def __init__(self):
         self._frozen = True  # freeze after init
@@ -110,7 +111,6 @@ class Op(ABC):
         else:
             return self._random
 
-    @abstractmethod
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         Given the shapes of parents, what is the shape of the output of this Op?
@@ -125,7 +125,7 @@ class Op(ABC):
             TypeError: If an incorrect number of parents are provided.
             ValueError: If the shapes of the parents are incoherent.
         """
-        pass
+        return self._get_shape(*parents_shapes)
 
     def __eq__(self, other: Op) -> bool:
         """
@@ -187,27 +187,31 @@ class Op(ABC):
         )
 
         if not is_abstract:
-            # check that _random was defined
             if not hasattr(cls, "_random"):
                 raise TypeError(f"Class '{cls.__name__}' must define '_random'.")
 
+            if not hasattr(cls, "_get_shape"):
+                raise TypeError(f"Class '{cls.__name__}' must define '_get_shape'.")
+
             if isinstance(cls._random, bool):
-                # cls.random.__doc__ = f"{cls._random}"
-                def random_getter(self) -> bool:
+
+                def random_getter(self: Self) -> bool:
                     return cast(bool, cls._random)
 
                 random_prop = property(random_getter)
                 random_prop.__doc__ = f"{cls._random}"
-                setattr(cls, "random", random_prop)
             elif isinstance(cls._random, Callable):
-                random_getter = cls._random
-                random_prop = property(random_getter)
+                random_prop = property(cls._random)
                 random_prop.__doc__ = cls._random.__doc__
-                setattr(cls, "random", random_prop)
             else:
                 raise TypeError(
                     f"Class '{cls.__name__}' has '_random' neither bool nor Callable."
                 )
+
+            setattr(cls, "random", random_prop)
+
+            setattr(cls, "get_shape", cls._get_shape)
+            # cls.get_shape.__doc__ = cls._get_shape.__doc__
 
 
 ################################################################################
@@ -236,7 +240,7 @@ class Constant(Op):
         self.value.flags.writeable = False  # make value immutable
         super().__init__()
 
-    def get_shape(self, *parents_shapes: Shape) -> Shape:
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         If ``len(parents_shapes)>0``, raises ``ValueError``. Otherwise, returns the
         shape of ``value``.
@@ -321,7 +325,16 @@ class ScalarOp(Op, ABC):
         else:
             return len(self._expected_parents)
 
-    def get_shape(self, *parents_shapes: Shape) -> Shape:
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
+        """
+        Checks that correct number of parents are given and each has shape ``()``.
+        Always returns ``()``
+
+        Raises:
+            TypeError: Incorrect number of parents
+            ValueError: Parent shapes not all ``()``.
+        """
+
         if len(parents_shapes) != self._num_parents:
             raise TypeError(
                 f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
@@ -593,7 +606,7 @@ class Matmul(Op):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, a_shape: Shape, b_shape: Shape) -> Shape:
+    def _get_shape(self, a_shape: Shape, b_shape: Shape) -> Shape:
         """
         Get the shape of applying a matmul to given shapes.
 
@@ -674,7 +687,7 @@ class Inv(Op):
         """"""
         super().__init__()
 
-    def get_shape(self, *parents):
+    def _get_shape(self, *parents):
         assert len(parents) == 1
         p_shape = parents[0]
         assert len(p_shape) == 2, "inverse only applies to 2d arrays"
@@ -697,7 +710,7 @@ class Softmax(Op):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, *parents):
+    def _get_shape(self, *parents):
         assert len(parents) == 1
         p_shape = parents[0]
         assert len(p_shape) == 1, "input to softmax would be 1d"
@@ -724,7 +737,7 @@ class Sum(Op):
         self.axis = axis
         super().__init__()
 
-    def get_shape(self, x_shape):
+    def _get_shape(self, x_shape):
         if self.axis is None:
             return ()
         else:
@@ -819,7 +832,7 @@ class Gamma(ScalarOp):
     _random = True
     _expected_parents = {"alpha": "shape", "beta": "rate / inverse scale"}
     _notes = [
-        'This follows ` stan <https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution>`__ in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
+        'This follows `Stan <https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution>`__ in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
     ]
 
 
@@ -856,7 +869,7 @@ class StudentT(ScalarOp):
 ################################################################################
 
 
-class VecMatOp(Op):
+class VecMatOp(Op, ABC):
     """
     Convenience class to create "vec mat" distributions that take as input a vector of
     length N, a matrix of size NxN and is a vector of length N. Takes no parameters.
@@ -867,8 +880,7 @@ class VecMatOp(Op):
     def __init__(self):
         super().__init__()
 
-    # def get_shape(self, vec_shape: Shape, mat_shape: Shape) -> Shape:
-    def get_shape(self, *parents_shapes: Shape) -> Shape:
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
         if len(parents_shapes) != 2:
             raise TypeError("VecMatOp expected 2 parents")
         vec_shape, mat_shape = parents_shapes
@@ -909,7 +921,7 @@ class Categorical(Op):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, weights_shape: Shape) -> Shape:
+    def _get_shape(self, weights_shape: Shape) -> Shape:
         assert isinstance(weights_shape, tuple)
         if len(weights_shape) != 1:
             raise ValueError(
@@ -934,7 +946,7 @@ class Multinomial(Op):
     def __init__(self):
         super().__init__()
 
-    def get_shape(self, n_shape: Shape, p_shape: Shape) -> Shape:
+    def _get_shape(self, n_shape: Shape, p_shape: Shape) -> Shape:
 
         if n_shape != ():
             raise ValueError("First input to Multinomial op must be scalar")
@@ -955,7 +967,7 @@ class Dirichlet(Op):
         """ """
         super().__init__()
 
-    def get_shape(self, concentration_shape: Shape) -> Shape:
+    def _get_shape(self, concentration_shape: Shape) -> Shape:
         """ """
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
@@ -976,7 +988,7 @@ class Wishart(Op):
         """ """
         super().__init__()
 
-    def get_shape(self, nu_shape: Shape, S_shape: Shape) -> Shape:
+    def _get_shape(self, nu_shape: Shape, S_shape: Shape) -> Shape:
         """ """
         if nu_shape != ():
             raise ValueError("degrees of freedom for Wishart must be scalar.")
@@ -1099,15 +1111,7 @@ class VMap(Op):
         # self._random = base_op.random
         super().__init__()
 
-    # @property
-    # def random(self) -> bool:
-    #     """
-    #     Equal to ``base_op.random``
-    #     """
-
-    #     return self._random
-
-    def get_shape(self, *parents_shapes: Shape) -> Shape:
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         Expects shapes corresponding to the shapes expected by ``base_op`` but with
         extra axes as dictated by ``axis_size``.
@@ -1196,16 +1200,13 @@ class Composite(Op):
         # self._random = ops[-1].random
         super().__init__()
 
-    # def random(self):
-    #     return self._random
-
     def _random(self):
         """
         Equal to ``ops[-1].random``
         """
         return self.ops[-1].random
 
-    def get_shape(self, *parents_shapes):
+    def _get_shape(self, *parents_shapes):
         all_shapes = list(parents_shapes)
         for my_op, my_par_nums in zip(self.ops, self.par_nums):
             my_parents_shapes = [all_shapes[i] for i in my_par_nums]
@@ -1250,13 +1251,6 @@ class Composite(Op):
 class Autoregressive(Op):
     """Represents an autoregressive distribution"""
 
-    def _random(self) -> bool:
-        """
-        Equal to ``self.base_op.random``
-        """
-
-        return self.base_op.random
-
     def __init__(
         self,
         base_op: Op,
@@ -1283,11 +1277,14 @@ class Autoregressive(Op):
         # self._random = base_op.random
         super().__init__()
 
-    # @property
-    # def random(self):
-    #     return self._random
+    def _random(self) -> bool:
+        """
+        Equal to ``self.base_op.random``
+        """
 
-    def get_shape(self, start_shape, *other_shapes):
+        return self.base_op.random
+
+    def _get_shape(self, start_shape, *other_shapes):
         # const_shapes = other_shapes[: self.num_constants]
         # other_shapes = other_shapes[self.num_constants :]
 
@@ -1486,7 +1483,7 @@ class Index(Op):
         else:
             return True
 
-    def get_shape(self, var_shape, *indices_shapes):
+    def _get_shape(self, var_shape, *indices_shapes):
         if len(self.slices) != len(var_shape):
             raise Exception("number of slots doesn't match number of dims of var")
 
@@ -1645,7 +1642,7 @@ class SimpleIndex(Op):
         """
         super().__init__()
 
-    def get_shape(self, *shapes):
+    def _get_shape(self, *shapes):
         var_shape, *indices_shapes = shapes
 
         num_indexed = len(indices_shapes)

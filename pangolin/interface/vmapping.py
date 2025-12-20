@@ -43,7 +43,7 @@ class AbstractOp(Op):
         self.shape = shape
         super().__init__()
 
-    def get_shape(self, *parents_shapes):
+    def _get_shape(self, *parents_shapes):
         return self.shape
 
     def __eq__(self, other):
