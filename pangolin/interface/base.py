@@ -498,7 +498,9 @@ def create_rv(op: OpU, *args) -> InfixRV[OpU]:
 
 def _scalar_op_doc(OpClass):
     op = OpClass
-    expected_parents = op._expected_parents
+    # expected_parents = op._expected_parents
+    op_info = ir._OpInfo(OpClass)
+    expected_parents = op_info.expected_parents
 
     if op.random:
         __doc__ = f"Creates a {str(OpClass.__name__)} distributed RV."
@@ -508,7 +510,7 @@ def _scalar_op_doc(OpClass):
     __doc__ += """
     
     All arguments must either be scalar or mutually broadcastable according to
-    `config.broadcasting`
+    ``config.broadcasting``
 
     Args:
     """
@@ -722,7 +724,8 @@ def scalar_fun_factory(OpClass: type[ScalarOp]):
     import makefun
 
     op = OpClass()
-    expected_parents = op._expected_parents  # type: ignore
+    op_info = ir._OpInfo(OpClass)
+    expected_parents = op_info.expected_parents
 
     def fun(*args, **kwargs):
         if config.broadcasting == Broadcasting.OFF:
@@ -740,9 +743,11 @@ def scalar_fun_factory(OpClass: type[ScalarOp]):
         else:
             raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
 
+    op_info = ir._OpInfo(OpClass)
+
     func_sig = (
         f"{op.name}"
-        + comma_separated([f"{a}:'RVLike'" for a in expected_parents])
+        + comma_separated([f"{a}:'RVLike'" for a in op_info.expected_parents])
         + " -> InfixRV["
         + f"ir.{OpClass.__name__}"
         + "]"
@@ -805,6 +810,7 @@ def _populate_scalar_funs():
         if (
             isinstance(cls, type)
             and issubclass(cls, ir.ScalarOp)
+            and not cls == ir.ScalarOp
             and not inspect.isabstract(cls)
         ):
             setattr(

@@ -49,12 +49,12 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Type, Sequence, Self, Literal, Tuple, Any, cast, TYPE_CHECKING
-from collections.abc import Callable
+from typing import Sequence
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
 from jaxtyping import PyTree
+
 
 Shape = tuple[int, ...]
 """
@@ -146,6 +146,26 @@ class Op(ABC):
     def name(self) -> str:
         "Returns the name of the op class as a string"
         return type(self).__name__
+
+    @property
+    def is_invertible(self) -> bool:
+        "Can this function be inverted?"
+        return False
+
+    @property
+    def invert(self) -> "Op":
+        """
+        Get the inverse of this Op.
+
+        Returns:
+            Inverse op
+
+        Raises:
+            NotImplementedError: If this op is not invertible.
+        """
+        raise NotImplementedError(
+            f"An op of type {type(self).__name__} is not invertible."
+        )
 
     def __repr__(self):
         return self.name + "()"
@@ -274,13 +294,23 @@ class Constant(OpNonrandom):
 
 class ScalarOp(Op):
     """
-    An `Op` expecting scalar inputs and producing a single scalar output.
+    New scalar ops
     """
 
+    _expected_parents: int | dict[str, str]
+    _random: bool
+    _wikipedia: str | None = None
+    _notes: list[str] = []
+
+    def __init__(self):
+        super().__init__()
+
     @property
-    @abstractmethod
     def _num_parents(self) -> int:
-        pass
+        if isinstance(self._expected_parents, int):
+            return self._expected_parents
+        else:
+            return len(self._expected_parents)
 
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         if len(parents_shapes) != self._num_parents:
@@ -299,6 +329,30 @@ class ScalarOp(Op):
     def __hash__(self):
         return hash((self.name, self.random, self._num_parents))
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        def random_getter(self):
+            return cls._random
+
+        random_prop = property(random_getter)
+        random_prop.__doc__ = f"{cls._random}"
+        setattr(cls, "random", random_prop)
+
+        op_info = _OpInfo(cls)
+
+        cls.__doc__ = _get_scalar_op_docstring(op_info)
+
+        # cls.__doc__ = f"""Create a {cls.__name__} `Op`. Takes no parameters. When used in an RV, expects\
+        #        {cls._num_parents} scalar parent(s):"""
+
+        # if cls._wikipedia:
+        #    s += f"`wikipedia definition <{op_info.wikipedia}>`__\n"
+
+    @property
+    def random(self) -> bool:
+        return self._random
+
 
 ################################################################################
 # Create scalar Ops
@@ -314,14 +368,13 @@ def _generate_expected_parents(num_parents: int) -> dict[str, str]:
 
 
 class _OpInfo:
-    def __init__(
-        self,
-        name,
-        random,
-        expected_parents: int | dict[str, str],
-        wikipedia=None,
-        notes=[],
-    ):
+    def __init__(self, cls: type[ScalarOp]):
+        random = cls._random
+        name = cls.__name__
+        expected_parents = cls._expected_parents
+        wikipedia = cls._wikipedia
+        notes = cls._notes
+
         self.name = name
         self.random = random
         self.notes = notes
@@ -330,6 +383,8 @@ class _OpInfo:
             self.expected_parents = _generate_expected_parents(expected_parents)
         else:
             self.expected_parents = expected_parents
+
+        assert isinstance(self.expected_parents, dict)
 
         if random:
             if wikipedia:
@@ -384,176 +439,141 @@ Examples
     return s
 
 
-def _scalar_op_factory(name, random, expected_parents, **kwargs) -> Type[ScalarOp]:
-    op_info = _OpInfo(
-        name=name, random=random, expected_parents=expected_parents, **kwargs
-    )
-    name = op_info.name
-    random = op_info.random
-    notes = op_info.notes
-    expected_parents = op_info.expected_parents
-    num_parents = len(expected_parents)
-
-    def __init__(self):
-        ScalarOp.__init__(self)
-
-    @property
-    def prop_num_parents(self) -> int:
-        return num_parents
-
-    prop_num_parents.__doc__ = f"{num_parents}"
-
-    @property
-    def prop_random(self) -> bool:
-        return random
-
-    prop_random.__doc__ = f"{random}"
-
-    # __init__.__doc__ = f"""
-    # Create a {name} op. Takes no arguments.
-    # """
-
-    __doc__ = _get_scalar_op_docstring(op_info)
-
-    MyClass = type(
-        name,
-        (ScalarOp,),
-        {
-            "__init__": __init__,
-            "__doc__": __doc__,
-            "_expected_parents": expected_parents,
-            "random": prop_random,
-            "_num_parents": prop_num_parents,
-            # "_num_parents": num_parents,
-            "_notes": notes,
-            # "__qualname__": f"ScalarOp.{name}",  # crucial for docs?
-            "__module__": "pangolin.ir",
-        },
-    )
-
-    # # this also seems to be OK
-    # class MyClass(ScalarOp):
-    #     def __init__(self):
-    #         self._expected_parents = expected_parents
-    #         ScalarOp.__init__(self, random, num_parents)
-
-    # MyClass.__init__.__doc__ = f"Create a {name} op. Takes no arguments."
-    # MyClass.__name__ = name
-    # MyClass.__qualname__ = f"ScalarOp.{name}" # crucial for docs!
-    # MyClass.__doc__ = _get_scalar_op_docstring(op_info)
-
-    return MyClass
-
-
-################################################################################
-# type checking block to aid static typing
-################################################################################
-
-if TYPE_CHECKING:
-    "Stubs for type checkers"
-
-    class ConcreteScalarOp(ScalarOp):
-        """
-        Convinces type checker that all necessary stuff is implemented.
-        """
-
-        def random(self): ...
-        def _num_parents(self): ...
-
-    class Add(ConcreteScalarOp): ...
-
-    class Sub(ConcreteScalarOp): ...
-
-    class Mul(ConcreteScalarOp): ...
-
-    class Div(ConcreteScalarOp): ...
-
-    class Pow(ConcreteScalarOp): ...
-
-    class Arccos(ConcreteScalarOp): ...
-
-    class Arccosh(ConcreteScalarOp): ...
-
-    class Arcsin(ConcreteScalarOp): ...
-
-    class Arcsinh(ConcreteScalarOp): ...
-
-    class Arctan(ConcreteScalarOp): ...
-
-    class Arctanh(ConcreteScalarOp): ...
-
-    class Cos(ConcreteScalarOp): ...
-
-    class Cosh(ConcreteScalarOp): ...
-
-    class Sin(ConcreteScalarOp): ...
-
-    class Sinh(ConcreteScalarOp): ...
-
-    class Tan(ConcreteScalarOp): ...
-
-    class Tanh(ConcreteScalarOp): ...
-
-    class Abs(ConcreteScalarOp): ...
-
-    class Exp(ConcreteScalarOp): ...
-
-    class InvLogit(ConcreteScalarOp): ...
-
-    class Log(ConcreteScalarOp): ...
-
-    class Logit(ConcreteScalarOp): ...
-
-    class Loggamma(ConcreteScalarOp): ...
-
-    class Step(ConcreteScalarOp): ...
-
-
 ################################################################################
 # Arithmetic
 ################################################################################
 
-Add = _scalar_op_factory(name="Add", random=False, expected_parents=2)  # type: ignore
-Sub = _scalar_op_factory(name="Sub", random=False, expected_parents=2)  # type: ignore
-Mul = _scalar_op_factory(name="Mul", random=False, expected_parents=2)  # type: ignore
-Div = _scalar_op_factory(name="Div", random=False, expected_parents=2)  # type: ignore
-Pow = _scalar_op_factory(name="Pow", random=False, expected_parents=2)  # type: ignore
+
+class Add(ScalarOp):
+    _expected_parents = 2
+    _random = False
+
+
+class Sub(ScalarOp):
+    _expected_parents = 2
+    _random = False
+
+
+class Mul(ScalarOp):
+    _expected_parents = 2
+    _random = False
+
+
+class Div(ScalarOp):
+    _expected_parents = 2
+    _random = False
+
+
+class Pow(ScalarOp):
+    _expected_parents = 2
+    _random = False
+
 
 ################################################################################
 # Trigonometry
 ################################################################################
 
-Arccos = _scalar_op_factory(name="Arccos", random=False, expected_parents=1)  # type: ignore
-Arccosh = _scalar_op_factory(name="Arccosh", random=False, expected_parents=1)  # type: ignore
-Arcsin = _scalar_op_factory(name="Arcsin", random=False, expected_parents=1)  # type: ignore
-Arcsinh = _scalar_op_factory(name="Arcsinh", random=False, expected_parents=1)  # type: ignore
-Arctan = _scalar_op_factory(name="Arctan", random=False, expected_parents=1)  # type: ignore
-Arctanh = _scalar_op_factory(name="Arctanh", random=False, expected_parents=1)  # type: ignore
-Cos = _scalar_op_factory(name="Cos", random=False, expected_parents=1)  # type: ignore
-Cosh = _scalar_op_factory(name="Cosh", random=False, expected_parents=1)  # type: ignore
-Sin = _scalar_op_factory(name="Sin", random=False, expected_parents=1)  # type: ignore
-Sinh = _scalar_op_factory(name="Sinh", random=False, expected_parents=1)  # type: ignore
-Tan = _scalar_op_factory(name="Tan", random=False, expected_parents=1)  # type: ignore
-Tanh = _scalar_op_factory(name="Tanh", random=False, expected_parents=1)  # type: ignore
+
+class Arccos(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Arccosh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Arcsin(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Arcsinh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Arctan(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Arctanh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Cos(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Cosh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Sin(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Sinh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Tan(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
+
+class Tanh(ScalarOp):
+    _expected_parents = 1
+    _random = False
+
 
 ################################################################################
 # Other scalar functions
 ################################################################################
 
-Abs = _scalar_op_factory(name="Abs", random=False, expected_parents=1)  # type: ignore
-Exp = _scalar_op_factory(name="Exp", random=False, expected_parents=1)  # type: ignore
-InvLogit = _scalar_op_factory(name="InvLogit", random=False, expected_parents=1)  # type: ignore
-Log = _scalar_op_factory(name="Log", random=False, expected_parents=1)  # type: ignore
-Loggamma = _scalar_op_factory(
-    name="Loggamma",
-    random=False,
-    expected_parents=1,
-    notes=[
-        "Do we want `scipy.special.loggamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.loggamma.html>`__ or `scipy.special.gammaln <https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.gammaln.html>`__? These are different!"
-    ],
-)  # type: ignore
-Logit = _scalar_op_factory(name="Logit", random=False, expected_parents=1)  # type: ignore
-Step = _scalar_op_factory(name="Step", random=False, expected_parents=1)  # type: ignore
+
+class Abs(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class Exp(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class InvLogit(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class Log(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class Logit(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class Step(ScalarOp):
+    _random = False
+    _expected_parents = 1
+
+
+class Loggamma(ScalarOp):
+    _random = False
+    _expected_parents = 1
+    _notes = ["Do we want ``scipy.special.loggamma`` or ``scipy.special.gammaln``?"]
+
 
 ################################################################################
 # Linear Algebra
@@ -730,121 +750,105 @@ class Sum(OpNonrandom):
 ################################################################################
 
 
-Normal = _scalar_op_factory(
-    name="Normal",
-    random=True,
-    expected_parents={
+class Normal(ScalarOp):
+    _random = True
+    _expected_parents = {
         "mu": "location / mean",
         "sigma": "scale / standard deviation",
-    },
-)
+    }
 
-NormalPrec = _scalar_op_factory(
-    name="NormalPrec",
-    random=True,
-    expected_parents={
+
+class NormalPrec(ScalarOp):
+    _random = True
+    _expected_parents = {
         "mu": "location / mean",
         "tau": "precision / inverse variance",
-    },
-    wikipedia="Normal",
-)
+    }
+    _wikipedia = "Normal"
 
-Lognormal = _scalar_op_factory(
-    name="Lognormal",
-    random=True,
-    expected_parents={
+
+class Lognormal(ScalarOp):
+    _random = True
+    _expected_parents = {
         "mu": "logarithm of location",
         "sigma": "logarithm of scale (not sigma squared!)",
-    },
-    wikipedia="Log-Normal",
-)
+    }
+    _wikipedia = "Log-Normal"
 
-Bernoulli = _scalar_op_factory(
-    name="Bernoulli",
-    random=True,
-    expected_parents={"theta": "probability (between 0 and 1)"},
-)
 
-BernoulliLogit = _scalar_op_factory(
-    name="BernoulliLogit",
-    random=True,
-    expected_parents={"theta": "logit of probability (unbounded)"},
-)
+class Bernoulli(ScalarOp):
+    _random = True
+    _expected_parents = {"theta": "probability (between 0 and 1)"}
 
-Binomial = _scalar_op_factory(
-    name="Binomial",
-    random=True,
-    expected_parents={
+
+class BernoulliLogit(ScalarOp):
+    _random = True
+    _expected_parents = {"theta": "logit of probability (unbounded)"}
+
+
+class Binomial(ScalarOp):
+    _random = True
+    _expected_parents = {
         "N": "number of trials",
         "theta": "probability of success for each trial",
-    },
-)
-
-Cauchy = _scalar_op_factory(
-    name="Cauchy",
-    random=True,
-    expected_parents={"mu": "location", "sigma": "scale"},
-)
-
-Uniform = _scalar_op_factory(
-    name="Uniform",
-    random=True,
-    expected_parents={"alpha": "lower bound", "beta": "upper bound"},
-    wikipedia="Continuous_uniform",
-)
-
-Beta = _scalar_op_factory(
-    name="Beta",
-    random=True,
-    expected_parents={"alpha": "shape", "beta": "shape"},
-)
-
-Exponential = _scalar_op_factory(
-    name="Exponential",
-    random=True,
-    expected_parents={"beta": "rate / inverse scale"},
-)
-Gamma = _scalar_op_factory(
-    name="Gamma",
-    random=True,
-    expected_parents={"alpha": "shape", "beta": "rate / inverse scale"},
-    notes=[
-        'This follows [stan](https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution)) in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
-    ],
-)
-
-Poisson = _scalar_op_factory(
-    name="Poisson",
-    random=True,
-    expected_parents={"lambd": "lambda"},
-    # TODO: using lambda causes problems with makefun
-)
+    }
 
 
-BetaBinomial = _scalar_op_factory(
-    name="BetaBinomial",
-    random=True,
-    expected_parents={
+class Cauchy(ScalarOp):
+    _random = True
+    _expected_parents = {"mu": "location", "sigma": "scale"}
+
+
+class Uniform(ScalarOp):
+    _random = True
+    _expected_parents = {"alpha": "lower bound", "beta": "upper bound"}
+    _wikipedia = "Continuous_uniform"
+
+
+class Beta(ScalarOp):
+    _random = True
+    _expected_parents = {"alpha": "shape", "beta": "shape"}
+
+
+class Exponential(ScalarOp):
+    _random = True
+    _expected_parents = {"beta": "rate / inverse scale"}
+
+
+class Gamma(ScalarOp):
+    _random = True
+    _expected_parents = {"alpha": "shape", "beta": "rate / inverse scale"}
+    _notes = [
+        'This follows ` stan <https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution>`__ in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
+    ]
+
+
+class Poisson(ScalarOp):
+    _random = True
+    _expected_parents = {"lambd": "lambda"}
+
+
+class BetaBinomial(ScalarOp):
+    _random = True
+    _expected_parents = {
         "N": "as in binomial dist",
         "alpha": "as in beta dist",
         "beta": "as in beta dist",
-    },
-    wikipedia="Beta-binomial",
-    notes=[
+    }
+    _wikipedia = "Beta-binomial"
+    _notes = [
         "This follows the (N,alpha,beta) convention of [Stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html) (and Wikipedia). Some other systems (e.g. [Numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial)) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
-    ],
-)
+    ]
 
-StudentT = _scalar_op_factory(
-    name="StudentT",
-    random=True,
-    expected_parents={
+
+class StudentT(ScalarOp):
+    _random = True
+    _expected_parents = {
         "nu": "degress of freedom",
         "mu": "location (often 0)",
         "sigma": "scale (often 1)",
-    },
-    wikipedia="Student's_t",
-)
+    }
+    _wikipedia = "Student's_t"
 
 
 ################################################################################
