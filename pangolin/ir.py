@@ -147,25 +147,25 @@ class Op(ABC):
         "Returns the name of the op class as a string"
         return type(self).__name__
 
-    @property
-    def is_invertible(self) -> bool:
-        "Can this function be inverted?"
-        return False
+    # @property
+    # def is_invertible(self) -> bool:
+    #     "Can this function be inverted?"
+    #     return False
 
-    @property
-    def invert(self) -> "Op":
-        """
-        Get the inverse of this Op.
+    # @property
+    # def invert(self) -> "Op":
+    #     """
+    #     Get the inverse of this Op.
 
-        Returns:
-            Inverse op
+    #     Returns:
+    #         Inverse op
 
-        Raises:
-            NotImplementedError: If this op is not invertible.
-        """
-        raise NotImplementedError(
-            f"An op of type {type(self).__name__} is not invertible."
-        )
+    #     Raises:
+    #         NotImplementedError: If this op is not invertible.
+    #     """
+    #     raise NotImplementedError(
+    #         f"An op of type {type(self).__name__} is not invertible."
+    #     )
 
     def __repr__(self):
         return self.name + "()"
