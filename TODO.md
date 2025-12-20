@@ -1,9 +1,11 @@
-* Create inference tests that *only use the IR*
+* Bring sanity to Indexing
 
-* Make sure inference passes those tests.
+* Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
 
-* Get inference working on models created by the simple interface
+* Offer optional OCD array indexing mode
 
-# Someday
+* Fakeloops
+
+*  Many Op like Softmax or Sum would often be mapped over arrays. Should these take axis arguments? Or should that be the perogative of VMap and dealt with at the interface level?
 
 * `vmap(normal)([0,1,2], [3,4,5])` should raise a better error message

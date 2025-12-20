@@ -211,7 +211,6 @@ class Op(ABC):
             setattr(cls, "random", random_prop)
 
             setattr(cls, "get_shape", cls._get_shape)
-            # cls.get_shape.__doc__ = cls._get_shape.__doc__
 
 
 ################################################################################
@@ -240,15 +239,11 @@ class Constant(Op):
         self.value.flags.writeable = False  # make value immutable
         super().__init__()
 
-    def _get_shape(self, *parents_shapes: Shape) -> Shape:
+    def _get_shape(self) -> Shape:
         """
         If ``len(parents_shapes)>0``, raises ``ValueError``. Otherwise, returns the
         shape of ``value``.
         """
-        if len(parents_shapes) != 0:
-            raise ValueError(
-                f"Constant got {len(parents_shapes)} arguments but expected 0."
-            )
         return self.value.shape
 
     def __eq__(self, other: Op) -> bool:
@@ -314,9 +309,6 @@ class ScalarOp(Op, ABC):
     _random: bool
     _wikipedia: str | None = None
     _notes: list[str] = []
-
-    def __init__(self):
-        super().__init__()
 
     @property
     def _num_parents(self) -> int:
@@ -603,9 +595,6 @@ class Matmul(Op):
 
     _random = False
 
-    def __init__(self):
-        super().__init__()
-
     def _get_shape(self, a_shape: Shape, b_shape: Shape) -> Shape:
         """
         Get the shape of applying a matmul to given shapes.
@@ -683,15 +672,19 @@ class Inv(Op):
 
     _random = False
 
-    def __init__(self):
-        """"""
-        super().__init__()
+    def _get_shape(self, p_shape: Shape) -> Shape:
+        """
+        Args:
+            p_shape: A square 2D shape
 
-    def _get_shape(self, *parents):
-        assert len(parents) == 1
-        p_shape = parents[0]
-        assert len(p_shape) == 2, "inverse only applies to 2d arrays"
-        assert p_shape[0] == p_shape[1], "inverse only for square 2d arrays"
+        Returns
+            Same as ``p_shape``
+        """
+
+        if len(p_shape) != 2:
+            raise ValueError("inverse only applies to 2d arrays")
+        if p_shape[0] != p_shape[1]:
+            raise ValueError("inverse only for square arrays")
         return p_shape
 
 
@@ -707,29 +700,23 @@ class Softmax(Op):
 
     _random = False
 
-    def __init__(self):
-        super().__init__()
-
-    def _get_shape(self, *parents):
-        assert len(parents) == 1
-        p_shape = parents[0]
+    def _get_shape(self, p_shape: Shape) -> Shape:
         assert len(p_shape) == 1, "input to softmax would be 1d"
         return p_shape
 
 
 class Sum(Op):
-    """Take the sum of an array over some axis"""
+    """
+    Create a Sum instance
+    Parameters
+    ----------
+    axis: int
+        What axis to sum over.
+    """
 
     _random = False
 
     def __init__(self, axis):
-        """
-        Create a Sum instance
-        Parameters
-        ----------
-        axis: int
-            What axis to sum over.
-        """
         if isinstance(axis, np.ndarray) and axis.shape == ():
             axis = int(axis)
         if not isinstance(axis, int):
@@ -737,7 +724,7 @@ class Sum(Op):
         self.axis = axis
         super().__init__()
 
-    def _get_shape(self, x_shape):
+    def _get_shape(self, x_shape: Shape) -> Shape:
         if self.axis is None:
             return ()
         else:
@@ -963,12 +950,13 @@ class Dirichlet(Op):
 
     _random = True
 
-    def __init__(self):
-        """ """
-        super().__init__()
-
     def _get_shape(self, concentration_shape: Shape) -> Shape:
-        """ """
+        """
+        Args:
+            concentration_shape: 1D vector
+        Returns:
+            1D vector, same as ``concentration_shape``.
+        """
         if len(concentration_shape) != 1:
             raise ValueError("Dirichlet op must have a single 1-d vector input")
         return concentration_shape
@@ -984,12 +972,14 @@ class Wishart(Op):
 
     _random = True
 
-    def __init__(self):
-        """ """
-        super().__init__()
-
     def _get_shape(self, nu_shape: Shape, S_shape: Shape) -> Shape:
-        """ """
+        """
+        Args:
+            nu_shape: must be ``()``
+            S_shape: must be 2d square array shape
+        Returns:
+            Same as ``S_shape``
+        """
         if nu_shape != ():
             raise ValueError("degrees of freedom for Wishart must be scalar.")
 
@@ -1200,13 +1190,13 @@ class Composite(Op):
         # self._random = ops[-1].random
         super().__init__()
 
-    def _random(self):
+    def _random(self) -> bool:
         """
         Equal to ``ops[-1].random``
         """
         return self.ops[-1].random
 
-    def _get_shape(self, *parents_shapes):
+    def _get_shape(self, *parents_shapes: Shape) -> Shape:
         all_shapes = list(parents_shapes)
         for my_op, my_par_nums in zip(self.ops, self.par_nums):
             my_parents_shapes = [all_shapes[i] for i in my_par_nums]
@@ -1284,7 +1274,7 @@ class Autoregressive(Op):
 
         return self.base_op.random
 
-    def _get_shape(self, start_shape, *other_shapes):
+    def _get_shape(self, start_shape: Shape, *other_shapes: Shape) -> Shape:
         # const_shapes = other_shapes[: self.num_constants]
         # other_shapes = other_shapes[self.num_constants :]
 
@@ -1483,7 +1473,7 @@ class Index(Op):
         else:
             return True
 
-    def _get_shape(self, var_shape, *indices_shapes):
+    def _get_shape(self, var_shape: Shape, *indices_shapes: Shape) -> Shape:
         if len(self.slices) != len(var_shape):
             raise Exception("number of slots doesn't match number of dims of var")
 
@@ -1631,20 +1621,13 @@ currently, JAGS is the only backend that can actually do inference in these sett
 
 class SimpleIndex(Op):
     """
-    Represents an `Op` to index into a `RV`. Does not deal with slices. (That's the interface's problem)
+    Create an `Op` to index into a `RV` in a "simple" way. Does not deal with slices.
+    (That's the interface's problem)
     """
 
     _random = False
 
-    def __init__(self):
-        """
-        Create an Index op
-        """
-        super().__init__()
-
-    def _get_shape(self, *shapes):
-        var_shape, *indices_shapes = shapes
-
+    def _get_shape(self, var_shape: Shape, *indices_shapes: Shape) -> Shape:
         num_indexed = len(indices_shapes)
         num_dims = len(var_shape)
         if num_indexed != num_dims:
