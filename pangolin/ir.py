@@ -49,7 +49,7 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Sequence
+from typing import Sequence, Callable, cast
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
@@ -95,17 +95,20 @@ class Op(ABC):
     """
 
     _frozen = False
+    _random: bool | Callable[..., bool]
 
     def __init__(self):
         self._frozen = True  # freeze after init
 
     @property
-    @abstractmethod
     def random(self) -> bool:
         """
         Is this class a distribution (``True``) or a deterministic function (``False``)
         """
-        pass
+        if callable(self._random):
+            return self._random(self)
+        else:
+            return self._random
 
     @abstractmethod
     def get_shape(self, *parents_shapes: Shape) -> Shape:
@@ -176,31 +179,35 @@ class Op(ABC):
         """
         return util.camel_case_to_snake_case(self.name)
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
 
-class OpRandom(Op):
-    """
-    Just an `Op` where ``op.random==True``.
-    """
+        is_abstract = ABC in cls.__bases__ or bool(
+            getattr(cls, "__abstractmethods__", False)
+        )
 
-    @property
-    def random(self) -> bool:
-        """
-        ``True``.
-        """
-        return True
+        if not is_abstract:
+            # check that _random was defined
+            if not hasattr(cls, "_random"):
+                raise TypeError(f"Class '{cls.__name__}' must define '_random'.")
 
+            if isinstance(cls._random, bool):
+                # cls.random.__doc__ = f"{cls._random}"
+                def random_getter(self) -> bool:
+                    return cast(bool, cls._random)
 
-class OpNonrandom(Op):
-    """
-    Just an `Op` where ``op.random==False``.
-    """
-
-    @property
-    def random(self) -> bool:
-        """
-        ``False``.
-        """
-        return False
+                random_prop = property(random_getter)
+                random_prop.__doc__ = f"{cls._random}"
+                setattr(cls, "random", random_prop)
+            elif isinstance(cls._random, Callable):
+                random_getter = cls._random
+                random_prop = property(random_getter)
+                random_prop.__doc__ = cls._random.__doc__
+                setattr(cls, "random", random_prop)
+            else:
+                raise TypeError(
+                    f"Class '{cls.__name__}' has '_random' neither bool nor Callable."
+                )
 
 
 ################################################################################
@@ -208,7 +215,7 @@ class OpNonrandom(Op):
 ################################################################################
 
 
-class Constant(OpNonrandom):
+class Constant(Op):
     """
     Represents a "constant" distribution. Has no parents. Data is always stored
     as a numpy array. If you want to live dangerously, you may be able to switch to
@@ -220,6 +227,8 @@ class Constant(OpNonrandom):
         Some constant value that is either a numpy array or something that can be cast
         to a numpy array.
     """
+
+    _random = False
 
     def __init__(self, value: ArrayLike):
         self.value = np.array(value)
@@ -292,7 +301,7 @@ class Constant(OpNonrandom):
 ########################################################################################
 
 
-class ScalarOp(Op):
+class ScalarOp(Op, ABC):
     """
     New scalar ops
     """
@@ -332,26 +341,9 @@ class ScalarOp(Op):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        def random_getter(self):
-            return cls._random
-
-        random_prop = property(random_getter)
-        random_prop.__doc__ = f"{cls._random}"
-        setattr(cls, "random", random_prop)
-
         op_info = _OpInfo(cls)
 
         cls.__doc__ = _get_scalar_op_docstring(op_info)
-
-        # cls.__doc__ = f"""Create a {cls.__name__} `Op`. Takes no parameters. When used in an RV, expects\
-        #        {cls._num_parents} scalar parent(s):"""
-
-        # if cls._wikipedia:
-        #    s += f"`wikipedia definition <{op_info.wikipedia}>`__\n"
-
-    @property
-    def random(self) -> bool:
-        return self._random
 
 
 ################################################################################
@@ -580,7 +572,7 @@ class Loggamma(ScalarOp):
 ################################################################################
 
 
-class Matmul(OpNonrandom):
+class Matmul(Op):
     """
     A class that does matrix multiplication, following the rules of ``numpy.matmul``.
     Currently only 1d and 2d arrays are supported.
@@ -595,6 +587,8 @@ class Matmul(OpNonrandom):
     >>> op.random
     False
     """
+
+    _random = False
 
     def __init__(self):
         super().__init__()
@@ -669,10 +663,12 @@ class Matmul(OpNonrandom):
             raise Exception("bug: should be impossible")
 
 
-class Inv(OpNonrandom):
+class Inv(Op):
     """
     Take the inverse of a square matrix
     """
+
+    _random = False
 
     def __init__(self):
         """"""
@@ -691,10 +687,12 @@ class Inv(OpNonrandom):
 ################################################################################
 
 
-class Softmax(OpNonrandom):
+class Softmax(Op):
     """
     Softmax
     """
+
+    _random = False
 
     def __init__(self):
         super().__init__()
@@ -706,8 +704,10 @@ class Softmax(OpNonrandom):
         return p_shape
 
 
-class Sum(OpNonrandom):
+class Sum(Op):
     """Take the sum of an array over some axis"""
+
+    _random = False
 
     def __init__(self, axis):
         """
@@ -856,11 +856,13 @@ class StudentT(ScalarOp):
 ################################################################################
 
 
-class VecMatOp(OpRandom):
+class VecMatOp(Op):
     """
     Convenience class to create "vec mat" distributions that take as input a vector of
     length N, a matrix of size NxN and is a vector of length N. Takes no parameters.
     """
+
+    _random = True
 
     def __init__(self):
         super().__init__()
@@ -895,12 +897,14 @@ class MultiNormal(VecMatOp):
         super().__init__()
 
 
-class Categorical(OpRandom):
+class Categorical(Op):
     """
     Create a Categorical distribution. Takes no parameters.
 
     When used in an RV, expects one parents: A 1-D vector of weights.
     """
+
+    _random = True
 
     def __init__(self):
         super().__init__()
@@ -915,7 +919,7 @@ class Categorical(OpRandom):
         return ()
 
 
-class Multinomial(OpRandom):
+class Multinomial(Op):
     """
     Create a Multinomial Op. Takes no parameters.
 
@@ -924,6 +928,8 @@ class Multinomial(OpRandom):
     of probabilities (a 1D array). Note that this is different from Stan (which doesn't
     need ``n`` to be passed).
     """
+
+    _random = True
 
     def __init__(self):
         super().__init__()
@@ -937,11 +943,13 @@ class Multinomial(OpRandom):
         return p_shape
 
 
-class Dirichlet(OpRandom):
+class Dirichlet(Op):
     """Create a Dirichlet Op. Takes no parameters.
 
     When used in an RV, a Dirichlet op expects one parent, namely the concentration
     """
+
+    _random = True
 
     def __init__(self):
         """ """
@@ -954,13 +962,15 @@ class Dirichlet(OpRandom):
         return concentration_shape
 
 
-class Wishart(OpRandom):
+class Wishart(Op):
     """
     Create a Wishart op. Takes no parameters.
 
     When used in an RV, expects two parameters: nu (degrees of freedom, scalar) and
     S (symmetric positive-definite scale matrix)
     """
+
+    _random = True
 
     def __init__(self):
         """ """
@@ -1054,6 +1064,13 @@ class VMap(Op):
     (4, 6)
     """
 
+    def _random(self) -> bool:
+        """
+        Equal to ``base_op.random``
+        """
+
+        return self.base_op.random
+
     # tuple[int | None, ...] means a tuple of int or None of any length
     # list[int | None] means a list of any length (... not appropriate)
     def __init__(
@@ -1079,16 +1096,16 @@ class VMap(Op):
         self.base_op = base_op
         self.in_axes = in_axes
         self.axis_size = axis_size
-        self._random = base_op.random
+        # self._random = base_op.random
         super().__init__()
 
-    @property
-    def random(self) -> bool:
-        """
-        Equal to ``base_op.random``
-        """
+    # @property
+    # def random(self) -> bool:
+    #     """
+    #     Equal to ``base_op.random``
+    #     """
 
-        return self._random
+    #     return self._random
 
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
@@ -1176,12 +1193,17 @@ class Composite(Op):
         self.ops = tuple(ops)
         # self.par_nums = tuple(par_nums)
         self.par_nums = tuple(tuple(pp) for pp in par_nums)
-        self._random = ops[-1].random
+        # self._random = ops[-1].random
         super().__init__()
 
-    @property
-    def random(self):
-        return self._random
+    # def random(self):
+    #     return self._random
+
+    def _random(self):
+        """
+        Equal to ``ops[-1].random``
+        """
+        return self.ops[-1].random
 
     def get_shape(self, *parents_shapes):
         all_shapes = list(parents_shapes)
@@ -1228,6 +1250,13 @@ class Composite(Op):
 class Autoregressive(Op):
     """Represents an autoregressive distribution"""
 
+    def _random(self) -> bool:
+        """
+        Equal to ``self.base_op.random``
+        """
+
+        return self.base_op.random
+
     def __init__(
         self,
         base_op: Op,
@@ -1251,12 +1280,12 @@ class Autoregressive(Op):
         self.length = length
         self.in_axes = tuple(in_axes)
         self.where_self = where_self
-        self._random = base_op.random
+        # self._random = base_op.random
         super().__init__()
 
-    @property
-    def random(self):
-        return self._random
+    # @property
+    # def random(self):
+    #     return self._random
 
     def get_shape(self, start_shape, *other_shapes):
         # const_shapes = other_shapes[: self.num_constants]
@@ -1412,12 +1441,14 @@ def _slice_length(size, slice):
     return len(np.ones(size)[slice])
 
 
-class Index(OpNonrandom):
+class Index(Op):
     """
     Represents an `Op` to index into a `RV`. Slices for all sliced dimensions
     must be baked into the Index op when created. Non sliced dimensions are not
     part of the `Op` (they can be random variables).
     """
+
+    _random = False
 
     def __init__(self, *slices: slice | None):
         """
@@ -1601,10 +1632,12 @@ currently, JAGS is the only backend that can actually do inference in these sett
 """
 
 
-class SimpleIndex(OpNonrandom):
+class SimpleIndex(Op):
     """
     Represents an `Op` to index into a `RV`. Does not deal with slices. (That's the interface's problem)
     """
+
+    _random = False
 
     def __init__(self):
         """

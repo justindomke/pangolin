@@ -1,7 +1,7 @@
 import collections
 
 from . import InfixRV
-from pangolin.ir import Op, OpNonrandom, RV, VMap, Constant, print_upstream
+from pangolin.ir import Op, RV, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RVLike, constant, exp, log
@@ -27,7 +27,7 @@ class FlatCallable(Protocol):
     def __call__(self, *args: RV) -> list[RV]: ...
 
 
-class AbstractOp(OpNonrandom):
+class AbstractOp(Op):
     """
     Create an abstract Op. An `AbstractOp` doesn't actually do anything and expects no parents. It just has a fixed shape.
 
@@ -36,6 +36,8 @@ class AbstractOp(OpNonrandom):
     shape
         the shape for the output
     """
+
+    _random = False
 
     def __init__(self, shape: Shape = ()):
         self.shape = shape
