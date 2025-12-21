@@ -49,14 +49,14 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Sequence, Callable, Self, cast
+from typing import Sequence, Callable, Self, cast, TypeAlias
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
 from jaxtyping import PyTree
 
 
-Shape = tuple[int, ...]
+Shape: TypeAlias = tuple[int, ...]
 """
 A `Shape` is just a tuple of ints
 """
