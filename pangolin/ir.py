@@ -302,12 +302,29 @@ class Constant(Op):
 
 class ScalarOp(Op, ABC):
     """
-    New scalar ops
+    Abstract class to conveniently create "all-scalar" ops. These are simple ops that:
+
+    1. Have a fixed number of parents
+    2. Have fixed randomness
+    3. Expect all parents to be scalar
+    4. Output a scalar
+
+    To create a concrete instance of this class, all that's necessary is to specify
+
+    1. ``_random:bool`` indicating if the `Op` is a conditional distribution (``True``)
+       or a deterministic function (``False``)
+    2. ``_expected_parents: int | dict[str,str]`` which can either be the number of
+       parents (if ``int``) or a dictionary mapping parent names to descriptions.
+
+    You can also optionally provide ``_wikipedia:str``. This is only used to create a
+    link in the documentation. If not provided, there is a heuristic to try to guess a
+    link for dists.
     """
 
     _expected_parents: int | dict[str, str]
     _random: bool
     _wikipedia: str | None = None
+    "Optional wikipedia link"
     _notes: list[str] = []
 
     @property
@@ -320,7 +337,13 @@ class ScalarOp(Op, ABC):
     def _get_shape(self, *parents_shapes: Shape) -> Shape:
         """
         Checks that correct number of parents are given and each has shape ``()``.
-        Always returns ``()``
+        Always returns ``()``.
+
+        Args:
+            parents_shapes: Shape of each parent, all must be ``()``.
+
+        Returns:
+            ``()``
 
         Raises:
             TypeError: Incorrect number of parents
@@ -399,7 +422,12 @@ def _get_scalar_op_docstring(op_info):
     random = op_info.random
     expected_parents = op_info.expected_parents
 
-    s = f"Represents a {name} `Op`. Takes no parameters. When used in an RV, expects\
+    if random:
+        name_str = f"`{name} <{op_info.wikipedia}>`__"
+    else:
+        name_str = f"{name}"
+
+    s = f"Represents a {name_str} `Op`. Takes no parameters. When used in an RV, expects\
         {len(expected_parents)} scalar parent(s):"
     if expected_parents:
         s += "\n\n"
@@ -425,13 +453,11 @@ Examples
 ()
 """
 
-    if op_info.wikipedia or op_info.notes:
+    if op_info.notes:
         s += "\nNotes\n---\n"
         if op_info.notes:
             for note in op_info.notes:
                 s += note + "\n\n"
-        if op_info.wikipedia:
-            s += f"`wikipedia definition <{op_info.wikipedia}>`__\n"
 
     return s
 
@@ -764,7 +790,7 @@ class NormalPrec(ScalarOp):
         "mu": "location / mean",
         "tau": "precision / inverse variance",
     }
-    _wikipedia = "Normal"
+    _wikipedia = "https://en.wikipedia.org/wiki/Normal_distribution"
 
 
 class Lognormal(ScalarOp):
@@ -837,7 +863,7 @@ class BetaBinomial(ScalarOp):
     }
     _wikipedia = "Beta-binomial"
     _notes = [
-        "This follows the (N,alpha,beta) convention of [Stan](https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html) (and Wikipedia). Some other systems (e.g. [Numpyro](https://num.pyro.ai/en/stable/distributions.html#betabinomial)) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
+        "This follows the (N,alpha,beta) convention of `Stan <https://mc-stan.org/docs/2_19/functions-reference/beta-binomial-distribution.html>`__ (and Wikipedia). Some other systems (e.g. `Numpyro <https://num.pyro.ai/en/stable/distributions.html#betabinomial>`__) use alternate variable orderings. This is no problem for you as a user, since pangolin does the re-ordering for you based on the backend. But keep it in mind if translating a model from one system to another."
     ]
 
 
@@ -856,44 +882,33 @@ class StudentT(ScalarOp):
 ################################################################################
 
 
-class VecMatOp(Op, ABC):
+def _vec_mat_get_shape(vec_shape: Shape, mat_shape: Shape) -> Shape:
     """
-    Convenience class to create "vec mat" distributions that take as input a vector of
-    length N, a matrix of size NxN and is a vector of length N. Takes no parameters.
+    Checks that first argument is a 1D vector and second argument is a square 2D array
+    with sizes the same as the first argument.
     """
 
-    _random = True
-
-    def __init__(self):
-        super().__init__()
-
-    def _get_shape(self, *parents_shapes: Shape) -> Shape:
-        if len(parents_shapes) != 2:
-            raise TypeError("VecMatOp expected 2 parents")
-        vec_shape, mat_shape = parents_shapes
-
-        if len(vec_shape) != 1:
-            raise ValueError("first parameter must be a vector.")
-        if len(mat_shape) != 2:
-            raise ValueError("second parameter must be a matrix.")
-        N = vec_shape[0]
-        if mat_shape != (N, N):
-            raise ValueError(
-                "second parameter must be matrix with size matching first parameter"
-            )
-        return (N,)
+    if len(vec_shape) != 1:
+        raise ValueError("first parameter must be a vector.")
+    if len(mat_shape) != 2:
+        raise ValueError("second parameter must be a matrix.")
+    N = vec_shape[0]
+    if mat_shape != (N, N):
+        raise ValueError(
+            "second parameter must be matrix with size matching first parameter"
+        )
+    return (N,)
 
 
-class MultiNormal(VecMatOp):
+class MultiNormal(Op):
     """
     Create a MultiNormal distribution. Takes no parameters.
 
     When used in an RV, expects two parents: The mean and covariance.
     """
 
-    def __init__(self):
-        """ """
-        super().__init__()
+    _random = True
+    _get_shape = _vec_mat_get_shape
 
 
 class Categorical(Op):
@@ -905,10 +920,14 @@ class Categorical(Op):
 
     _random = True
 
-    def __init__(self):
-        super().__init__()
-
     def _get_shape(self, weights_shape: Shape) -> Shape:
+        """
+        Args:
+            weights_shape: Should be 1D.
+        Returns:
+            ``()``
+        """
+
         assert isinstance(weights_shape, tuple)
         if len(weights_shape) != 1:
             raise ValueError(
@@ -930,10 +949,14 @@ class Multinomial(Op):
 
     _random = True
 
-    def __init__(self):
-        super().__init__()
-
     def _get_shape(self, n_shape: Shape, p_shape: Shape) -> Shape:
+        """
+        Args:
+            n_shape: Must be ``()``
+            p_shape: Must be 1D
+        Returns:
+            Same as ``p_shape``
+        """
 
         if n_shape != ():
             raise ValueError("First input to Multinomial op must be scalar")
