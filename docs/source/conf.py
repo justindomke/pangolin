@@ -24,7 +24,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     # "sphinx.ext.intersphinx",
-    "sphinx_autodoc_typehints",
+    # "sphinx_autodoc_typehints",
     # "myst_parser",
     # "autodoc2",
 ]
@@ -65,25 +65,24 @@ napoleon_preprocess_types = False
 napoleon_type_aliases = None
 napoleon_attr_annotations = True
 napoleon_type_aliases = {
-    "Shape": "Shape",
     "PyTree": "PyTree",
     "PyTree[Node]": "PyTree[Node]",
 }
 
 # autodoc options
-# autodoc_typehints = "description"
+autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 autodoc_inherit_docstrings = False
 # autodoc_preserve_defaults = True
 # autodoc_typehints_format = "short"
 
-autodoc_typehints = "none"
-typehints_use_rtype = False
+# autodoc_typehints = "none"
+# typehints_use_rtype = False
 
 default_role = "any"
 
 autodoc_type_aliases = {
-    "Shape": "`Shape`",
+    "Shape": "Shape",
     "RVLike": "RVLike",
     "ArrayLike": "ArrayLike",
     "PyTree": "PyTree",
