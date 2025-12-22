@@ -11,7 +11,7 @@
 
 * `vmap(normal)([0,1,2], [3,4,5])` should raise a better error message
 
-* Improve `get_shape` functions / docs for scalar functions to better document number of args etc
+* Improve `get_shape` functions / docs for scalar Op to better document number of args etc
 
 * Offer constraints:
   * Possibly just for scalar dists
