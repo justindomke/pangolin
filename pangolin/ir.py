@@ -1,29 +1,17 @@
 """
-The pangolin IR for defining joint distributions over collections of random variables.
-Note that while it is certainly possible to define probabilistic model directly in terms
-of this IR, it is quite a "low-level" notation, and **end-users of Pangolin are not
-typically expected to manipulate this IR directly**. Instead, users would typically
-use an `pangolin.interface` that provides a friendlier way of creating these models.
+The pangolin IR for defining joint distributions over collections of random variables. Note that while it is certainly possible to define probabilistic model directly in terms of this IR, it is quite a "low-level" notation, and **end-users of Pangolin are not typically expected to manipulate this IR directly**. Instead, users would typically use an :py:mod:`pangolin.interface` that provides a friendlier way of creating these models.
 
-This IR only *represents* groups of dependent random variables. All actual functionality
-is left to inference engines.
+This IR only *represents* groups of dependent random variables. All actual functionality is left to inference engines.
 
-The two core abstractions in the IR are `Op` and `RV`. An `Op` represents a simple
-function or conditional distribution, while an `RV` consists of a single `Op` and
-a (possibly empty) tuple of parent `Op`. An `RV` represents a random variable.
-Each `RV` contains a single `Op` and a (possibly empty) tuple of parent `RV`. Thus,
-the IR is essentially just a directed graph where each node is a RV with a single `Op`.
+The two core abstractions in the IR are the `Op` and the `RV`. An `Op` represents a simple function or conditional distribution, while an `RV` consists of a single `Op` and a (possibly empty) tuple of parent `Op`. Thus, the IR is essentially just a directed graph where each node is an `RV` with a single `Op`.
 
-That's the whole IR. Unlike in Pyro / NumPyro / PyMC / Tensorflow Probability,
-Random variables do not have names, and there is no notion of a "model" class.
-In Pangolin you just work with RVs. You can assign those RVs to named variables
-or put them into tuples or lists or dicts if you want. But that's up to you.
+That's the whole IR. Unlike in Pyro / NumPyro / PyMC / Tensorflow Probability, Random variables do not have names, and there is no notion of a "model" class. In Pangolin, you just work with RVs. You can assign those RVs to named variables or put them into tuples or lists or dicts if you want. But that's up to you.
 
 Other notes:
 
-* All RVs and Ops are immutable. Nothing is allowed to change after initialization.
-* All RVs have static shapes. The shape of an RV is recursively determined by its Op and
-  the shapes of its parent RVs.    
+* All `RV` and `Op` are immutable. Nothing is allowed to change after initialization.
+* All `RV` have static shapes. The shape of an `RV` is recursively determined by its Op and
+  the shapes of its parent `RV`.    
 
   
 Types of `Op`:
@@ -68,30 +56,15 @@ A `Shape` is just a tuple of ints
 
 class Op(ABC):
     """
-    Abstract base class for operators. An `Op` represents a deterministic function or
-    conditional distribution. All functionality for sampling or evaluating densities is
-    left to inference backends. This is frozen after initialization.
+    Abstract base class for operators. An `Op` represents a deterministic function or distribution. All functionality for sampling or evaluating densities is left to inference backends. An `Op` is frozen after initialization.
 
-    Simple `Op` typically have no parameters. For example, `Add()` just represents
-    scalar addition. The `Op` itself does not indicate what variables are being
-    added together. Similarly, ``Normal()`` just represents a normal distribution, but
-    it does not itself indicate what the mean and scale of that distribution are.
+    Simple `Op` typically have no parameters. For example, `Add()` just represents scalar addition. The `Op` itself does not indicate what variables are being added together. Similarly, `Normal()` just represents a normal distribution, but it does not itself indicate what the mean and scale of that distribution are. More complex classes have constructors that take any parameters that must be fixed in order to maintain fixed shapes. For example `Sum` takes the axis to sum over.
 
-    An `Op` must provide an `__eq__` method that indicates *mathematical* equality.
-    Thus, if ``op1 = Normal()`` and ``op2 = Normal()`` then, ``op1 == op2``, even though
-    ``op1`` and ``op2`` are distinct objects. For simple `Op` that take no parameters,
-    this is done just by comparing types. For complex `Op` that take parameters, this
-    should be overriden.
+    A concrete `Op` class must provide a ``_random`` class attribute, indicating if an op is a conditional distribution (``True``) or a deterministic function (``False``). For classes where this is fixed, this can just be a ``bool``. For classes where this depends on the particular instance of the class (e.g. `VMap`) this can be a function taking the op instance and returning a ``bool``. This property is accessed by `random`. In addition, the docstring for `random` in subclasses is automatically overridden based on ``_random``. (If ``_random`` is ``bool``, the fixed value is given as a string. If ``_random`` is a function, the docstring for ``_random`` is copied to `random` in the subclass.)
 
-    An `Op` must also provide a boolean `random` attribute indicating if it is a
-    conditional distribution (``True``) or a deterministic function (``False``).
+    A concrete `Op` class must also provide a function ``_get_shape`` as a class attribute, which will be called by `get_shape`. This is a *function*, not a constant, because some `Op` (e.g. `MultiNormal` or `MatMul`) may have differnet shapes depending on the shapes of the inputs. This ``_get_shape`` function should take the *shapes* of all parents and compute the shape of the output. It is also expected that the ``_get_shape`` method will do error checking—e.g. verify that the correct number of parents are provided and the shapes of the parents are coherent with each other. This method is called by `RV` at construction to ensure that the shapes of all random variables are coherent.
 
-    An `Op` must also a ``get_parents`` method to determine the shape of the output of the
-    Op given the shapes of the parents. This method is needed because some types of `Op`
-    (e.g. multivariate normal distributions) can have different shapes depending on the
-    shapes of the parents. It is also expected that the `get_shape` method will do error
-    checking—e.g. verify that the correct number of parents are provided and the shapes of
-    the parents are coherent with each other.
+    An `Op` must provide an `__eq__` method that indicates *mathematical* equality. Thus, if ``op1 = Normal()`` and ``op2 = Normal()`` then, ``op1 == op2``, even though ``op1`` and ``op2`` are distinct objects. However, if ``op3 = Sum(0)`` and ``op4 = Sum(1)`` then ``op3 != op4``. This base class provides a simple implementation that checks if the two arguments have the same type. This must be overridden for classes like `Sum` that have constructors that take parameters. (In those cases, ``__hash__`` must also be overridden.)
     """
 
     _frozen = False
@@ -104,7 +77,7 @@ class Op(ABC):
     @property
     def random(self) -> bool:
         """
-        Is this class a distribution (``True``) or a deterministic function (``False``)
+        Is this class a distribution (``True``) or a deterministic function (``False``)?
         """
         if callable(self._random):
             return self._random(self)
@@ -304,21 +277,19 @@ class ScalarOp(Op, ABC):
     """
     Abstract class to conveniently create "all-scalar" ops. These are simple ops that:
 
-    1. Have a fixed number of parents
-    2. Have fixed randomness
-    3. Expect all parents to be scalar
-    4. Output a scalar
+    1. Have class-fixed randomness.
+    2. Have a class-fixed number of parents.
+    3. Expect all parents to be scalar.
+    4. Output a scalar.
 
-    To create a concrete instance of this class, all that's necessary is to specify
+    To create a concrete instance of this class, all that's necessary is to specify two things:
 
-    1. ``_random:bool`` indicating if the `Op` is a conditional distribution (``True``)
-       or a deterministic function (``False``)
-    2. ``_expected_parents: int | dict[str,str]`` which can either be the number of
-       parents (if ``int``) or a dictionary mapping parent names to descriptions.
+    1. ``_random`` a ``bool`` indicating if the `Op` is a conditional distribution or a deterministic function. Unlike in a general `Op` this cannot be a function.
+    2. ``_expected_parents`` which can either be the number of parents (an ``int``) or a dictionary mapping parent names to descriptions. If a dictionary is given, those parent names will be included in the documentation, and may be used when constructing interface functions.
 
-    You can also optionally provide ``_wikipedia:str``. This is only used to create a
+    You can also optionally provide ``_wikipedia`` string. This is only used to create a
     link in the documentation. If not provided, there is a heuristic to try to guess a
-    link for dists.
+    link for distributions.
     """
 
     _expected_parents: int | dict[str, str]
