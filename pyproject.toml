@@ -2,14 +2,13 @@
 name = "pangolin"
 version = "0.0.1"
 description = "Probabilistic inference focused on fun"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "jax==0.4.38",
+    "jax",
     "jaxtyping",
     "numpy",
     "scipy",
     "numpyro",
-    "funsor>=0.4.5",
     "makefun>=1.16.0",
     "blackjax>=1.2.5",
 ]
@@ -20,10 +19,8 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "pytest>=8.4.1",
-    "jupyter",
-    "seaborn",
+    "black",
+    "pytest",
     "arviz",
 ]
 docs = [
