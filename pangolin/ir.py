@@ -62,7 +62,7 @@ class Op(ABC):
 
     A concrete `Op` class must provide a ``_random`` class attribute, indicating if an op is a conditional distribution (``True``) or a deterministic function (``False``). For classes where this is fixed, this can just be a ``bool``. For classes where this depends on the particular instance of the class (e.g. `VMap`) this can be a function taking the op instance and returning a ``bool``. This property is accessed by `random`. In addition, the docstring for `random` in subclasses is automatically overridden based on ``_random``. (If ``_random`` is ``bool``, the fixed value is given as a string. If ``_random`` is a function, the docstring for ``_random`` is copied to `random` in the subclass.)
 
-    A concrete `Op` class must also provide a function ``_get_shape`` as a class attribute, which will be called by `get_shape`. This is a *function*, not a constant, because some `Op` (e.g. `MultiNormal` or `MatMul`) may have differnet shapes depending on the shapes of the inputs. This ``_get_shape`` function should take the *shapes* of all parents and compute the shape of the output. It is also expected that the ``_get_shape`` method will do error checking—e.g. verify that the correct number of parents are provided and the shapes of the parents are coherent with each other. This method is called by `RV` at construction to ensure that the shapes of all random variables are coherent.
+    A concrete `Op` class must also provide a function ``_get_shape`` as a class attribute, which will be called by `get_shape`. This is a *function*, not a constant, because some `Op` (e.g. `MultiNormal` or `Matmul`) may have differnet shapes depending on the shapes of the inputs. This ``_get_shape`` function should take the *shapes* of all parents and compute the shape of the output. It is also expected that the ``_get_shape`` method will do error checking—e.g. verify that the correct number of parents are provided and the shapes of the parents are coherent with each other. This method is called by `RV` at construction to ensure that the shapes of all random variables are coherent.
 
     An `Op` must provide an `__eq__` method that indicates *mathematical* equality. Thus, if ``op1 = Normal()`` and ``op2 = Normal()`` then, ``op1 == op2``, even though ``op1`` and ``op2`` are distinct objects. However, if ``op3 = Sum(0)`` and ``op4 = Sum(1)`` then ``op3 != op4``. This base class provides a simple implementation that checks if the two arguments have the same type. This must be overridden for classes like `Sum` that have constructors that take parameters. (In those cases, ``__hash__`` must also be overridden.)
     """
@@ -70,6 +70,7 @@ class Op(ABC):
     _frozen = False
     _random: bool | Callable[[], bool]
     _get_shape: Callable[..., Shape]
+    _bijectable: bool | Callable[[int], bool] = False
 
     def __init__(self):
         self._frozen = True  # freeze after init
@@ -99,6 +100,12 @@ class Op(ABC):
             ValueError: If the shapes of the parents are incoherent.
         """
         return self._get_shape(*parents_shapes)
+
+    def bijectable(self, argnum: int) -> bool:
+        if callable(self._bijectable):
+            return self._bijectable(argnum)
+        else:
+            return self._bijectable
 
     def __eq__(self, other: Op) -> bool:
         """
@@ -444,6 +451,10 @@ class Add(ScalarOp):
     _expected_parents = 2
     _random = False
 
+    # _bijectable = True
+    def _bijectable(self, argnum: int) -> bool:
+        return True
+
 
 class Sub(ScalarOp):
     _expected_parents = 2
@@ -543,6 +554,7 @@ class Abs(ScalarOp):
 class Exp(ScalarOp):
     _random = False
     _expected_parents = 1
+    _bijectable = True
 
 
 class InvLogit(ScalarOp):
@@ -1708,6 +1720,94 @@ def index_orthogonal_no_slices(A, *index_arrays):
         current_dim += len(arr.shape)
 
     return A[*result_arrays]
+
+
+########################################################################################
+# Transformations
+########################################################################################
+
+
+class Transformed(Op):
+    """
+    ``Transformed(base_op, transform_op, num_base_args, transformed_arg)``
+    Represents the result of drawing a sample from ``base_op`` and then putting
+    that sample into a given position in ``transform_op``.
+
+    Doing
+
+    .. code-block:: python
+
+        >>> op = Transformed(base_op, # doctest: +SKIP
+        ...                  tform_op,
+        ...                  n_base_args,
+        ...                  tformed_arg)
+        >>> x = RV(op, *p[0:N-1]) # doctest: +SKIP
+
+    Is equal *in distribution* to doing
+
+    .. code-block:: python
+
+        >>> p_base  = p[:num_base_args] # doctest: +SKIP
+        >>> p_tform = p[num_base_args:] # doctest: +SKIP
+        >>> u = RV(base_op, *p_base)  # doctest: +SKIP
+        >>> x = RV(tform_op, *p_tform[:tformed_arg], u, *p_tform[tformed_arg:]) # doctest: +SKIP
+
+    However, in the latter case ``x`` is random and so has a density.
+
+    Examples
+    --------
+    >>> base_op = Normal()
+    >>> transform_op = Add()
+    >>> op = Transformed(base_op, transform_op, 2, 0)
+    >>> op.get_shape((), (), ())
+    ()
+
+    This is equivalent to a lognormal:
+
+    >>> op = Transformed(Normal(), Exp(), 2, 0)
+
+    Args:
+        base_op: The base op to transform (must be random)
+        transform_op: The transformation op (must be invertible w.r.t. it's ``transformed_arg`` th parent)
+
+    """
+
+    _random = True
+
+    def __init__(
+        self,
+        base_op: Op,
+        tform_op: Op,
+        n_base_args: int,
+        tformed_arg: int,
+    ):
+        if not base_op.random:
+            raise ValueError("base_op must be random")
+        if tform_op.random:
+            raise ValueError("transform_op cannot be random")
+
+        if not tform_op.bijectable(tformed_arg):
+            raise ValueError(
+                f"{repr(tform_op)} is not marked bijectable with respect to arg {tformed_arg}"
+            )
+
+        self.base_op = base_op
+        self.transform_op = tform_op
+        self.num_base_args = n_base_args
+        self.transformed_arg = tformed_arg
+
+    def _get_shape(self, *args: Shape) -> Shape:
+        dist_shapes = args[: self.num_base_args]
+        transform_shapes = args[self.num_base_args :]
+
+        original_shape = self.base_op.get_shape(*dist_shapes)
+        transform_input_shapes = (
+            transform_shapes[: self.transformed_arg]
+            + (original_shape,)
+            + transform_shapes[self.transformed_arg :]
+        )
+        new_shape = self.transform_op.get_shape(*transform_input_shapes)
+        return new_shape
 
 
 ########################################################################################
