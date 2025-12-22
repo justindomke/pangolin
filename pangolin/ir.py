@@ -68,7 +68,7 @@ class Op(ABC):
     """
 
     _frozen = False
-    _random: bool | Callable[[Self], bool]
+    _random: bool | Callable[[], bool]
     _get_shape: Callable[..., Shape]
 
     def __init__(self):
@@ -80,7 +80,7 @@ class Op(ABC):
         Is this class a distribution (``True``) or a deterministic function (``False``)?
         """
         if callable(self._random):
-            return self._random(self)
+            return self._random()
         else:
             return self._random
 
@@ -174,7 +174,9 @@ class Op(ABC):
                 random_prop = property(random_getter)
                 random_prop.__doc__ = f"{cls._random}"
             elif isinstance(cls._random, Callable):
-                random_prop = property(cls._random)
+                random_fun = cast(Callable[[Op], bool], cls._random)
+                random_prop = property(random_fun)
+
                 random_prop.__doc__ = cls._random.__doc__
             else:
                 raise TypeError(
@@ -1830,9 +1832,9 @@ def rv_equal(A: RV, B: RV) -> bool:
     Are ``A`` and ``B`` *distributionally* equal? That is, are they guaranteed to always have the same value? This is defined by the following rules:
 
     1. If ``A.op`` is random, then ``A`` is is equal to ``B`` if and only if they refer to the same object in memory.
-    2. If ``A.op`` is non-random, then ``A`` is equal to ``B`` if and only if they have the same `Op` and their parents (defined recursively using this function).
+    2. If ``A.op`` is non-random, then ``A`` is equal to ``B`` if and only if they have the same `Op` and their parents are equal (defined recursively using this function).
 
-    This function is implemented using caching. This doesn't change the results since :class:`RV` s and :class:`Op` s are immutable.
+    This function is implemented using caching. This doesn't change the results since `RV` and `Op` s are immutable.
 
     Args:
         A: the first RV to be compared
@@ -1840,6 +1842,9 @@ def rv_equal(A: RV, B: RV) -> bool:
 
     Examples
     --------
+
+    Constants behave as you'd expect.
+
     >>> a = RV(Constant(0.5))
     >>> b = RV(Constant(0.5))
     >>> c = RV(Constant(0.7))
@@ -1853,7 +1858,8 @@ def rv_equal(A: RV, B: RV) -> bool:
     >>> rv_equal(a, c)
     False
 
-    >>> # with random op, always non-equal unless same object
+    Random Op are always non-equal unless they are same object.
+
     >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), a))
     False
     >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), b))
@@ -1861,7 +1867,8 @@ def rv_equal(A: RV, B: RV) -> bool:
     >>> rv_equal(RV(Bernoulli(), a), RV(Bernoulli(), c))
     False
 
-    >>> # with non-random op, equal if ops equal and parents recursively equal
+    Non-random op are if ops are equal and parents are recursively equal.
+
     >>> rv_equal(RV(Exp(), a), RV(Exp(), a))
     True
     >>> rv_equal(RV(Exp(), a), RV(Exp(), b))
@@ -1903,7 +1910,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     vars
         any number of pytrees containing `RV`
     named_vars
-        single `RV` s as keyword arguments, will be printed with those names
+        single `RV` as keyword arguments, will be printed with those names
 
     Examples
     --------
