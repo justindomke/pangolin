@@ -1,3 +1,5 @@
+*2025.12.22:** Much less magical Scalar op generation in IR and somewhat less magical scalar function generation in iterface.
+
 **2025.12.18:** Add Wishart
 
 **2025.12.16:** Improve typing + API docs, clear interface+docs for user-configuration of broadcasting 
