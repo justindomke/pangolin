@@ -32,5 +32,8 @@ def test_wrong_number_of_args():
         tmp = RV(Constant(1))
         x = RV(d, tmp)
         assert False
-    except ValueError as e:
-        assert str(e) == "Constant got 1 arguments but expected 0."
+    except TypeError as e:
+        assert (
+            str(e)
+            == "Constant._get_shape() takes 1 positional argument but 2 were given"
+        )

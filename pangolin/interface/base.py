@@ -4,22 +4,22 @@ This package defines a special subtype of RV that supports operator overloading
 
 from __future__ import annotations
 from pangolin.ir import RV, Op, Constant, ScalarOp, VMap
-from pangolin import ir
+from pangolin import ir, util
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
 from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING, get_type_hints
-from pangolin.util import comma_separated, camel_case_to_snake_case
 import inspect
-from typing import Generic, TypeAlias, Final
-import os
-import sys
+
+# from typing import Generic, TypeAlias, Final
+import typing
 import inspect
 from dataclasses import dataclass, fields
 from enum import Enum
 from contextlib import contextmanager
+import makefun
 
-RVLike: TypeAlias = RV | ArrayLike
+RVLike: typing.TypeAlias = RV | ArrayLike
 
 # RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
 
@@ -230,7 +230,7 @@ def override(**kwargs):
 OpU = TypeVar("OpU", bound=Op)
 
 
-class InfixRV(RV[OpU], Generic[OpU]):
+class InfixRV(RV[OpU], typing.Generic[OpU]):
     """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
     operations.
 
@@ -522,7 +522,7 @@ def _scalar_op_doc(OpClass):
 
     __doc__ += f"""
     Returns:
-        Random variable with ``z.op`` of type `pangolin.ir.{str(OpClass.__name__)}` and {len(expected_parents)} parent(s).
+        Random variable with ``z.op`` of type `pangolin.ir.{str(OpClass.__name__)}` or `pangolin.ir.VMap` if broadcasting is triggered and {len(expected_parents)} parent(s).
     """
 
     from .. import util
@@ -560,7 +560,7 @@ def _scalar_op_doc(OpClass):
     return __doc__
 
 
-def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
+def vmap_scalars_simple(op: OpU, *parent_shapes: ir.Shape) -> VMap | OpU:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This only accepts a very limited amount of broadcasting: All parents shapes must
     either be *scalar* or *exactly equal*.
@@ -592,6 +592,8 @@ def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
     VMap(VMap(StudentT(), (0, None, 0), 5), (0, None, 0), 3)
     """
 
+    # TODO: Always return VMap
+
     array_shape = None
     for shape in parent_shapes:
         if shape == ():
@@ -619,7 +621,7 @@ def vmap_scalars_simple(op: Op, *parent_shapes: ir.Shape) -> Op:
     return new_op
 
 
-def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
+def vmap_scalars_numpy(op: OpU, *parent_shapes: ir.Shape) -> OpU | ir.VMap:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This implements most of numpy-style scalar broadcasting. The only limitation is that
     broadcasting of singleton dimensions against non-singleton dimensions is not
@@ -682,52 +684,56 @@ def vmap_scalars_numpy(op: Op, *parent_shapes: ir.Shape) -> Op:
     # (will also need to create ir.Squeeze)
 
 
-# def scalar_fun_factory(OpClass: type[ScalarOp], /):
-#     import makefun
+########################################################################################
+# Generate interface for scalar functions
+########################################################################################
 
-#     op = OpClass()
-#     expected_parents = op._expected_parents  # type: ignore
+ScalarOpU = typing.TypeVar("ScalarOpU", bound=ScalarOp)
 
-#     def fun(*args, **kwargs):
-#         if SCALAR_BROADCASTING[0] == "off":
-#             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
-#         elif SCALAR_BROADCASTING[0] == "simple":
-#             positional_args = args + tuple(kwargs[a] for a in kwargs)
-#             parent_shapes = [get_shape(arg) for arg in positional_args]
-#             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
-#             return create_rv(vmapped_op, *positional_args)
-#         elif SCALAR_BROADCASTING[0] == "numpy":
-#             positional_args = args + tuple(kwargs[a] for a in kwargs)
-#             parent_shapes = [get_shape(arg) for arg in positional_args]
-#             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
-#             return create_rv(vmapped_op, *positional_args)
-#         else:
-#             raise Exception(f"Unknown scalar broadcasting model: {SCALAR_BROADCASTING}")
-
-#     func_sig = (
-#         f"{op.name}"
-#         + comma_separated([f"{a}:'RVLike'" for a in expected_parents])
-#         + " -> InfixRV["
-#         + f"ir.{OpClass.__name__}"
-#         + "]"
-#     )
-
-#     fun = makefun.create_function(
-#         func_sig, fun, dict_globals={"RVLike", RVLike}
-#     )  # useless?
-#     fun.__doc__ = _scalar_op_doc(OpClass)
-#     fun.__module__ = "pangolin.interface"
-#     return fun
+ScalarInterfaceFun: typing.TypeAlias = Callable[..., InfixRV[ScalarOpU | VMap]]
 
 
-def scalar_fun_factory(OpClass: type[ScalarOp]):
-    import makefun
+def get_base_op_from_scalar_fun(
+    fun: Callable[..., InfixRV[ScalarOpU | VMap]]
+) -> Type[ScalarOpU]:
+    hints = get_type_hints(fun)
+    return_type = hints.get("return")
 
-    op = OpClass()
-    op_info = ir._OpInfo(OpClass)
-    expected_parents = op_info.expected_parents
+    if not return_type:
+        raise ValueError(f"{fun.__name__} needs a return annotation")
 
-    def fun(*args, **kwargs):
+    all_args = typing.get_args(return_type)
+    assert len(all_args) == 1
+
+    union_arg = all_args[0]
+    OpClass = typing.get_args(union_arg)[0]
+    return OpClass
+
+
+def _scalar_op_signature(fun: ScalarInterfaceFun):
+    sig = inspect.signature(fun)
+    params = list(sig.parameters.values())
+
+    OpClass = get_base_op_from_scalar_fun(fun)
+    expected_parents = OpClass._expected_parents
+
+    if isinstance(expected_parents, int):
+        assert len(params) == expected_parents
+        return sig
+
+    assert len(params) == len(expected_parents), f"parent mismatch for {fun}"
+
+    new_params = []
+    for param, parent_name in zip(params, expected_parents, strict=True):
+        new_p = param.replace(name=parent_name)
+        new_params.append(new_p)
+
+    new_sig = sig.replace(parameters=new_params)
+    return new_sig
+
+
+def _scalar_handler(op):
+    def handler(*args, **kwargs):
         if config.broadcasting == Broadcasting.OFF:
             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
         elif config.broadcasting == Broadcasting.SIMPLE:
@@ -743,97 +749,146 @@ def scalar_fun_factory(OpClass: type[ScalarOp]):
         else:
             raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
 
-    op_info = ir._OpInfo(OpClass)
+    return handler
 
-    func_sig = (
-        f"{op.name}"
-        + comma_separated([f"{a}:'RVLike'" for a in op_info.expected_parents])
-        + " -> InfixRV["
-        + f"ir.{OpClass.__name__}"
-        + "]"
+
+def scalar_op(fun: ScalarInterfaceFun):
+    OpClass = get_base_op_from_scalar_fun(fun)
+    op = OpClass()
+
+    if fun.__name__ != util.camel_case_to_snake_case(OpClass.__name__):
+        raise Exception(f"{fun.__name__} does not match to {OpClass.__name__}")
+
+    # assert fun.__name__ == util.camel_case_to_snake_case(OpClass.__name__)
+
+    wrapper = makefun.create_function(
+        _scalar_op_signature(fun),
+        _scalar_handler(op),
+        func_name=fun.__name__,
+        qualname=fun.__qualname__,
+        module_name=fun.__module__,
+        doc=_scalar_op_doc(OpClass),
     )
 
-    fun = makefun.create_function(
-        func_sig, fun, dict_globals={"RVLike", RVLike}
-    )  # useless?
-    fun.__doc__ = _scalar_op_doc(OpClass)
-    fun.__module__ = "pangolin.interface"
-    return fun
+    return wrapper
 
 
-if TYPE_CHECKING:
-    # stubs so type-checker doesn't fail on InfixRV
-    def add(a: RVLike, b: RVLike) -> InfixRV[ir.Add]: ...
-    def sub(a: RVLike, b: RVLike) -> InfixRV[ir.Sub]: ...
-    def mul(a: RVLike, b: RVLike) -> InfixRV[ir.Mul]: ...
-    def div(a: RVLike, b: RVLike) -> InfixRV[ir.Div]: ...
-    def pow(a: RVLike, b: RVLike) -> InfixRV[ir.Pow]: ...
-    def abs(a: RVLike) -> InfixRV[ir.Abs]: ...
-    def arccos(a: RVLike) -> InfixRV[ir.Arccos]: ...
-    def arccosh(a: RVLike) -> InfixRV[ir.Arccosh]: ...
-    def arcsin(a: RVLike) -> InfixRV[ir.Arcsin]: ...
-    def arcsinh(a: RVLike) -> InfixRV[ir.Arcsinh]: ...
-    def arctan(a: RVLike) -> InfixRV[ir.Arctan]: ...
-    def arctanh(a: RVLike) -> InfixRV[ir.Arctanh]: ...
-    def cos(a: RVLike) -> InfixRV[ir.Cos]: ...
-    def cosh(a: RVLike) -> InfixRV[ir.Cosh]: ...
-    def exp(a: RVLike) -> InfixRV[ir.Exp]: ...
-    def inv_logit(a: RVLike) -> InfixRV[ir.InvLogit]: ...
-    def log(a: RVLike) -> InfixRV[ir.Log]: ...
-    def loggamma(a: RVLike) -> InfixRV[ir.Loggamma]: ...
-    def logit(a: RVLike) -> InfixRV[ir.Logit]: ...
-    def sin(a: RVLike) -> InfixRV[ir.Sin]: ...
-    def sinh(a: RVLike) -> InfixRV[ir.Sinh]: ...
-    def step(a: RVLike) -> InfixRV[ir.Step]: ...
-    def tan(a: RVLike) -> InfixRV[ir.Tan]: ...
-    def tanh(a: RVLike) -> InfixRV[ir.Tanh]: ...
-    def normal(a: RVLike, b: RVLike) -> InfixRV[ir.Normal]: ...
-    def normal_prec(a: RVLike, b: RVLike) -> InfixRV[ir.NormalPrec]: ...
-    def lognormal(a: RVLike, b: RVLike) -> InfixRV[ir.Lognormal]: ...
-    def cauchy(a: RVLike, b: RVLike) -> InfixRV[ir.Cauchy]: ...
-    def bernoulli(a: RVLike) -> InfixRV[ir.Bernoulli]: ...
-    def bernoulli_logit(a: RVLike) -> InfixRV[ir.BernoulliLogit]: ...
-    def binomial(a: RVLike, b: RVLike) -> InfixRV[ir.Binomial]: ...
-    def uniform(a: RVLike, b: RVLike) -> InfixRV[ir.Uniform]: ...
-    def beta(a: RVLike, b: RVLike) -> InfixRV[ir.Beta]: ...
-    def beta_binomial(a: RVLike, b: RVLike, c: RVLike) -> InfixRV[ir.BetaBinomial]: ...
-    def exponential(a: RVLike) -> InfixRV[ir.Exponential]: ...
-    def gamma(a: RVLike, b: RVLike) -> InfixRV[ir.Gamma]: ...
-    def poisson(a: RVLike) -> InfixRV[ir.Poisson]: ...
-    def student_t(a: RVLike) -> InfixRV[ir.StudentT]: ...
+@scalar_op
+def add(a: RVLike, b: RVLike) -> InfixRV[ir.Add | ir.VMap]: ...
+@scalar_op
+def sub(a: RVLike, b: RVLike) -> InfixRV[ir.Sub | ir.VMap]: ...
+@scalar_op
+def mul(a: RVLike, b: RVLike) -> InfixRV[ir.Mul | ir.VMap]: ...
+@scalar_op
+def div(a: RVLike, b: RVLike) -> InfixRV[ir.Div | ir.VMap]: ...
+@scalar_op
+def pow(a: RVLike, b: RVLike) -> InfixRV[ir.Pow | ir.VMap]: ...
+@scalar_op
+def abs(a: RVLike) -> InfixRV[ir.Abs | ir.VMap]: ...
+@scalar_op
+def arccos(a: RVLike) -> InfixRV[ir.Arccos | ir.VMap]: ...
+@scalar_op
+def arccosh(a: RVLike) -> InfixRV[ir.Arccosh | ir.VMap]: ...
+@scalar_op
+def arcsin(a: RVLike) -> InfixRV[ir.Arcsin | ir.VMap]: ...
+@scalar_op
+def arcsinh(a: RVLike) -> InfixRV[ir.Arcsinh | ir.VMap]: ...
+@scalar_op
+def arctan(a: RVLike) -> InfixRV[ir.Arctan | ir.VMap]: ...
+@scalar_op
+def arctanh(a: RVLike) -> InfixRV[ir.Arctanh | ir.VMap]: ...
+@scalar_op
+def cos(a: RVLike) -> InfixRV[ir.Cos | ir.VMap]: ...
+@scalar_op
+def cosh(a: RVLike) -> InfixRV[ir.Cosh | ir.VMap]: ...
+@scalar_op
+def exp(a: RVLike) -> InfixRV[ir.Exp | ir.VMap]: ...
+@scalar_op
+def inv_logit(a: RVLike) -> InfixRV[ir.InvLogit | ir.VMap]: ...
+@scalar_op
+def log(a: RVLike) -> InfixRV[ir.Log | ir.VMap]: ...
+@scalar_op
+def loggamma(a: RVLike) -> InfixRV[ir.Loggamma | ir.VMap]: ...
+@scalar_op
+def logit(a: RVLike) -> InfixRV[ir.Logit | ir.VMap]: ...
+@scalar_op
+def sin(a: RVLike) -> InfixRV[ir.Sin | ir.VMap]: ...
+@scalar_op
+def sinh(a: RVLike) -> InfixRV[ir.Sinh | ir.VMap]: ...
+@scalar_op
+def step(a: RVLike) -> InfixRV[ir.Step | ir.VMap]: ...
+@scalar_op
+def tan(a: RVLike) -> InfixRV[ir.Tan | ir.VMap]: ...
+@scalar_op
+def tanh(a: RVLike) -> InfixRV[ir.Tanh | ir.VMap]: ...
+@scalar_op
+def normal(a: RVLike, b: RVLike) -> InfixRV[ir.Normal | ir.VMap]: ...
+@scalar_op
+def normal_prec(a: RVLike, b: RVLike) -> InfixRV[ir.NormalPrec | ir.VMap]: ...
+@scalar_op
+def lognormal(a: RVLike, b: RVLike) -> InfixRV[ir.Lognormal | ir.VMap]: ...
+@scalar_op
+def cauchy(a: RVLike, b: RVLike) -> InfixRV[ir.Cauchy | ir.VMap]: ...
+@scalar_op
+def bernoulli(a: RVLike) -> InfixRV[ir.Bernoulli | ir.VMap]: ...
+@scalar_op
+def bernoulli_logit(a: RVLike) -> InfixRV[ir.BernoulliLogit | ir.VMap]: ...
+@scalar_op
+def binomial(a: RVLike, b: RVLike) -> InfixRV[ir.Binomial | ir.VMap]: ...
+@scalar_op
+def uniform(a: RVLike, b: RVLike) -> InfixRV[ir.Uniform | ir.VMap]: ...
+@scalar_op
+def beta(a: RVLike, b: RVLike) -> InfixRV[ir.Beta | ir.VMap]: ...
+@scalar_op
+def beta_binomial(
+    a: RVLike, b: RVLike, c: RVLike
+) -> InfixRV[ir.BetaBinomial | ir.VMap]: ...
+@scalar_op
+def exponential(a: RVLike) -> InfixRV[ir.Exponential | ir.VMap]: ...
+@scalar_op
+def gamma(a: RVLike, b: RVLike) -> InfixRV[ir.Gamma | ir.VMap]: ...
+@scalar_op
+def poisson(a: RVLike) -> InfixRV[ir.Poisson | ir.VMap]: ...
+@scalar_op
+def student_t(a: RVLike, b: RVLike, c: RVLike) -> InfixRV[ir.StudentT | ir.VMap]: ...
 
 
-def _populate_scalar_funs():
-    module = sys.modules[__name__]
+# add extra doctests for student_t to check kwargs REALLY work
+student_t.__doc__ = (
+    typing.cast(str, student_t.__doc__)
+    + """
+    Also, let's check that we can mix positional and keyword arguments.
 
-    for name, cls in vars(ir).items():
-        if (
-            isinstance(cls, type)
-            and issubclass(cls, ir.ScalarOp)
-            and not cls == ir.ScalarOp
-            and not inspect.isabstract(cls)
-        ):
-            setattr(
-                module,
-                camel_case_to_snake_case(name),
-                scalar_fun_factory(cls),
-            )
+    >>> student_t(nu=0.1, mu=0.2, sigma=0.4)
+    InfixRV(StudentT(), InfixRV(Constant(0.1)), InfixRV(Constant(0.2)), InfixRV(Constant(0.4)))
 
+    >>> student_t(0.1, mu=0.2, sigma=0.4)
+    InfixRV(StudentT(), InfixRV(Constant(0.1)), InfixRV(Constant(0.2)), InfixRV(Constant(0.4)))
 
-_populate_scalar_funs()
+    >>> student_t(0.1, sigma=0.4, mu=0.2)
+    InfixRV(StudentT(), InfixRV(Constant(0.1)), InfixRV(Constant(0.2)), InfixRV(Constant(0.4)))
 
-
-expit = scalar_fun_factory(ir.InvLogit)
-expit.__doc__ = "Equivalent to `inv_logit`"
-sigmoid = scalar_fun_factory(ir.InvLogit)
-sigmoid.__doc__ = "Equivalent to `inv_logit`"
+    >>> student_t(sigma=0.4, nu=0.1, mu=0.2)
+    InfixRV(StudentT(), InfixRV(Constant(0.1)), InfixRV(Constant(0.2)), InfixRV(Constant(0.4)))
+    """
+)
 
 
-def sqrt(x: RVLike) -> InfixRV[ir.Pow]:
+def expit(a):
+    "An alias for `inv_logit`"
+    return inv_logit(a)
+
+
+def sigmoid(a):
+    "An alias for `inv_logit`"
+    return inv_logit(a)
+
+
+def sqrt(x: RVLike) -> InfixRV[ir.Pow | VMap]:
     """
     Take a square root.
 
-    sqrt(x) is an alias for pow(x,0.5)
+    sqrt(x) is an alias for pow(x, 0.5)
     """
     return pow(x, 0.5)
 

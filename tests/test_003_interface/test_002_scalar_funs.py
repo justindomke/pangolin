@@ -14,17 +14,17 @@ def test_wrong_number_of_args():
             if len(args) == 0:
                 assert (
                     str(e)
-                    == f"Normal() missing 2 required positional arguments: 'mu' and 'sigma'"
+                    == f"normal() missing 2 required positional arguments: 'mu' and 'sigma'"
                 )
             elif len(args) == 1:
                 assert (
                     str(e)
-                    == f"Normal() missing 1 required positional argument: 'sigma'"
+                    == f"normal() missing 1 required positional argument: 'sigma'"
                 )
             else:
                 assert (
                     str(e)
-                    == f"Normal() takes 2 positional arguments but {len(args)} were given"
+                    == f"normal() takes 2 positional arguments but {len(args)} were given"
                 )
 
 
