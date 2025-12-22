@@ -882,7 +882,7 @@ class StudentT(ScalarOp):
 ################################################################################
 
 
-def _vec_mat_get_shape(vec_shape: Shape, mat_shape: Shape) -> Shape:
+def _vec_mat_get_shape(self, vec_shape: Shape, mat_shape: Shape) -> Shape:
     """
     Checks that first argument is a 1D vector and second argument is a square 2D array
     with sizes the same as the first argument.
