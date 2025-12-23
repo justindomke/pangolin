@@ -486,7 +486,7 @@ def tree_map_recurse_at_leaf(
         # `remaining_subtrees` are the corresponding subtrees from `*remaining_trees`.
         # The inner `jax.tree_map` then broadcasts `leaf` across the leaves
         # of `remaining_subtrees`.
-        return jax.tree_map(
+        return jax.tree_util.tree_map(
             lambda *leaves: f(leaf, *leaves),
             *remaining_subtrees,
             is_leaf=is_leaf,  # Propagate the custom is_leaf to the inner map
@@ -611,7 +611,7 @@ def assimilate_vals(vars: PyTree, vals: PyTree) -> PyTree[jnp.ndarray]:
     from a big array with one more dimension.)
     """
     try:
-        new_vals = jax.tree_map(lambda var, val: jnp.array(val), vars, vals)
+        new_vals = jax.tree_util.tree_map(lambda var, val: jnp.array(val), vars, vals)
     except ValueError:
         vars_treedef = jax.tree_util.tree_structure(vars)
         vals_treedef = jax.tree_util.tree_structure(vals)
