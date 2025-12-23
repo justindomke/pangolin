@@ -21,6 +21,7 @@ build-backend = "hatchling.build"
 dev = [
     "black",
     "pytest",
+    "pytest-clarity",
     "arviz",
 ]
 docs = [
@@ -37,5 +38,16 @@ docs = [
 torch = ["torch","funtorch"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "--doctest-modules"
+testpaths = ["tests","pangolin"]
+addopts = "-vv --doctest-modules"
+norecursedirs = [
+    "pangolin-jags",
+    "hidden",
+    "models",
+    "*.egg", 
+    ".git", 
+    ".venv", 
+    "node_modules", 
+    "dist", 
+    "build"
+]
