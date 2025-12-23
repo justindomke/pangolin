@@ -2,6 +2,16 @@
 
 These instructions will install pangolin and all dependencies in a local directory, using the [uv](https://docs.astral.sh/uv/) package manager.
 
+## Just want to test out pangolin?
+
+Assuming you have [uv](https://docs.astral.sh/uv/) installed, you can download pangolin and start python with pangolin in a temporary environment with this one-liner:
+
+```shell
+uv run --with git+https://github.com/justindomke/pangolin.git python
+```
+
+## Want to install it "properly"?
+
 **Step 1** If you haven't installed [uv](https://docs.astral.sh/uv/), install it.
 
 **Step 2** Download pangolin source code and extract it. You could do this in either of the following ways:
