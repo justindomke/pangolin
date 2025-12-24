@@ -51,3 +51,6 @@ norecursedirs = [
     "dist", 
     "build"
 ]
+
+[tool.black]
+line-length = 120
