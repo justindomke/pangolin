@@ -1,0 +1,1 @@
+This module provides tests that are shared between different "backends", i.e. differerent modules that provide ``ancestor_sample_flat`` and ``ancestor_log_prob_flat`` methods. (These do not do inference, just evaluate models.)

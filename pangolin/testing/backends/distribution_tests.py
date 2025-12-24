@@ -1,6 +1,4 @@
 from pangolin.ir import *
-
-# import numpyro.handlers
 import numpy as np
 import pytest
 import scipy.special
@@ -69,7 +67,7 @@ testdata = [
     (Wishart, scipy.stats.wishart, [(10.1, 20.0), "positive-definite"]),
 ]
 
-# don't test Cauchy since it has no mean
+# Cauchy won't be tested since it has no mean
 
 
 def get_mean(scipy_rv):
@@ -81,6 +79,9 @@ def get_mean(scipy_rv):
         return scipy_rv.mean()
     else:
         return None
+
+
+
 
 
 def get_std(scipy_rv):
