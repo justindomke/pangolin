@@ -1,8 +1,9 @@
 from .deterministic_tests import DeterministicTests
 from .distribution_tests import DistributionTests
+from .simple_posterior_tests import SimplePosteriorTests
 
 
-class InferenceTests(DeterministicTests, DistributionTests):
+class InferenceTests(DeterministicTests, DistributionTests, SimplePosteriorTests):
     """
     Module is abstract, to use should define a subclass ``_sample_flat`` etc. with a name starting with "Test"
     """
