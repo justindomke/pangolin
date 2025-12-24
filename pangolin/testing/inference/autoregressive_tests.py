@@ -35,6 +35,29 @@ class AutoregressiveTests:
         out = self.sample_flat([y], [], [], niter=1)
         assert np.allclose(expected, out[0])
 
+    def test_repeated_exp_with_dummy(self):
+        length = 5
+
+        op = ir.Autoregressive(ir.Exp(), length, in_axes=[])
+        # out = get_numpyro_val(op, 0.1, is_observed=False)
+
+        last = 0.1
+        expected = []
+        for i in range(length):
+            last = np.exp(last)
+            expected.append(last)
+        expected = np.array(expected)
+
+        x = ir.RV(ir.Constant(0.1))
+        y = ir.RV(op, x)
+        dummy = ir.RV(ir.Normal(), x, x)  # so there's something to sample!
+
+        def testfun(samps):
+            [ys] = samps
+            return all(np.allclose(samp, expected) for samp in ys)
+
+        test_util.inf_until_match(self.sample_flat, [y], [dummy], [1.5], testfun)
+
     def test_autoregressive_simple(self):
         x = pi.constant(0.5)
         length = 12
