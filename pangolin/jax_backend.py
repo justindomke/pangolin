@@ -457,7 +457,12 @@ def ancestor_sample_flat_single(vars: list[RV], key):
     return [all_values[var] for var in vars]
 
 
-def ancestor_sample_flat(vars: list[RV], key, size: Optional[int] = None):
+def ancestor_sample_flat(vars: list[RV], key: Optional[JaxArray] = None, size: Optional[int] = None):
+    if key is None:
+        # Generate random seed from numpy
+        seed = np.random.randint(0, 2**32 - 1)
+        key = jax.random.PRNGKey(seed)
+    
     if size is None:
         return ancestor_sample_flat_single(vars, key)
     else:
