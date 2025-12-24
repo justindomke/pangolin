@@ -23,6 +23,7 @@ dev = [
     "pytest",
     "pytest-clarity",
     "arviz",
+    "ty",
 ]
 docs = [
     "sphinx",
