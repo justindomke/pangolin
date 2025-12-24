@@ -3,9 +3,12 @@ from .distribution_tests import DistributionTests
 from .simple_posterior_tests import SimplePosteriorTests
 from .composite_tests import CompositeTests
 from .autoregressive_tests import AutoregressiveTests
+from .vmap_tests import VmapTests
 
 
-class InferenceTests(DeterministicTests, DistributionTests, SimplePosteriorTests, CompositeTests, AutoregressiveTests):
+class InferenceTests(
+    DeterministicTests, DistributionTests, SimplePosteriorTests, CompositeTests, AutoregressiveTests, VmapTests
+):
     """
     Module is abstract, to use should define a subclass ``_sample_flat`` etc. with a name starting with "Test"
     """
