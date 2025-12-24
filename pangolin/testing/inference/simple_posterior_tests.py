@@ -62,8 +62,8 @@ class SimplePosteriorTests:
         x = ir.RV(ir.Normal(), loc, scale)
         z = ir.RV(ir.Normal(), x, scale)
         y = ir.RV(ir.Mul(), z, scale)
-        [x_samps, y_samps] = self.sample_flat([x, y], [z], [1.0], niter=1000)
-        assert x_samps.shape == y_samps.shape == (1000,)
+        [x_samps, y_samps] = self.sample_flat([x, y], [z], [1.0], niter=10000)
+        assert x_samps.shape == y_samps.shape == (10000,)
         assert np.abs(np.mean(x_samps) - 0.5) < 0.05
         assert np.abs(np.var(x_samps) - 0.5) < 0.05
         assert np.allclose(y_samps, 1.0)

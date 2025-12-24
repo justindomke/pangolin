@@ -81,9 +81,6 @@ def get_mean(scipy_rv):
         return None
 
 
-
-
-
 def get_std(scipy_rv):
     if hasattr(scipy_rv, "std") and not np.any(np.isnan(scipy_rv.std())) and not np.any(np.isinf(scipy_rv.std())):
         return scipy_rv.std()
@@ -131,7 +128,7 @@ class DistributionTests:
                     samps = np.array(samps, copy=True)  # cast from JAX or pytorch or whatever
 
                     empirical_mean = np.mean(samps, axis=0)
-                    match = np.all(np.abs(empirical_mean - expected_mean) / np.abs(expected_mean) < 0.05)
+                    match = np.all(np.abs(empirical_mean - expected_mean) / np.linalg.norm(expected_mean) < 0.05)
 
                     if expected_std is not None:
                         empirical_std = np.std(samps, axis=0)
