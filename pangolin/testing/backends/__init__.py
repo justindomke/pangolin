@@ -10,7 +10,12 @@ class BackendTests(DeterministicTests, DistributionTests):
     _ancestor_sample_flat = None
     _ancestor_log_prob_flat = None
     _cast = None
-
+    _ops_without_sampling_support = {}
+    "A set of pangolin random ops that this backend cannot sample from. Corresponding tests will be skipped"
+    _ops_without_log_prob_support = {}
+    "A set of pangolin random ops that this backend cannot evaluate log_probabilities. Corresponding tests will be skipped"
+    _ops_without_eval_support = {}
+    "A set of pangolin deterministic ops that this backend cannot evaluate log_probabilities. Corresponding tests will be skipped"
 
     @property
     def ancestor_sample_flat(self):
