@@ -2,6 +2,20 @@
 This is an **experimental** sub-module to compile pangolin models into
 plain-old pytorch functions.
 
+This backend currently has some limitation in it's support for *sampling* from ``Beta``, ``BetaBinomial``, ``Exponential``, ``StudentT``, ``Dirichlet``, ``Multinomial``, ``Wishart``, and ``MultiNormal`` distributions. This is due to some basic ~~bugs~~ limitations in PyTorch's distribution implementation. For example, you often cannot sample inside a vmap. While
+
+``torch.vmap(lambda dummy: torch.distributions.Normal(0,1).sample(), randomness='different')(torch.zeros(2))``
+
+works fine (and so ``Normal`` is supported), the similar call
+
+``torch.vmap(lambda dummy: torch.distributions.Exponential(2.0).rsample(), randomness='different')(torch.zeros(2))``
+
+raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.``
+
+Log-probability calculations work fine for all those distributions.
+
+This backend has very limited support for ``Multinomial`` and no support for ``BetaBinomial``.
+
 **Note**: Because pytorch is large and sometimes annoying to install, and many users
 will not use this functionality, pangolin does not install pytorch as a requirement by
 default. This might lead you to get this error:
@@ -678,7 +692,8 @@ def ancestor_sample_flat(vars: list[RV], size: Optional[int] = None):
     else:
         mysample = lambda dummy: ancestor_sample_flat_single(vars)
         dummy = torch.zeros(size)
-        return torch.vmap(mysample, randomness="different")(dummy)
+        #return torch.vmap(mysample, randomness="different")(dummy)
+        return my_vmap(mysample, in_dims=(0,), axis_size=size)(dummy)
 
 
 def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike]):
