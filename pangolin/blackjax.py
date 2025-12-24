@@ -1,6 +1,6 @@
 """
 This module defines a convenient interface to call
-`Blackjax <https://blackjax-devs.github.io/blackjax/>`_ 
+`Blackjax <https://blackjax-devs.github.io/blackjax/>`_
 to do inference. You could of course just call `pangolin.jax_backend.ancestor_log_prob`
 to get a plain jax function and then call Blackjax yourself. But this module abstracts
 away all the details.
@@ -55,6 +55,7 @@ def run_nuts(log_prob, key, initial_state, num_samples):
     adapt = blackjax.window_adaptation(blackjax.nuts, log_prob)
 
     (last_state, parameters), _ = adapt.run(warmup_key, initial_state, num_samples)  # type: ignore
+
     kernel = blackjax.nuts(log_prob, **parameters).step
     states, infos = inference_loop(sample_key, kernel, last_state, num_samples)
     return states.position
@@ -114,9 +115,7 @@ def sample_flat(
 
     if any(not v.op.random for v in given_vars):
         nonrandom_ops = [v.op for v in given_vars if not v.op.random]
-        raise ValueError(
-            f"Cannot condition on RV with non-random op(s) {nonrandom_ops}"
-        )
+        raise ValueError(f"Cannot condition on RV with non-random op(s) {nonrandom_ops}")
 
     # if no given variables, just do ancestor sampling (works but disabled for simplicity)
     # if len(given_vars) == 0:
@@ -131,18 +130,17 @@ def sample_flat(
 
     @jax.jit
     def log_prob(latent_vals):
-        return jax_backend.ancestor_log_prob_flat(
-            latent_vars + given_vars, latent_vals + given_vals
-        )
+        return jax_backend.ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals)
 
-    key = jax.random.PRNGKey(0)
+    # key = jax.random.PRNGKey(0)
+    seed = np.random.randint(0, 2**32 - 1)
+    key = jax.random.PRNGKey(seed)
+
     latent_vals = jax_backend.ancestor_sample_flat(latent_vars, key)
     latent_samps = run_nuts(log_prob, key, latent_vals, niter)
 
     def fill(latent_vals):
-        return jax_backend.fill_in(
-            latent_vars + given_vars, latent_vals + given_vals, vars
-        )
+        return jax_backend.fill_in(latent_vars + given_vars, latent_vals + given_vals, vars)
 
     # include niter in case latent_samps is empty
     return jax.vmap(fill, axis_size=niter)(latent_samps)
@@ -279,9 +277,7 @@ class Calculate:
         Array(...)
         """
 
-        return self.sample(
-            vars, given_vars, given_vals, lambda x: np.mean(x, axis=0), **options
-        )
+        return self.sample(vars, given_vars, given_vals, lambda x: np.mean(x, axis=0), **options)
 
     def var(
         self,
@@ -290,9 +286,7 @@ class Calculate:
         given_vals: PyTree[ArrayLike] = None,
         **options,
     ):
-        return self.sample(
-            vars, given_vars, given_vals, lambda x: np.var(x, axis=0), **options
-        )
+        return self.sample(vars, given_vars, given_vals, lambda x: np.var(x, axis=0), **options)
 
     def std(
         self,
@@ -301,9 +295,7 @@ class Calculate:
         given_vals: PyTree[ArrayLike] = None,
         **options,
     ):
-        return self.sample(
-            vars, given_vars, given_vals, lambda x: np.std(x, axis=0), **options
-        )
+        return self.sample(vars, given_vars, given_vals, lambda x: np.std(x, axis=0), **options)
 
     def sample_arviz(
         self,
@@ -368,9 +360,7 @@ Default version of `Calculate.sample_arviz` that uses 1000 samples.
 """
 
 
-def inf_until_match(
-    inf, vars, given, vals, testfun, niter_start=1000, niter_max=100000
-):
+def inf_until_match(inf, vars, given, vals, testfun, niter_start=1000, niter_max=100000):
     from time import time
 
     niter = niter_start
@@ -392,10 +382,6 @@ import functools
 sample_until_match = functools.partial(inf_until_match, sample)
 
 
-def sample_flat_until_match(
-    vars, given, vals, testfun, niter_start=1000, niter_max=100000
-):
+def sample_flat_until_match(vars, given, vals, testfun, niter_start=1000, niter_max=100000):
     new_testfun = lambda stuff: testfun(stuff[0])
-    return inf_until_match(
-        sample_flat, vars, given, vals, new_testfun, niter_start, niter_max
-    )
+    return inf_until_match(sample_flat, vars, given, vals, new_testfun, niter_start, niter_max)
