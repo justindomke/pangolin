@@ -106,3 +106,57 @@ class CompositeTests:
         assert np.allclose(l2, expected)
 
 
+# def test_composite_deterministic():
+#     @composite
+#     def f(x):
+#         a = x + 2
+#         b = x * x
+#         return a + b
+
+#     x = constant(1.5)
+#     y = f(x)
+#     assert isinstance(y.op, ir.Composite)
+
+#     expected = (1.5 + 2) + (1.5**2)
+
+#     [ys] = sample_flat([y], [], [], niter=100)
+#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+
+#     ys = sample(y, None, None, niter=100)
+#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+
+
+# def test_composite_random():
+#     @composite
+#     def f(x):
+#         a = x + 2
+#         b = x * x
+#         return normal(a**b, 1e-5)
+
+#     x = constant(1.5)
+#     y = f(x)
+#     assert isinstance(y.op, ir.Composite)
+
+#     expected = (1.5 + 2) ** (1.5**2)
+
+#     [ys] = sample_flat([y], [], [], niter=100)
+#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+
+#     ys = sample(y, None, None, niter=100)
+#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+
+
+# def test_composite_simple_const_rv():
+#     x = constant(0.5)
+#     noise = constant(1e-3)
+
+#     @composite
+#     def f(last):
+#         return normal(last, noise)  # +1
+
+#     y = f(x)
+
+#     def testfun(E_y):
+#         return np.abs(E_y - 0.5) < 0.1
+
+#     inf_until_match(E, y, [], [], testfun)
