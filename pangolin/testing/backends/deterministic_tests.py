@@ -1,10 +1,8 @@
-# from pangolin.interface import *
 from pangolin.ir import *
 import numpyro.handlers
 import numpy as np
 import pytest
 import scipy.special
-from pangolin.jax_backend import ancestor_sample_flat
 import jax
 
 
@@ -59,22 +57,20 @@ testdata = [
 ]
 
 
-class DeterministicTestSuite:
+class DeterministicTests:
     """
-    This class assumes a fixture named 'ancestor_sample_flat' will be available at runtime.
+    Intended to be used as a mixin
     """
 
     @pytest.mark.parametrize("pangolin_op, numpy_fun, ranges", testdata)
-    def test_op(self, pangolin_op, numpy_fun, ranges):
+    def test_deterministic_op(self, pangolin_op, numpy_fun, ranges):
         for reps in range(5):
             inputs = rands_from_ranges(ranges)
 
             input_rvs = [RV(Constant(x)) for x in inputs]
             output_rv = RV(pangolin_op(), *input_rvs)
 
-            output_pangolin = ancestor_sample_flat([output_rv], None)
+            output_pangolin = self.ancestor_sample_flat([output_rv], None)
             output_numpy = numpy_fun(*inputs)
             assert np.allclose(output_pangolin, output_numpy, atol=1e-5, rtol=1e-5)
 
-
-# class BackendTestSuite(

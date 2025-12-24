@@ -9,9 +9,9 @@ import jax
 from pangolin import ir
 
 
-class DeterministicTestSuite:
+class CompositeTests:
     """
-    This class assumes a fixture named 'ancestor_sample_flat' will be available at runtime.
+    Intended to be used as a mixin
     """
 
     def test_add(self):
@@ -27,7 +27,7 @@ class DeterministicTestSuite:
         y = ir.RV(op, x)
         assert isinstance(y.op, ir.Composite)
 
-        [out] = ancestor_sample_flat([y], None)
+        [out] = self.ancestor_sample_flat([y], None)
         assert np.allclose(expected, out)
 
     def test_add_mul(self):
@@ -106,4 +106,3 @@ class DeterministicTestSuite:
         assert np.allclose(l2, expected)
 
 
-# class BackendTestSuite(

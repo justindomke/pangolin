@@ -13,6 +13,8 @@
 
 * Improve `get_shape` functions / docs for scalar Op to better document number of args etc
 
+* More complete unified backend tests
+
 * Offer constraints:
   * Possibly just for scalar dists
   * Possibly offer an unnormalized_log_prob function (tricky because matters if constraints are constant)
