@@ -40,7 +40,7 @@ torch = ["torch","funtorch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests","pangolin"]
-addopts = "-vv --doctest-modules"
+addopts = "-s -vv --doctest-modules"
 norecursedirs = [
     "pangolin-jags",
     "hidden",
