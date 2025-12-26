@@ -130,8 +130,8 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
 
 
 def autoregressive(
-    fun: Callable, length: None | int = None, in_axes: PyTree[int | None] = 0
-) -> Callable[..., RV[Autoregressive]]:
+    fun: Callable[..., RV], length: None | int = None, in_axes: PyTree[int | None] = 0
+) -> Callable[..., InfixRV[Autoregressive]]:
     """
     Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
 
@@ -172,26 +172,22 @@ def autoregressive(
 
     Even more generally, ``in_axes`` can be any pytree of in-axes that is a tree prefix for the arguments. (See examples below)
 
-    Parameters
-    ----------
-    fun
-        Function to call repeatedly to define the distribution.
-        Must take ``carry`` as the first input.
-        Must return a single `RV`.
-        Can only create a single *random* `RV`, which must be the final output.
-        But can create an arbitrary number of *non*-random `RV`.
-        Can optionally take extra inputs that will be mapped.
-    length
-        Length of autoregressive. Can be ``None`` if any inputs are mapped along some axis.
-    in_axes
-        What axis to map each input other than ``carry`` over (or ``None`` if
-        non-mapped). As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
-        inputs other than ``carry``.
+    Parameters:
+        fun:
+            Function to call repeatedly to define the distribution.
+            Must take some argument ``carry`` as the first input and return a single `RV` with the same shape as ``carry``.
+            This function can only create a single *random* `RV` which (if it exists) must be the return value. But it can create an arbitrary number of non-random `RV` internally.
+            This function can take extra inputs, which can be `RVLike` or pytrees of `RVLike`. These can be mapped as determined
+            Can optionally take extra inputs that will be mapped.
+        length:
+            Length of autoregressive. Can be ``None`` if any inputs are mapped along some axis.
+        in_axes:
+            What axis to map each input other than ``carry`` over (or ``None`` if
+            non-mapped). As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
+            inputs other than ``carry``.
 
-    Returns
-    -------
-    auto_fun
-        Function that takes some number of pytrees of `RVLike` with mapped axes and produces a single ``RV[Autoregressive]``
+    Returns:
+        Function that takes a single init `RVLike` plus some number of pytrees of `RVLike` with mapped axes and produces a single ``RV[Autoregressive]``
 
     Examples
     --------
@@ -253,8 +249,6 @@ def autoregressive(
     autoregress
     """
 
-    # TODO: Document pytree inputs
-
     def myfun(init: RVLike, *args: PyTree[RVLike]):
         if len(args) == 1:
             # handles vmap(f, 0)(x) instead vmap(f,(0,))(x)
@@ -283,7 +277,9 @@ def autoregressive(
     return myfun
 
 
-def autoregress(length: int | None = None, in_axes: Any = 0) -> Callable:
+def autoregress(
+    length: int | None = None, in_axes: Any = 0
+) -> Callable[[Callable[..., RV]], Callable[..., InfixRV[Autoregressive]]]:
     """
     Simple decorator to create functions to create autoregressive RVs. The idea is that
 
@@ -299,12 +295,12 @@ def autoregress(length: int | None = None, in_axes: Any = 0) -> Callable:
 
     This can be very convenient as a decorator.
 
-    Parameters
-    ----------
-    length
-        the number of repetitions
-    in_axes
-        axis to map arguments other than ``carry`` over
+    Args:
+        length: the number of repetitions
+        in_axes: axis to map arguments other than ``carry`` over
+
+    Returns:
+        Decorator that takes a function that transforms a `RVLike` and some number of pytress of `RVLike` into a single `RV` and returns a function that transforms a `RVLike` and some number of pytrees of `RVLike` into a single RV with an `ir.Autoregressive` op.
 
     Examples
     --------
