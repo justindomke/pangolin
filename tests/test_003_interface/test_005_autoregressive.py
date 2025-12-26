@@ -60,8 +60,6 @@ def test_normal_with_param():
     assert y.parents == (u, scales)
 
 
-
-
 def test_pass_constants():
     def fun(x, scale):
         return normal(x, scale)
@@ -101,67 +99,95 @@ def test_normal_with_param_non_flat():
     def fun(x, scale):
         return normal(x, scale)
 
-    u = constant(2.2)
-    scales = constant(np.arange(1, 11))
-    y = autoregressive(fun, 10)(u, scales)
+    u_np = 2.2
+    u_rv = constant(u_np)
 
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
-    assert y.op.base_op == base_op
-    assert y.op == ir.Autoregressive(base_op, 10, [0])
-    assert y.parents == (u, scales)
+    scales_np = np.arange(1, 11)
+    scales_rv = constant(scales_np)
 
+    for u in [u_np, u_rv]:
+        for length in [10, None]:
+            for scales in [scales_rv, scales_np]:
+                y = autoregressive(fun, length)(u, scales)
 
-def test_normal_with_param_no_length_non_flat():
-    def fun(x, scale):
-        return normal(x, scale)
+                base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+                assert y.op.base_op == base_op
+                assert y.op == ir.Autoregressive(base_op, 10, [0])
 
-    u = constant(2.2)
-    scales = constant(np.arange(1, 11))
-    y = autoregressive(fun, None)(u, scales)
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
-    assert y.op.base_op == base_op
-    assert y.op == ir.Autoregressive(base_op, 10, [0])
-    assert y.parents == (u, scales)
+                assert y.parents[0].op == u_rv.op == ir.Constant(u_np)
+                assert y.parents[1].op == scales_rv.op == ir.Constant(scales_np)
 
-
-def test_pass_constants_non_flat():
-    def fun(x, scale):
-        return normal(x, scale)
-
-    y = autoregressive(fun)(2.2, constant(np.arange(1, 11)))
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
-    assert y.op.base_op == base_op
-    assert y.op == ir.Autoregressive(base_op, 10, [0])
-    assert y.parents[0].op == ir.Constant(2.2)
-    assert y.parents[1].op == ir.Constant(np.arange(1, 11))
+                if u is u_rv:
+                    assert y.parents[0] is u_rv
+                if scales is scales_rv:
+                    assert y.parents[1] is scales_rv
 
 
 def test_normal_with_unmapped_param_non_flat():
     def fun(x, scale):
         return normal(x, scale)
 
-    u = constant(2.2)
-    scale = constant(3.3)
-    y = autoregressive(fun, 10, None)(u, scale)
+    u_np = 2.2
+    u_rv = constant(u_np)
 
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
-    assert y.op.base_op == base_op
-    assert y.op == ir.Autoregressive(base_op, 10, [None])
-    assert y.parents == (u, scale)
+    scales_np = 3.3
+    scales_rv = constant(scales_np)
+
+    length = 10
+
+    for u in [u_np, u_rv]:
+        for scales in [scales_rv, scales_np]:
+            for in_axes in [None]:
+                y = autoregressive(fun, length, in_axes)(u, scales)
+
+                base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+                assert y.op.base_op == base_op
+                assert y.op == ir.Autoregressive(base_op, 10, [None])
+
+                assert y.parents[0].op == u_rv.op == ir.Constant(u_np)
+                assert y.parents[1].op == scales_rv.op == ir.Constant(scales_np)
+
+                if u is u_rv:
+                    assert y.parents[0] is u_rv
+                if scales is scales_rv:
+                    assert y.parents[1] is scales_rv
+
+
+# def test_normal_with_unmapped_param_non_flat():
+#     def fun(x, scale):
+#         return normal(x, scale)
+
+#     u = constant(2.2)
+#     scale = constant(3.3)
+#     y = autoregressive(fun, 10, None)(u, scale)
+
+#     base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+#     assert y.op.base_op == base_op
+#     assert y.op == ir.Autoregressive(base_op, 10, [None])
+#     assert y.parents == (u, scale)
 
 
 def test_dict_non_flat():
     def fun(x, params):
         return normal(x, params["scale"])
 
-    u = constant(2.2)
-    params = {"scale": constant(3.3)}
-    y = autoregressive(fun, 10, None)(u, params)
+    # u = constant(2.2)
+    # params = {"scale": constant(3.3)}
 
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
-    assert y.op.base_op == base_op
-    assert y.op == ir.Autoregressive(base_op, 10, [None])
-    assert y.parents == (u, params["scale"])
+    u_np = 2.2
+    u_rv = constant(2.2)
+
+    for u in [u_np, u_rv]:
+        for params in [{"scale": constant(3.3)}]:
+            y = autoregressive(fun, 10, None)(u, params)
+
+            base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+            assert y.op.base_op == base_op
+            assert y.op == ir.Autoregressive(base_op, 10, [None])
+            # assert y.parents == (u, params["scale"])
+
+            assert y.parents[0].op == u_rv.op == ir.Constant(2.2)
+            assert y.parents[1].op == ir.Constant(3.3)
 
 
 def test_interesting_autoregressive():

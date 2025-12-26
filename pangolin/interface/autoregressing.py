@@ -18,7 +18,8 @@ from pangolin.interface.base import RVLike
 
 # from pangolin.simple_interface.vmapping import get_flat_vmap_args_and_axes
 from typing import Callable, Sequence, Any
-
+from jaxtyping import PyTree
+import numpy as np
 
 # would like to insist that the function takes RV args but type system not up to the task
 SingleOutputFun = Callable[..., RV]
@@ -49,7 +50,7 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
     Doing
 
     ```python
-    z = autoregressive_flat(fun, length=5, in_axes=[0,None])(start, A, B)
+    z = autoregressive_flat(fun, length=5, in_axes=(0,None))(start, A, B)
     ```
 
     is semantically similar to
@@ -67,13 +68,14 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
     ----------
     flat_fun
         function for base of autoregressive
-    length: int | None
-        length of autoregressive. Can be None if any inputs are mapped along some axis.
-    in_axes: int | None | Sequence[int | None]
+    length
+        length of autoregressive. Cannot be skipped
+    in_axes
+        which axis (or ``None``) to slice
 
     Examples
     --------
-    >>> x = autoregressive_flat(exp, 5, None)(makerv(7.7))
+    >>> x = autoregressive_flat(exp, length=5, in_axes=())(constant(7.7))
     >>> x.op
     Autoregressive(Composite(1, (Exp(),), ((0,),)), 5, (), 0)
     >>> x.op.base_op
@@ -89,7 +91,7 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
 
     >>> a = makerv(7.7)
     >>> b = makerv([1,2,3,4,5])
-    >>> x = autoregressive_flat(add, 5, None)(a, b)
+    >>> x = autoregressive_flat(add, length=5, in_axes=(0,))(a, b)
     >>> x.op
     Autoregressive(Composite(2, (Add(),), ((0, 1),)), 5, (0,), 0)
     >>> x.op.base_op
@@ -105,14 +107,9 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
 
     """
 
-    # next = flat_fun(prev, *args)
-    # from pangolin.interface.base import rv_factory
-
     def myfun(init: RVLike, *args0: RVLike):
         init = makerv(init)
         args = tuple(makerv(a) for a in args0)
-
-        # my_length = _get_autoregressive_length(length, in_axes, args)
 
         # first, get composite op
         init_shape = init.shape
@@ -132,14 +129,16 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
     return myfun
 
 
-def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -> Callable[..., RV[Autoregressive]]:
+def autoregressive(
+    fun: Callable, length: None | int = None, in_axes: PyTree[int | None] = 0
+) -> Callable[..., RV[Autoregressive]]:
     """
     Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
 
     .. code-block:: python
 
-        auto_fun = autoregressive(fun, 5, [0, None])
-        z = autoregressive_fun(start, A, B)
+        auto_fun = autoregressive(fun, 5)
+        z = auto_fun(start)
 
     is semantically like
 
@@ -147,12 +146,31 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
 
         carry = start
         values = []
-        # length = 5
         for i in range(5):
-            # in_axes = [0, None] <-> A sliced on 0th axis, B unsliced
-            carry = fun(carry, A[i], B)
+            carry = fun(carry)
             values.append(carry)
         z = concatenate(values)
+
+    As a more complex example, doing
+
+    .. code-block:: python
+
+        auto_fun = autoregressive(fun, 5, [0, None])
+        z = auto_fun(start, A, B)
+
+    is semantically like:
+
+    .. code-block:: python
+
+        carry = start
+        values = []
+        # length = 5
+        for i in range(5):
+            carry = fun(carry, A[i], B) # A sliced on 0th axis, B unsliced
+            values.append(carry)
+        z = concatenate(values)
+
+    Even more generally, ``in_axes`` can be any pytree of in-axes that is a tree prefix for the arguments. (See examples below)
 
     Parameters
     ----------
@@ -167,14 +185,13 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
         Length of autoregressive. Can be ``None`` if any inputs are mapped along some axis.
     in_axes
         What axis to map each input other than ``carry`` over (or ``None`` if
-        non-mapped).
-        As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
+        non-mapped). As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
         inputs other than ``carry``.
 
     Returns
     -------
     auto_fun
-        Function that takes some number of pytrees of `RV` with mapped axes and produces a single ``RV[Autoregressive]``
+        Function that takes some number of pytrees of `RVLike` with mapped axes and produces a single ``RV[Autoregressive]``
 
     Examples
     --------
@@ -184,22 +201,17 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
     >>> def fun(carry):
     ...     return normal(exp(carry), 1)
     >>> z = autoregressive(fun, 5)(x)
-    >>> z.parents == (x,)
+    >>> isinstance(z.op, Autoregressive)
     True
-    >>> print(z.op.name)
-    Autoregressive
+    >>> z.op.base_op
+    Composite(1, (Exp(), Constant(1), Normal()), ((0,), (), (1, 2)))
     >>> z.op.length
     5
-    >>> print(z.op.base_op.name)
-    Composite
-    >>> z.op.base_op.num_inputs
-    1
-    >>> z.op.base_op.ops
-    (Exp(), Constant(1), Normal())
-    >>> z.op.base_op.par_nums
-    ((0,), (), (1, 2))
     >>> z.op.in_axes
     ()
+    >>> z.parents == (x,)
+    True
+
 
     Distribution where ``z[i] ~ exponential(z[i-1]*y[i])``
 
@@ -208,22 +220,32 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
     >>> def fun(carry, yi):
     ...     return exponential(carry * yi)
     >>> z = autoregressive(fun)(x,y)
-    >>> print(z.op.name)
-    Autoregressive
-    >>> z.op.length
-    3
-    >>> z.parents == (x, y)
+    >>> isinstance(z.op, Autoregressive)
     True
-    >>> print(z.op.base_op.name)
-    Composite
-    >>> z.op.base_op.num_inputs
-    2
-    >>> z.op.base_op.ops
-    (Mul(), Exponential())
-    >>> z.op.base_op.par_nums
-    ((0, 1), (2,))
+    >>> z.op.base_op
+    Composite(2, (Mul(), Exponential()), ((0, 1), (2,)))
+    >>> z.op.length # note this was inferred!
+    3
     >>> z.op.in_axes
     (0,)
+    >>> z.parents == (x, y)
+    True
+
+
+    You can also pass bare constants
+
+    >>> def fun(carry, yi):
+    ...     return exponential(carry * yi)
+    >>> z = autoregressive(fun)(3.3, np.array([1,2,3]))
+    >>> isinstance(z.op, Autoregressive)
+    True
+    >>> z.op.base_op
+    Composite(2, (Mul(), Exponential()), ((0, 1), (2,)))
+    >>> z.op.length
+    3
+    >>> z.op.in_axes
+    (0,)
+
 
     See Also
     --------
@@ -233,7 +255,7 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
 
     # TODO: Document pytree inputs
 
-    def myfun(init: RVLike, *args):
+    def myfun(init: RVLike, *args: PyTree[RVLike]):
         if len(args) == 1:
             # handles vmap(f, 0)(x) instead vmap(f,(0,))(x)
             my_in_axes = (in_axes,)
@@ -246,12 +268,11 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
         init = makerv(init)
         args = jax.tree_util.tree_map(makerv, args)
 
-        # abstract args without extra dims
-        dummy_args = get_dummy_args(my_in_axes, args)
+        abstract_sliced_args = get_dummy_args(my_in_axes, args)
         flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
         flat_fun, flatten_inputs, unflatten_output = util.flatten_fun(
-            fun, init, *dummy_args, is_leaf=util._is_leaf_with_none
+            fun, init, *abstract_sliced_args, is_leaf=util._is_leaf_with_none
         )
         new_flat_fun = lambda *args: flat_fun(*args)[0]  # don't return list
 
