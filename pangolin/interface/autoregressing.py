@@ -20,6 +20,10 @@ from pangolin.interface.base import RVLike
 from typing import Callable, Sequence, Any
 
 
+# would like to insist that the function takes RV args but type system not up to the task
+SingleOutputFun = Callable[..., RV]
+
+
 def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]) -> int:
     "If length is given, checks that it's compatible with all args. Otherwise, infers from args and chcecks they are compatible."
 
@@ -38,7 +42,7 @@ def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | No
     return my_length
 
 
-def autoregressive_flat(flat_fun, length: int | None = None, in_axes0: None | Sequence[int | None] = None) -> Callable:
+def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[int | None, ...]) -> Callable:
     """
     Given a "flat" function, create a function to generate an RV with an `Autoregressive` Op.
 
@@ -108,13 +112,7 @@ def autoregressive_flat(flat_fun, length: int | None = None, in_axes0: None | Se
         init = makerv(init)
         args = tuple(makerv(a) for a in args0)
 
-        # if no axes given assume all 0
-        if in_axes0:
-            in_axes = in_axes0
-        else:
-            in_axes = [0 for _ in args]
-
-        my_length = _get_autoregressive_length(length, in_axes, args)
+        # my_length = _get_autoregressive_length(length, in_axes, args)
 
         # first, get composite op
         init_shape = init.shape
@@ -125,7 +123,7 @@ def autoregressive_flat(flat_fun, length: int | None = None, in_axes0: None | Se
         # where_self = len(constants) # constants always first in composite
         op = Autoregressive(
             base_op,
-            my_length,
+            length,
             in_axes=[None] * len(constants) + list(in_axes),
             where_self=where_self,
         )
@@ -248,11 +246,7 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
         init = makerv(init)
         args = jax.tree_util.tree_map(makerv, args)
 
-        # # TODO: Find a good name and push this functionality back to vmap
-        # dummy_args, new_in_axes, flat_args, flat_in_axes = get_flat_vmap_args_and_axes(
-        #     in_axes, args
-        # )
-
+        # abstract args without extra dims
         dummy_args = get_dummy_args(my_in_axes, args)
         flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
@@ -260,7 +254,10 @@ def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -
             fun, init, *dummy_args, is_leaf=util._is_leaf_with_none
         )
         new_flat_fun = lambda *args: flat_fun(*args)[0]  # don't return list
-        return autoregressive_flat(new_flat_fun, length, flat_in_axes)(init, *flat_args)
+
+        my_length = _get_autoregressive_length(length, flat_in_axes, flat_args)
+
+        return autoregressive_flat(new_flat_fun, my_length, flat_in_axes)(init, *flat_args)
 
     return myfun
 
