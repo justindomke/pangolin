@@ -83,7 +83,7 @@ Do you love broadcasting? Do you hate broadcasting? Are you lukewarm about broad
 Well, good news. In this interface, you can configure how broadcasting works. You can
 use "simple" broadcasting, you can use full NumPy-style broadcasting, or
 you can turn broadcasting off completely. See `Broadcasting` for details.
- 
+
 API docs
 ------------------------------
 
@@ -97,7 +97,7 @@ from .base import RVLike
 # from . import vmap
 from .vmapping import vmap
 from .compositing import composite
-from .autoregressing import autoregressive, autoregress
+from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
 from .indexing import index
 from pangolin.ir import print_upstream
 
@@ -125,6 +125,8 @@ __all__ = [
     "constant",
     "vmap",
     "composite",
+    "Autoregressable",
+    "Autoregressed",
     "autoregressive",
     "autoregress",
     "index",

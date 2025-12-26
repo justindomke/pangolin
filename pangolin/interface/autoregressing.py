@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pangolin.ir import Composite, RV
 from pangolin.ir import Autoregressive
 from pangolin.interface import (
@@ -17,12 +18,63 @@ import jax.tree_util
 from pangolin.interface.base import RVLike
 
 # from pangolin.simple_interface.vmapping import get_flat_vmap_args_and_axes
-from typing import Callable, Sequence, Any
+from typing import Callable, Sequence, Any, Protocol, TypeAlias
 from jaxtyping import PyTree
 import numpy as np
 
 # would like to insist that the function takes RV args but type system not up to the task
-SingleOutputFun = Callable[..., RV]
+
+
+FlatAutoregressable: TypeAlias = (
+    Callable[[InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV, InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
+    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
+)
+FlatAutoregressable.__doc__ = """
+A type alias for a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
+"""
+
+FlatAutoregressed: TypeAlias = Callable[..., InfixRV[Autoregressive]]
+FlatAutoregressed.__doc__ = """
+A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single autoregressive InfixRV output. Because of Python's wonderfully limited type system, this does not actually check the inputs.
+"""
+
+
+Autoregressable: TypeAlias = (
+    Callable[[InfixRV], InfixRV]
+    | Callable[[InfixRV, "PyTree[InfixRV]"], InfixRV]
+    | Callable[[InfixRV, "PyTree[InfixRV]", "PyTree[InfixRV]"], InfixRV]
+    | Callable[[InfixRV, "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]"], InfixRV]
+    | Callable[[InfixRV, "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]"], InfixRV]
+    | Callable[
+        [InfixRV, "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]", "PyTree[InfixRV]"],
+        InfixRV,
+    ]
+    | Callable[
+        [
+            InfixRV,
+            "PyTree[InfixRV]",
+            "PyTree[InfixRV]",
+            "PyTree[InfixRV]",
+            "PyTree[InfixRV]",
+            "PyTree[InfixRV]",
+            "PyTree[InfixRV]",
+        ],
+        InfixRV,
+    ]
+)
+Autoregressable.__doc__ = """
+A type alias for a function that takes one `InfixRV` input plus any number of pytrees of `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
+"""
+
+Autoregressed: TypeAlias = Callable[..., InfixRV[Autoregressive]]
+Autoregressed.__doc__ = """
+A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional ``PyTree[InfixRV]`` and returns a single autoregressive RV output. Because of Python's limited type system, this does not actually check the inputs.
+"""
 
 
 def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]) -> int:
@@ -43,7 +95,9 @@ def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | No
     return my_length
 
 
-def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[int | None, ...]) -> Callable:
+def autoregressive_flat(
+    flat_fun: FlatAutoregressable, length: int, in_axes: tuple[int | None, ...]
+) -> FlatAutoregressed:
     """
     Given a "flat" function, create a function to generate an RV with an `Autoregressive` Op.
 
@@ -129,9 +183,7 @@ def autoregressive_flat(flat_fun: SingleOutputFun, length: int, in_axes: tuple[i
     return myfun
 
 
-def autoregressive(
-    fun: Callable[..., RV], length: None | int = None, in_axes: PyTree[int | None] = 0
-) -> Callable[..., InfixRV[Autoregressive]]:
+def autoregressive(fun: Autoregressable, length: None | int = None, in_axes: PyTree[int | None] = 0) -> Autoregressed:
     """
     Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
 
@@ -245,6 +297,8 @@ def autoregressive(
 
     See Also
     --------
+    Autoregressable
+    Autoregressed
     pangolin.ir.Autoregressive
     autoregress
     """
@@ -268,7 +322,10 @@ def autoregressive(
         flat_fun, flatten_inputs, unflatten_output = util.flatten_fun(
             fun, init, *abstract_sliced_args, is_leaf=util._is_leaf_with_none
         )
-        new_flat_fun = lambda *args: flat_fun(*args)[0]  # don't return list
+        # new_flat_fun = lambda *args: flat_fun(*args)[0]  # don't return list
+
+        def new_flat_fun(init: RVLike, *args: RVLike) -> InfixRV:
+            return flat_fun(init, *args)[0]
 
         my_length = _get_autoregressive_length(length, flat_in_axes, flat_args)
 
@@ -277,9 +334,7 @@ def autoregressive(
     return myfun
 
 
-def autoregress(
-    length: int | None = None, in_axes: Any = 0
-) -> Callable[[Callable[..., RV]], Callable[..., InfixRV[Autoregressive]]]:
+def autoregress(length: int | None = None, in_axes: Any = 0) -> Callable[[Autoregressable], Autoregressed]:
     """
     Simple decorator to create functions to create autoregressive RVs. The idea is that
 

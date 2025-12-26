@@ -2,7 +2,7 @@ interface Module
 ================
 
 .. automodule:: pangolin.interface
-   :members:
+   :members: 
    :undoc-members:
    :show-inheritance:
    :special-members: True
@@ -21,3 +21,7 @@ interface Module
 .. autodata:: pangolin.interface.config
 
 .. autofunction:: pangolin.interface.override
+
+.. autodata:: pangolin.interface.Autoregressable
+
+.. autodata:: pangolin.interface.Autoregressed

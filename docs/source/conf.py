@@ -67,6 +67,7 @@ napoleon_attr_annotations = True
 napoleon_type_aliases = {
     "PyTree": "PyTree",
     "PyTree[Node]": "PyTree[Node]",
+    "PyTree[InfixRV]": "PyTree[InfixRV]",
 }
 
 # autodoc options
@@ -85,7 +86,6 @@ autodoc_type_aliases = {
     "Shape": "Shape",
     "RVLike": "RVLike",
     "ArrayLike": "ArrayLike",
-    "PyTree": "PyTree",
 }
 
 # intersphinx_mapping = {
