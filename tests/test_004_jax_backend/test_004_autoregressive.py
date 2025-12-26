@@ -81,9 +81,7 @@ def test_autoregressive_simple_const_rv():
     # y = autoregressive(lambda last: normal(last + 1, noise), length)(x)
 
     length = 12
-    base_op = ir.Composite(
-        2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]]
-    )
+    base_op = ir.Composite(2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]])
     op = ir.Autoregressive(base_op, length, [None], 0)
 
     x = ir.RV(ir.Constant(0.5))
