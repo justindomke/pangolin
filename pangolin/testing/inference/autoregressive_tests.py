@@ -56,7 +56,7 @@ class AutoregressiveTests:
             [ys] = samps
             return all(np.allclose(samp, expected) for samp in ys)
 
-        test_util.inf_until_match(self.sample_flat, [y], [dummy], [1.5], testfun)
+        test_util.inf_until_match(self.sample_flat, [y], [dummy], [1.5], testfun)  # type:ignore[unresolved-attribute]
 
     def test_autoregressive_simple(self):
         x = pi.constant(0.5)
@@ -111,17 +111,21 @@ class AutoregressiveTests:
         x = pi.constant(0.0)
         length = 12
         increment = np.random.randn(length)
-        y = pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment)
+        for y in [
+            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment),
+            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4))(x, increment),
+            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4), in_axes=0)(x, increment),
+        ]:
 
-        assert isinstance(y.op, ir.Autoregressive)
+            assert isinstance(y.op, ir.Autoregressive)
 
-        def testfun(samps):
-            [ys] = samps
-            last_y = ys[-1, :]
-            expected = np.cumsum(increment)
-            return np.max(np.abs(last_y - expected)) < 0.1
+            def testfun(samps):
+                [ys] = samps
+                last_y = ys[-1, :]
+                expected = np.cumsum(increment)
+                return np.max(np.abs(last_y - expected)) < 0.1
 
-        test_util.inf_until_match(self.sample_flat, [y], [], [], testfun)
+            test_util.inf_until_match(self.sample_flat, [y], [], [], testfun)
 
     def test_autoregressive_matmul(self):
         ndim = 5
