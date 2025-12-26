@@ -1,4 +1,13 @@
+# Before 0.0.1
+
+* better typing for interface (pytree for autoregressive etc)
+
 * Bring sanity to indexing
+
+* Fix autoregressive interface
+
+# After 0.0.1
+
 
 * Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
 
