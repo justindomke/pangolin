@@ -20,9 +20,7 @@ from pangolin.interface.base import RVLike
 from typing import Callable, Sequence, Any
 
 
-def _get_autoregressive_length(
-    length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]
-) -> int:
+def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]) -> int:
     "If length is given, checks that it's compatible with all args. Otherwise, infers from args and chcecks they are compatible."
 
     my_length = length
@@ -35,16 +33,12 @@ def _get_autoregressive_length(
                 my_length = arg.shape[ax]
 
     if my_length is None:
-        raise ValueError(
-            "Can't create autoregressive with length=None and no mapped axis"
-        )
+        raise ValueError("Can't create autoregressive with length=None and no mapped axis")
 
     return my_length
 
 
-def autoregressive_flat(
-    flat_fun, length: int | None = None, in_axes0: None | Sequence[int | None] = None
-) -> Callable:
+def autoregressive_flat(flat_fun, length: int | None = None, in_axes0: None | Sequence[int | None] = None) -> Callable:
     """
     Given a "flat" function, create a function to generate an RV with an `Autoregressive` Op.
 
@@ -125,9 +119,7 @@ def autoregressive_flat(
         # first, get composite op
         init_shape = init.shape
         args_shapes = tuple(a.shape for a in args)
-        base_args_shapes = tuple(
-            s[1:] for s in args_shapes
-        )  # assume all mapped along 1st axis
+        base_args_shapes = tuple(s[1:] for s in args_shapes)  # assume all mapped along 1st axis
         base_op, constants = make_composite(flat_fun, init_shape, *base_args_shapes)
         where_self = 0
         # where_self = len(constants) # constants always first in composite
@@ -142,9 +134,7 @@ def autoregressive_flat(
     return myfun
 
 
-def autoregressive(
-    fun: Callable, length: None | int = None, in_axes: Any = 0
-) -> Callable[[Any], RV[Autoregressive]]:
+def autoregressive(fun: Callable, length: None | int = None, in_axes: Any = 0) -> Callable[..., RV[Autoregressive]]:
     """
     Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
 

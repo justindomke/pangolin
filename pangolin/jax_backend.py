@@ -65,9 +65,7 @@ simple_dists: dict[Type[Op], Callable] = {
     ir.Bernoulli: dist.Bernoulli,
     ir.BernoulliLogit: dist.BernoulliLogits,
     ir.Beta: dist.Beta,
-    ir.BetaBinomial: lambda n, a, b: dist.BetaBinomial(
-        a, b, n
-    ),  # numpyro has a different order
+    ir.BetaBinomial: lambda n, a, b: dist.BetaBinomial(a, b, n),  # numpyro has a different order
     ir.Binomial: dist.Binomial,
     ir.Categorical: dist.Categorical,
     ir.Cauchy: dist.Cauchy,
@@ -93,9 +91,7 @@ def make_simple_log_prob(
 ) -> Callable[[Op, ArrayLike, Sequence[ArrayLike]], jnp.ndarray]:
     bind = simple_dists[op_class]
 
-    def my_log_prob(
-        op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike]
-    ) -> jnp.ndarray:
+    def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike]) -> jnp.ndarray:
         bound_dist: dist.Distribution = bind(*parent_values)
         return bound_dist.log_prob(value)
 
@@ -210,14 +206,10 @@ def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents):
         assert in_axis in [
             0,
             None,
-        ], "NumPyro only supports Autoregressive with in_axis of 0 or None"
+        ], "Jax backend only supports Autoregressive with in_axis of 0 or None"
 
-    mapped_parents = tuple(
-        p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0
-    )
-    unmapped_parents = tuple(
-        p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis is None
-    )
+    mapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0)
+    unmapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis is None)
 
     def merge_args(mapped_args):
         ret = []
@@ -262,9 +254,7 @@ eval_handlers[ir.Autoregressive] = eval_autoregressive
 
 
 # TODO: This should be parallel!
-def log_prob_autoregressive(
-    op: ir.Autoregressive, value: ArrayLike, parent_values: Sequence[ArrayLike]
-):
+def log_prob_autoregressive(op: ir.Autoregressive, value: ArrayLike, parent_values: Sequence[ArrayLike]):
     assert isinstance(op, ir.Autoregressive)
     assert op.random
 
@@ -288,9 +278,7 @@ def log_prob_autoregressive(
 log_prob_handlers[ir.Autoregressive] = log_prob_autoregressive
 
 
-def sample_autoregressive(
-    op: ir.Autoregressive, key, parent_values: Sequence[ArrayLike]
-):
+def sample_autoregressive(op: ir.Autoregressive, key, parent_values: Sequence[ArrayLike]):
     assert isinstance(op, ir.Autoregressive)
     assert op.random
 
@@ -350,9 +338,7 @@ def sample_vmap(op: ir.VMap, key, parent_values: Sequence[ArrayLike]):
 
     in_axes = (0,) + op.in_axes
     axis_size = op.axis_size
-    return jax.vmap(base_sample, in_axes=in_axes, axis_size=axis_size)(
-        subkey, *parent_values
-    )
+    return jax.vmap(base_sample, in_axes=in_axes, axis_size=axis_size)(subkey, *parent_values)
 
 
 sample_handlers[ir.VMap] = sample_vmap
@@ -367,11 +353,7 @@ def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLi
 
     in_axes = (0,) + op.in_axes
     axis_size = op.axis_size
-    return jnp.sum(
-        jax.vmap(base_log_prob, in_axes=in_axes, axis_size=axis_size)(
-            value, *parent_values
-        )
-    )
+    return jnp.sum(jax.vmap(base_log_prob, in_axes=in_axes, axis_size=axis_size)(value, *parent_values))
 
 
 log_prob_handlers[ir.VMap] = log_prob_vmap
@@ -416,9 +398,7 @@ def log_prob_op(
     op_class = type(op)
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     if shape(value) != expected_shape:
-        raise ValueError(
-            f"shape(value) {shape(value)} not {expected_shape} as expected"
-        )
+        raise ValueError(f"shape(value) {shape(value)} not {expected_shape} as expected")
     return log_prob_handlers[op_class](op, value, parent_values)
 
 
@@ -462,7 +442,7 @@ def ancestor_sample_flat(vars: list[RV], key: Optional[JaxArray] = None, size: O
         # Generate random seed from numpy
         seed = np.random.randint(0, 2**32 - 1)
         key = jax.random.PRNGKey(seed)
-    
+
     if size is None:
         return ancestor_sample_flat_single(vars, key)
     else:
@@ -482,9 +462,7 @@ def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike]):
             l += log_prob_op(var.op, value, parent_values)
         else:
             if var in vars:
-                raise ValueError(
-                    "Can't provide value for non-random variable in ancestor_log_prob_flat"
-                )
+                raise ValueError("Can't provide value for non-random variable in ancestor_log_prob_flat")
             out = eval_op(var.op, parent_values)
             all_values[var] = out
     return l
@@ -522,9 +500,7 @@ def fill_in(
 ################################################################################
 
 
-def ancestor_sample(
-    vars: PyTree[RV], key: Optional[JaxArray] = None, size: Optional[int] = None
-):
+def ancestor_sample(vars: PyTree[RV], key: Optional[JaxArray] = None, size: Optional[int] = None):
     """
     Draw exact samples!
 
@@ -701,9 +677,7 @@ def ancestor_log_prob(*vars: PyTree[RV], **kwvars: PyTree[RV]) -> Callable:
     def myfun(*vals, **kwvals):
         all_vals = (vals, kwvals)
 
-        all_vals = util.assimilate_vals(
-            all_vars, all_vals
-        )  # casts lists and such to ndarray
+        all_vals = util.assimilate_vals(all_vars, all_vals)  # casts lists and such to ndarray
 
         flat_vars, vars_treedef = jax.tree_util.tree_flatten(all_vars)
         flat_vals, vals_treedef = jax.tree_util.tree_flatten(all_vals)
