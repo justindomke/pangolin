@@ -8,6 +8,37 @@
 
 # After 0.0.1
 
+* Offer field for vmap
+
+  ```python
+  i = Index(5)
+  j = Index(10)
+  x = Field()
+  x[i, j] = a[i] * B[i,j] * c[j]
+  
+  x = field(
+    (5,10),
+    lambda i, j : a[i] * B[i,j] * c[j]
+  )
+  ```
+
+  I guess `Field` should be a subclass of `RV` 
+
+* Offer field for scan/vmap
+
+  ```python
+  i = Index(5)
+  j = Index(10)
+  x = Field()
+  x[start,j] = a[j]
+  x[i,j] = x[i-1,j] + B[i,j]
+
+  x = field(
+    (5, 10),
+    rule = lambda i, j, x: x[i-1,j] + B[i,j]
+    init = lambda i, j: a[j]
+  )
+  ```
 
 * Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
 
