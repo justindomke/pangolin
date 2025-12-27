@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import scipy.special
 import jax
-from base import HasInferenceProps
+from .base import HasInferenceProps
 
 
 def rands_from_ranges(ranges):

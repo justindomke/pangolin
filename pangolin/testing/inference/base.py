@@ -7,5 +7,4 @@ class HasInferenceProps(Protocol):
     @property
     def sample_flat(self) -> Callable: ...
 
-    @property
-    def _ops_without_sampling_support(self): ...
+    _ops_without_sampling_support: dict

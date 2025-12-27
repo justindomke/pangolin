@@ -5,6 +5,7 @@ from .composite_tests import CompositeTests
 from .autoregressive_tests import AutoregressiveTests
 from .vmap_tests import VmapTests
 from .complex_tests import ComplexTests
+from .base import HasInferenceProps
 
 
 class InferenceTests(

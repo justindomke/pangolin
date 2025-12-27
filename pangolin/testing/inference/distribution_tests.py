@@ -6,7 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing import test_util
-from base import HasInferenceProps
+from .base import HasInferenceProps
 
 
 def rands_from_ranges(ranges):

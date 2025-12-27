@@ -7,9 +7,10 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
+from .base import HasInferenceProps
 
 
-class VmapTests:
+class VmapTests(HasInferenceProps):
     """
     Intended to be used as a mixin
     """
