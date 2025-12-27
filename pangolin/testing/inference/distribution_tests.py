@@ -6,6 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing import test_util
+from base import HasInferenceProps
 
 
 def rands_from_ranges(ranges):
@@ -70,7 +71,7 @@ testdata = [
 # Cauchy won't be tested since it has no mean
 
 
-def get_mean(scipy_rv):
+def get_mean(scipy_rv) -> None | np.ndarray:
     if isinstance(scipy_rv, scipy.stats._multivariate.multivariate_normal_frozen):
         # scipy is inconsistent about multivariate normal
         # randomly has rv.mean instead of rv.mean() lolwhat
@@ -99,7 +100,7 @@ def get_cov(scipy_rv):
         return None
 
 
-class DistributionTests:
+class DistributionTests(HasInferenceProps):
     """
     Intended to be used as a mixin
     """
@@ -121,31 +122,30 @@ class DistributionTests:
             expected_std = get_std(scipy_rv)
             expected_cov = get_cov(scipy_rv)
 
-            if expected_mean is not None:
+            def testfun(samps_list):
+                [samps] = samps_list
+                samps = np.array(samps, copy=True)  # cast from JAX or pytorch or whatever
 
-                def testfun(samps_list):
-                    [samps] = samps_list
-                    samps = np.array(samps, copy=True)  # cast from JAX or pytorch or whatever
+                match = True
 
+                if expected_mean is not None:
                     empirical_mean = np.mean(samps, axis=0)
                     match = np.all(
                         np.abs(empirical_mean - expected_mean) / (0.1 + np.linalg.norm(expected_mean)) < 0.25
                     )
 
-                    print(expected_mean, empirical_mean)
+                # if expected_std is not None:
+                #     empirical_std = np.std(samps, axis=0)
+                #     match &= np.all(np.abs(empirical_std - expected_std) / (0.1 + expected_std) < 0.25)
 
-                    # if expected_std is not None:
-                    #     empirical_std = np.std(samps, axis=0)
-                    #     match &= np.all(np.abs(empirical_std - expected_std) / (0.1 + expected_std) < 0.25)
+                # if expected_cov is not None:
+                #     empirical_cov = np.cov(samps.T)
+                #     match &= np.all(
+                #         np.abs(empirical_cov - expected_cov) / (0.1 + np.linalg.norm(expected_cov)) < 0.25
+                #     )
 
-                    # if expected_cov is not None:
-                    #     empirical_cov = np.cov(samps.T)
-                    #     match &= np.all(
-                    #         np.abs(empirical_cov - expected_cov) / (0.1 + np.linalg.norm(expected_cov)) < 0.25
-                    #     )
+                return match
 
-                    return match
-
-                test_util.inf_until_match(
-                    self.sample_flat, [output_rv], [], [], testfun, niter_start=1000, niter_max=100000
-                )
+            test_util.inf_until_match(
+                self.sample_flat, [output_rv], [], [], testfun, niter_start=1000, niter_max=100000
+            )

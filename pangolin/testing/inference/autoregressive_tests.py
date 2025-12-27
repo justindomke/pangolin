@@ -7,9 +7,10 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
+from base import HasInferenceProps
 
 
-class AutoregressiveTests:
+class AutoregressiveTests(HasInferenceProps):
     """
     Intended to be used as a mixin
     """
@@ -56,7 +57,7 @@ class AutoregressiveTests:
             [ys] = samps
             return all(np.allclose(samp, expected) for samp in ys)
 
-        test_util.inf_until_match(self.sample_flat, [y], [dummy], [1.5], testfun)  # type:ignore[unresolved-attribute]
+        test_util.inf_until_match(self.sample_flat, [y], [dummy], [1.5], testfun)
 
     def test_autoregressive_simple(self):
         x = pi.constant(0.5)
