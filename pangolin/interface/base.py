@@ -603,9 +603,7 @@ def vmap_scalars_simple(op: OpU, *parent_shapes: ir.Shape) -> VMap | OpU:
             array_shape = shape
         else:
             if shape != array_shape:
-                raise ValueError(
-                    f"Can't broadcast non-matching shapes {shape} and {array_shape}"
-                )
+                raise ValueError(f"Can't broadcast non-matching shapes {shape} and {array_shape}")
 
     if array_shape is None:
         return op
@@ -693,9 +691,7 @@ ScalarOpU = typing.TypeVar("ScalarOpU", bound=ScalarOp)
 ScalarInterfaceFun: typing.TypeAlias = Callable[..., InfixRV[ScalarOpU | VMap]]
 
 
-def get_base_op_from_scalar_fun(
-    fun: Callable[..., InfixRV[ScalarOpU | VMap]]
-) -> Type[ScalarOpU]:
+def get_base_op_from_scalar_fun(fun: Callable[..., InfixRV[ScalarOpU | VMap]]) -> Type[ScalarOpU]:
     hints = get_type_hints(fun)
     return_type = hints.get("return")
 
@@ -840,9 +836,7 @@ def uniform(a: RVLike, b: RVLike) -> InfixRV[ir.Uniform | ir.VMap]: ...
 @scalar_op
 def beta(a: RVLike, b: RVLike) -> InfixRV[ir.Beta | ir.VMap]: ...
 @scalar_op
-def beta_binomial(
-    a: RVLike, b: RVLike, c: RVLike
-) -> InfixRV[ir.BetaBinomial | ir.VMap]: ...
+def beta_binomial(a: RVLike, b: RVLike, c: RVLike) -> InfixRV[ir.BetaBinomial | ir.VMap]: ...
 @scalar_op
 def exponential(a: RVLike) -> InfixRV[ir.Exponential | ir.VMap]: ...
 @scalar_op
@@ -898,7 +892,7 @@ def sqrt(x: RVLike) -> InfixRV[ir.Pow | VMap]:
 ########################################################################################
 
 
-def matmul(a: RVLike, b: RVLike) -> RV[ir.Matmul]:
+def matmul(a: RVLike, b: RVLike) -> InfixRV[ir.Matmul]:
     """
     Matrix product of two arrays. The behavior follows that of
     `numpy.matmul <https://numpy.org/doc/stable/reference/generated/numpy.matmul.html>`_
@@ -919,14 +913,14 @@ def matmul(a: RVLike, b: RVLike) -> RV[ir.Matmul]:
     return create_rv(ir.Matmul(), a, b)
 
 
-def inv(a: RVLike) -> RV[ir.Inv]:
+def inv(a: RVLike) -> InfixRV[ir.Inv]:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
     """
     return create_rv(ir.Inv(), a)
 
 
-def softmax(a: RVLike) -> RV[ir.Softmax]:
+def softmax(a: RVLike) -> InfixRV[ir.Softmax]:
     """
     Take `softmax <https://en.wikipedia.org/wiki/Softmax_function>`_ function.
     (TODO: conform to
@@ -962,7 +956,7 @@ def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
 ########################################################################################
 
 
-def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
+def multi_normal(mean: RVLike, cov: RVLike) -> InfixRV[ir.MultiNormal]:
     """
     Create a multivariate normal distributed random variable.
     Call as ``multi_normal(mean, cov)``
@@ -977,7 +971,7 @@ def multi_normal(mean: RVLike, cov: RVLike) -> RV[ir.MultiNormal]:
     return create_rv(ir.MultiNormal(), mean, cov)
 
 
-def categorical(theta: RVLike) -> RV[ir.Categorical]:
+def categorical(theta: RVLike) -> InfixRV[ir.Categorical]:
     """
     Create a `categorical <https://en.wikipedia.org/wiki/Categorical_distribution>`_
     distributed `RV` where ``theta`` is a vector of non-negative reals that sums to one.
@@ -990,7 +984,7 @@ def categorical(theta: RVLike) -> RV[ir.Categorical]:
     return create_rv(ir.Categorical(), theta)
 
 
-def multinomial(n: RVLike, p: RVLike) -> RV[ir.Multinomial]:
+def multinomial(n: RVLike, p: RVLike) -> InfixRV[ir.Multinomial]:
     """
     Create a `multinomial <https://en.wikipedia.org/wiki/Multinomial_distribution>`_
     distributed random variable. Call as ``multinomial(n,p)`` where ``n`` is the number of repetitions and ``p`` is a vector of probabilities that sums to one.
@@ -1006,7 +1000,7 @@ def multinomial(n: RVLike, p: RVLike) -> RV[ir.Multinomial]:
     return create_rv(ir.Multinomial(), n, p)
 
 
-def dirichlet(alpha: RVLike) -> RV[ir.Dirichlet]:
+def dirichlet(alpha: RVLike) -> InfixRV[ir.Dirichlet]:
     """
     Create a
     `Dirichlet <https://en.wikipedia.org/wiki/Dirichlet_distribution>`__
@@ -1021,7 +1015,7 @@ def dirichlet(alpha: RVLike) -> RV[ir.Dirichlet]:
     return create_rv(ir.Dirichlet(), alpha)
 
 
-def wishart(nu: RVLike, S: RVLike) -> RV[ir.Wishart]:
+def wishart(nu: RVLike, S: RVLike) -> InfixRV[ir.Wishart]:
     """
     Create a
     `Wishart <https://en.wikipedia.org/wiki/Wishar_distribution>`__
