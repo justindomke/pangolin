@@ -11,9 +11,9 @@ Other notes:
 
 * All `RV` and `Op` are immutable. Nothing is allowed to change after initialization.
 * All `RV` have static shapes. The shape of an `RV` is recursively determined by its Op and
-  the shapes of its parent `RV`.    
+  the shapes of its parent `RV`.
 
-  
+
 Types of `Op`:
 
 ============================ ============
@@ -21,9 +21,9 @@ Type                         Ops
 ============================ ============
 Constants                    :class:`Constant`
 Arithmetic                   :class:`Add` :class:`Sub` :class:`Mul` :class:`Div`
-Trigonometry                 :class:`Arccos` :class:`Arccosh` :class:`Arcsin` :class:`Arcsinh` :class:`Arctan` :class:`Arctanh` :class:`Cos` :class:`Cosh` :class:`Sin` :class:`Sinh` :class:`Tan` :class:`Tanh` 
-Other scalar functions       :class:`Pow` :class:`Abs` :class:`Exp` :class:`InvLogit` :class:`Log` :class:`Loggamma` :class:`Logit` :class:`Step` 
-Linear algebra               :class:`Matmul` :class:`Inv` 
+Trigonometry                 :class:`Arccos` :class:`Arccosh` :class:`Arcsin` :class:`Arcsinh` :class:`Arctan` :class:`Arctanh` :class:`Cos` :class:`Cosh` :class:`Sin` :class:`Sinh` :class:`Tan` :class:`Tanh`
+Other scalar functions       :class:`Pow` :class:`Abs` :class:`Exp` :class:`InvLogit` :class:`Log` :class:`Loggamma` :class:`Logit` :class:`Step`
+Linear algebra               :class:`Matmul` :class:`Inv`
 Other multivariate functions :class:`Sum` :class:`Softmax`
 Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognormal` :class:`Cauchy` :class:`Bernoulli` :class:`BernoulliLogit` :class:`Beta` :class:`Binomial` :class:`Categorical` :class:`Uniform` :class:`BetaBinomial` :class:`Exponential` :class:`Gamma` :class:`Poisson` :class:`StudentT`
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
@@ -162,9 +162,7 @@ class Op(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        is_abstract = ABC in cls.__bases__ or bool(
-            getattr(cls, "__abstractmethods__", False)
-        )
+        is_abstract = ABC in cls.__bases__ or bool(getattr(cls, "__abstractmethods__", False))
 
         if not is_abstract:
             if not hasattr(cls, "_random"):
@@ -186,9 +184,7 @@ class Op(ABC):
 
                 random_prop.__doc__ = cls._random.__doc__
             else:
-                raise TypeError(
-                    f"Class '{cls.__name__}' has '_random' neither bool nor Callable."
-                )
+                raise TypeError(f"Class '{cls.__name__}' has '_random' neither bool nor Callable.")
 
             setattr(cls, "random", random_prop)
 
@@ -239,9 +235,7 @@ class Constant(Op):
                 and np.all(self.value == other.value)
                 and self.value.dtype == other.value.dtype
             ):
-                assert hash(self) == hash(
-                    other
-                ), "bug: hashes don't match for equal Constant"
+                assert hash(self) == hash(other), "bug: hashes don't match for equal Constant"
                 return True
         return False
 
@@ -270,11 +264,7 @@ class Constant(Op):
         # assure regular old numpy in case jax being used
         numpy_value = np.array(self.value)
         with np.printoptions(threshold=5, linewidth=50, edgeitems=2):
-            return (
-                np.array2string(numpy_value, precision=3)
-                .replace("\n", "")
-                .replace("  ", " ")
-            )
+            return np.array2string(numpy_value, precision=3).replace("\n", "").replace("  ", " ")
 
 
 ########################################################################################
@@ -331,15 +321,10 @@ class ScalarOp(Op, ABC):
         """
 
         if len(parents_shapes) != self._num_parents:
-            raise TypeError(
-                f"{self.name} op got {len(parents_shapes)} parent(s) but expected"
-                f" {self._num_parents}."
-            )
+            raise TypeError(f"{self.name} op got {len(parents_shapes)} parent(s) but expected" f" {self._num_parents}.")
         for shape in parents_shapes:
             if shape != ():
-                raise ValueError(
-                    f"{self.name} op got parent shapes {parents_shapes} not all scalar."
-                )
+                raise ValueError(f"{self.name} op got parent shapes {parents_shapes} not all scalar.")
         return ()
 
     # TODO: simplify?
@@ -388,9 +373,7 @@ class _OpInfo:
 
         if random:
             if wikipedia:
-                self.wikipedia = (
-                    f"https://en.wikipedia.org/wiki/{wikipedia}_distribution"
-                )
+                self.wikipedia = f"https://en.wikipedia.org/wiki/{wikipedia}_distribution"
             else:
                 self.wikipedia = f"https://en.wikipedia.org/wiki/{name}_distribution"
         else:
@@ -635,42 +618,30 @@ class Matmul(Op):
 
         """
         if len(a_shape) not in [1, 2]:
-            raise ValueError(
-                f"First parent for Matmul must have 1 or 2 dims (got {len(a_shape)})."
-            )
+            raise ValueError(f"First parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
 
         if len(b_shape) not in [1, 2]:
-            raise ValueError(
-                f"Second parent for Matmul must have 1 or 2 dims (got {len(a_shape)})."
-            )
+            raise ValueError(f"Second parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
 
         if len(a_shape) == 1 and len(b_shape) == 1:
             # inner product
             if a_shape != b_shape:
-                raise ValueError(
-                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
-                )
+                raise ValueError(f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})")
             return ()
         elif len(a_shape) == 1 and len(b_shape) == 2:
             # vector-matrix product
             if a_shape[0] != b_shape[0]:
-                raise ValueError(
-                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
-                )
+                raise ValueError(f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})")
             return (b_shape[1],)
         elif len(a_shape) == 2 and len(b_shape) == 1:
             # matrix-vector product
             if a_shape[1] != b_shape[0]:
-                raise ValueError(
-                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
-                )
+                raise ValueError(f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})")
             return (a_shape[0],)
         elif len(a_shape) == 2 and len(b_shape) == 2:
             # matrix-matrix product
             if a_shape[1] != b_shape[0]:
-                raise ValueError(
-                    f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})"
-                )
+                raise ValueError(f"Matmul parent shapes do not match ({a_shape} vs. {b_shape})")
             return (a_shape[0], b_shape[1])
         else:
             raise Exception("bug: should be impossible")
@@ -879,9 +850,7 @@ def _vec_mat_get_shape(self, vec_shape: Shape, mat_shape: Shape) -> Shape:
         raise ValueError("second parameter must be a matrix.")
     N = vec_shape[0]
     if mat_shape != (N, N):
-        raise ValueError(
-            "second parameter must be matrix with size matching first parameter"
-        )
+        raise ValueError("second parameter must be matrix with size matching first parameter")
     return (N,)
 
 
@@ -915,10 +884,7 @@ class Categorical(Op):
 
         assert isinstance(weights_shape, tuple)
         if len(weights_shape) != 1:
-            raise ValueError(
-                f"Categorical op got input with {len(weights_shape)} dims but "
-                f"expected 1."
-            )
+            raise ValueError(f"Categorical op got input with {len(weights_shape)} dims but " f"expected 1.")
         return ()
 
 
@@ -1096,9 +1062,7 @@ class VMap(Op):
             in_axes = tuple(in_axes)
         assert isinstance(in_axes, tuple), "in_axes must be tuple"
         if axis_size is None:
-            assert any(
-                axis is not None for axis in in_axes
-            ), "if axis_size=None, at least one axis must be mapped"
+            assert any(axis is not None for axis in in_axes), "if axis_size=None, at least one axis must be mapped"
         else:
             if not isinstance(axis_size, (int, np.integer)):
                 raise Exception(f"axis_size must be None or int was {type(axis_size)}")
@@ -1116,13 +1080,9 @@ class VMap(Op):
         """
 
         if len(parents_shapes) != len(self.in_axes):
-            raise ValueError(
-                f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}"
-            )
+            raise ValueError(f"len(in_axes) {len(self.in_axes)} does not match number of parents {len(parents_shapes)}")
 
-        remaining_shapes, axis_size = get_sliced_shapes(
-            parents_shapes, self.in_axes, self.axis_size
-        )
+        remaining_shapes, axis_size = get_sliced_shapes(parents_shapes, self.in_axes, self.axis_size)
         dummy_shape: Shape = self.base_op.get_shape(*remaining_shapes)
         return (axis_size,) + dummy_shape
 
@@ -1153,11 +1113,7 @@ class VMap(Op):
 
     def __eq__(self, other):
         if isinstance(other, VMap):
-            return (
-                self.base_op == other.base_op
-                and self.in_axes == other.in_axes
-                and self.axis_size == other.axis_size
-            )
+            return self.base_op == other.base_op and self.in_axes == other.in_axes and self.axis_size == other.axis_size
         return False
 
     def __hash__(self):
@@ -1188,9 +1144,7 @@ class Composite(Op):
             assert all(isinstance(i, int) for i in my_par_nums)
         for d in ops[:-1]:
             if d.random:
-                raise ValueError(
-                    f"all but last op for Composite must be non-random (got {d})"
-                )
+                raise ValueError(f"all but last op for Composite must be non-random (got {d})")
         self.num_inputs = num_inputs
         self.ops = tuple(ops)
         # self.par_nums = tuple(par_nums)
@@ -1226,11 +1180,7 @@ class Composite(Op):
 
     def __eq__(self, other):
         if isinstance(other, Composite):
-            return (
-                self.num_inputs == other.num_inputs
-                and self.ops == other.ops
-                and self.par_nums == other.par_nums
-            )
+            return self.num_inputs == other.num_inputs and self.ops == other.ops and self.par_nums == other.par_nums
         return False
 
     def __hash__(self):
@@ -1306,11 +1256,7 @@ class Autoregressive(Op):
         # insert self
         # if n == self.where_self:
         #    base_input_shapes.append(start_shape)
-        base_input_shapes = (
-            base_input_shapes[: self.where_self]
-            + [start_shape]
-            + base_input_shapes[self.where_self :]
-        )
+        base_input_shapes = base_input_shapes[: self.where_self] + [start_shape] + base_input_shapes[self.where_self :]
 
         # for s in other_shapes:
         #    assert s[0] == my_length
@@ -1487,9 +1433,7 @@ class Index(Op):
 
         for idx_shape1 in indices_shapes:
             for idx_shape2 in indices_shapes:
-                assert (
-                    idx_shape1 == idx_shape2
-                ), "all indices must have same shape (no broadcasting yet)"
+                assert idx_shape1 == idx_shape2, "all indices must have same shape (no broadcasting yet)"
 
         output_shape = ()
         idx_added = False
@@ -1639,9 +1583,7 @@ class SimpleIndex(Op):
         num_indexed = len(indices_shapes)
         num_dims = len(var_shape)
         if num_indexed != num_dims:
-            raise ValueError(
-                f"Indexed RV with {num_dims} dims with {num_indexed} indices."
-            )
+            raise ValueError(f"Indexed RV with {num_dims} dims with {num_indexed} indices.")
 
         # num_non_scalar = len([idx_shape for idx_shape in indices_shapes if idx_shape is not ()])
         # if num_non_scalar > 1:
@@ -1727,49 +1669,141 @@ def index_orthogonal_no_slices(A, *index_arrays):
 ########################################################################################
 
 
+class Bijection(Op):
+    """
+    The intended use for bijections is for defining transformed distributions where we start with the density ``P(x)`` and we would like to quickly evaluate ``P(y)`` where ``y`` is some transformed version of x.
+
+    In general if ``Y=T(X)`` then
+
+    ``P_X(x) = P_Y(T(x)) × |det ∇T(x)|``
+
+    and
+
+    ``P_Y(y) = P_X(T⁻¹(y)) × |det ∇T⁻¹(y)|``.
+
+    That is, ``P_Y`` is the pushforward of ``P_X`` and ``P_X`` is the pullback of ``P_Y``.
+
+    We assume that this distribution will generally be used as a "pullback", meaning that an op is known for ``P(X)`` and one wishes to define an op for ``P(Y)``. In order to implement ``log_prob` for ``P(Y)`` it will be necessary to evaluate ``T⁻¹(y)`` and ``|det ∇T⁻¹(y)|``. In order to sample ``P(Y)`` it will be necessary to evaluate ``T(x)``.
+
+    Args:
+        forward: Implements ``T(x)``
+        inverse: Implements ``T⁻¹(y)``
+        inverse_log_det_jac: Impelements ``log(|det ∇T⁻¹(y)|)``
+
+    Examples
+    --------
+    An implementation of the ``exp`` transformation, using the fact that the inverse is ``log`` and the log-derivative of the inverse is ``log(d/dy log(y)) = log(1/y) = -log(y)``.
+
+    >>> forward = Exp()
+    >>> inverse = Log()
+    >>> inverse_log_jac_det = Composite(
+    ...     1,
+    ...     (Log(), Constant(-1), Mul()),
+    ...     ((0,), (), (2, 1)))
+    >>> bijector = Bijection(forward, inverse, inverse_log_jac_det)
+    >>> print(bijector)
+    bijection(exp, log, composite(1, (log, -1, mul), ((0,), (), (2, 1))))
+    """
+
+    _random = False
+
+    def __init__(self, forward: Op, inverse: Op, inverse_log_det_jac: Op):
+        if forward.random:
+            raise ValueError("forward op cannot be random")
+
+        if inverse.random:
+            raise ValueError("inverse op cannot be random")
+
+        if inverse_log_det_jac.random:
+            raise ValueError("log_det_jac cannot be random")
+
+        self.forward = forward
+        self.inverse = inverse
+        self.inverse_log_det_jac = inverse_log_det_jac
+
+    def _get_shape(self, y_shape: Shape, *param_shapes: Shape) -> Shape:
+        x_shape = self.forward.get_shape(y_shape, *param_shapes)
+        y_shape_pred = self.inverse.get_shape(x_shape, *param_shapes)
+        if y_shape_pred != y_shape:
+            raise ValueError(
+                f"y_shape {y_shape} did not match predicted y_shape {y_shape_pred}, indicating forward and inverse ops have incompatible shapes"
+            )
+        return x_shape
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Bijection):
+            return False
+        return (
+            self.forward == other.forward
+            and self.inverse == other.inverse
+            and self.inverse_log_det_jac == other.inverse_log_det_jac
+        )
+
+    def __hash__(self):
+        return hash((self.forward, self.inverse, self.inverse_log_det_jac))
+
+    def __repr__(self):
+        return f"Bijection({repr(self.forward)}, {repr(self.inverse)}, {repr(self.inverse_log_det_jac)})"
+
+    def __str__(self):
+        """
+        Return a string representation of the VMap op. Just like ``__repr__`` except
+        uses str for calling the recursive distribution.
+        """
+        return f"bijection({str(self.forward)}, {str(self.inverse)}, {str(self.inverse_log_det_jac)})"
+
+
 class Transformed(Op):
     """
+    Given some distribution ``P(X)`` and some bijection ``Y=T(X)``, create the distribution ``P(Y)``.
+
     ``Transformed(base_op, transform_op, num_base_args, transformed_arg)``
     Represents the result of drawing a sample from ``base_op`` and then putting
     that sample into a given position in ``transform_op``.
 
-    Doing
+    If you do this:
 
     .. code-block:: python
 
-        >>> op = Transformed(base_op, # doctest: +SKIP
-        ...                  tform_op,
-        ...                  n_base_args,
-        ...                  tformed_arg)
-        >>> x = RV(op, *p[0:N-1]) # doctest: +SKIP
+        >>> bijection = Bijection(forward, inverse, inverse_log_jac_det) # doctest: +SKIP
+        >>> op = Transformed(base_op, bijection, n_biject_args)          # doctest: +SKIP
+        >>> y = RV(op, *p)                                               # doctest: +SKIP
 
-    Is equal *in distribution* to doing
+    That produces a `RV` ``y`` that is equal *in distribution* to doing this:
 
     .. code-block:: python
 
-        >>> p_base  = p[:num_base_args] # doctest: +SKIP
-        >>> p_tform = p[num_base_args:] # doctest: +SKIP
-        >>> u = RV(base_op, *p_base)  # doctest: +SKIP
-        >>> x = RV(tform_op, *p_tform[:tformed_arg], u, *p_tform[tformed_arg:]) # doctest: +SKIP
+        >>> p_biject = p[:n_biject_args] # doctest: +SKIP
+        >>> p_base   = p[n_biject_args:] # doctest: +SKIP
+        >>> x = RV(base_op, *p_base)     # doctest: +SKIP
+        >>> y = RV(forward, *p_biject)   # doctest: +SKIP
 
-    However, in the latter case ``x`` is random and so has a density.
+    However, in the former case ``y`` is considered random.
 
     Examples
     --------
-    >>> base_op = Normal()
-    >>> transform_op = Add()
-    >>> op = Transformed(base_op, transform_op, 2, 0)
-    >>> op.get_shape((), (), ())
-    ()
-
     This is equivalent to a lognormal:
 
-    >>> op = Transformed(Normal(), Exp(), 2, 0)
+    >>> base_op = Normal()
+    >>> forward = Exp()
+    >>> inverse = Log()
+    >>> inverse_log_jac_det = Composite(
+    ...     1,
+    ...     (Log(), Constant(-1), Mul()),
+    ...     ((0,), (), (2, 1)))
+    >>> exp_bijector = Bijection(forward, inverse, inverse_log_jac_det)
+    >>> op = Transformed(Normal(), exp_bijector, 0)
+    >>> op
+    Transformed(Normal(), Bijection(Exp(), Log(), Composite(1, (Log(), Constant(-1), Mul()), ((0,), (), (2, 1)))), 0)
+    >>> print(op)
+    transformed(normal, bijection(exp, log, composite(1, (log, -1, mul), ((0,), (), (2, 1)))), 0)
+    >>> op.get_shape((),())
+    ()
 
     Args:
         base_op: The base op to transform (must be random)
-        transform_op: The transformation op (must be invertible w.r.t. it's ``transformed_arg`` th parent)
-
+        bijection: The bijection to apply
+        n_biject_args: Number of parameter parents for bijection
     """
 
     _random = True
@@ -1777,37 +1811,33 @@ class Transformed(Op):
     def __init__(
         self,
         base_op: Op,
-        tform_op: Op,
-        n_base_args: int,
-        tformed_arg: int,
+        bijector: Bijection,
+        n_biject_args: int,
     ):
         if not base_op.random:
             raise ValueError("base_op must be random")
-        if tform_op.random:
-            raise ValueError("transform_op cannot be random")
-
-        if not tform_op.bijectable(tformed_arg):
-            raise ValueError(
-                f"{repr(tform_op)} is not marked bijectable with respect to arg {tformed_arg}"
-            )
 
         self.base_op = base_op
-        self.transform_op = tform_op
-        self.num_base_args = n_base_args
-        self.transformed_arg = tformed_arg
+        self.bijector = bijector
+        self.n_biject_args = n_biject_args
 
     def _get_shape(self, *args: Shape) -> Shape:
-        dist_shapes = args[: self.num_base_args]
-        transform_shapes = args[self.num_base_args :]
+        biject_args_shapes = args[: self.n_biject_args]
+        dist_shapes = args[self.n_biject_args :]
 
         original_shape = self.base_op.get_shape(*dist_shapes)
-        transform_input_shapes = (
-            transform_shapes[: self.transformed_arg]
-            + (original_shape,)
-            + transform_shapes[self.transformed_arg :]
-        )
-        new_shape = self.transform_op.get_shape(*transform_input_shapes)
+        new_shape = self.bijector.get_shape(original_shape, *biject_args_shapes)
         return new_shape
+
+    def __repr__(self):
+        return f"Transformed({repr(self.base_op)}, {repr(self.bijector)}, {repr(self.n_biject_args)})"
+
+    def __str__(self):
+        """
+        Return a string representation of the VMap op. Just like ``__repr__`` except
+        uses str for calling the recursive distribution.
+        """
+        return f"transformed({str(self.base_op)}, {str(self.bijector)}, {str(self.n_biject_args)})"
 
 
 ########################################################################################
@@ -2100,9 +2130,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
             id = vars_named[node]
         else:
             # find a unique id
-            while (
-                util.num2str(count) in id_to_node or util.num2str(count) in named_vars
-            ):
+            while util.num2str(count) in id_to_node or util.num2str(count) in named_vars:
                 count += 1
             id = util.num2str(count)
 
