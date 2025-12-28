@@ -68,7 +68,7 @@ class Op(ABC):
     """
 
     _frozen = False
-    _random: bool | Callable[[], bool]
+    _random: bool | Callable[..., bool]
     _get_shape: Callable[..., Shape]
     _bijectable: bool | Callable[[int], bool] = False
 
@@ -107,7 +107,7 @@ class Op(ABC):
         else:
             return self._bijectable
 
-    def __eq__(self, other: Op) -> bool:
+    def __eq__(self, other) -> bool:
         """
         Are ``self`` and ``other`` *mathematically* equal?
 
@@ -171,22 +171,26 @@ class Op(ABC):
             if not hasattr(cls, "_get_shape"):
                 raise TypeError(f"Class '{cls.__name__}' must define '_get_shape'.")
 
-            if isinstance(cls._random, bool):
+            _random = getattr(cls, "_random", None)
+            if _random is None:
+                raise TypeError("_random undefined")
+
+            if isinstance(_random, bool):
 
                 def random_getter(self: Self) -> bool:
-                    return cast(bool, cls._random)
+                    return cast(bool, _random)
 
                 random_prop = property(random_getter)
-                random_prop.__doc__ = f"{cls._random}"
-            elif isinstance(cls._random, Callable):
-                random_fun = cast(Callable[[Op], bool], cls._random)
+                random_prop.__doc__ = f"{_random}"
+                setattr(cls, "random", random_prop)
+            elif isinstance(_random, Callable):
+                random_fun = cast(Callable[[Op], bool], _random)
                 random_prop = property(random_fun)
 
-                random_prop.__doc__ = cls._random.__doc__
+                random_prop.__doc__ = _random.__doc__
+                setattr(cls, "random", random_prop)
             else:
                 raise TypeError(f"Class '{cls.__name__}' has '_random' neither bool nor Callable.")
-
-            setattr(cls, "random", random_prop)
 
             setattr(cls, "get_shape", cls._get_shape)
 
@@ -292,7 +296,7 @@ class ScalarOp(Op, ABC):
     """
 
     _expected_parents: int | dict[str, str]
-    _random: bool
+    # _random: bool
     _wikipedia: str | None = None
     "Optional wikipedia link"
     _notes: list[str] = []
@@ -433,10 +437,6 @@ Examples
 class Add(ScalarOp):
     _expected_parents = 2
     _random = False
-
-    # _bijectable = True
-    def _bijectable(self, argnum: int) -> bool:
-        return True
 
 
 class Sub(ScalarOp):
@@ -1040,6 +1040,7 @@ class VMap(Op):
     (4, 6)
     """
 
+    # @property
     def _random(self) -> bool:
         """
         Equal to ``base_op.random``
