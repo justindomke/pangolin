@@ -7,10 +7,10 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
-from .base import HasInferenceProps
+from .base import MixinBase
 
 
-class ComplexTests(HasInferenceProps):
+class ComplexTests(MixinBase):
     """
     Intended to be used as a mixin
     """

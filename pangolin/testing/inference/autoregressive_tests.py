@@ -7,10 +7,11 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
-from .base import HasInferenceProps
+from .base import MixinBase
+from typing import Callable
 
 
-class AutoregressiveTests(HasInferenceProps):
+class AutoregressiveTests(MixinBase):
     """
     Intended to be used as a mixin
     """
@@ -33,7 +34,7 @@ class AutoregressiveTests(HasInferenceProps):
         x = ir.RV(ir.Constant(0.1))
         y = ir.RV(op, x)
 
-        out = self.sample_flat([y], [], [], niter=1)
+        out = self._sample_flat([y], [], [], niter=1)
         assert np.allclose(expected, out[0])
 
     def test_repeated_exp_with_dummy(self):
