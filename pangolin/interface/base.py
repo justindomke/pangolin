@@ -18,6 +18,7 @@ from dataclasses import dataclass, fields
 from enum import Enum
 from contextlib import contextmanager
 import makefun
+import types
 
 RVLike: typing.TypeAlias = RV | ArrayLike
 
@@ -308,7 +309,7 @@ class InfixRV(RV[OpU], typing.Generic[OpU]):
     def __str__(self):
         return super().__str__()
 
-    _IdxType = RVLike | slice | type(Ellipsis)
+    _IdxType = RVLike | slice | types.EllipsisType
 
     def __getitem__(self, idx: _IdxType | tuple[_IdxType, ...]):
         """
