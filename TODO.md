@@ -1,10 +1,10 @@
 # Before 0.0.1
 
-* better typing for interface (pytree for autoregressive etc)
-
 * Bring sanity to indexing
 
-* Fix autoregressive interface
+* Careful typing for ir
+
+
 
 # After 0.0.1
 
