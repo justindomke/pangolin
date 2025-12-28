@@ -9,7 +9,7 @@ from pangolin.ir import SimpleIndex
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RVLike, constant, exp, log
-from typing import Sequence, Type
+from typing import Sequence, Type, cast
 import jax.tree_util
 
 from typing import Protocol, TypeVar, Any
@@ -52,6 +52,7 @@ def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RV
         idx_mid = (slice(None),) * slices_needed
         idx_end = idx[where + 1 :]
         idx = idx_start + idx_mid + idx_end
+    idx = cast(tuple[slice | RVLike, ...], idx)
     return idx
 
 
