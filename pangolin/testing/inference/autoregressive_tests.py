@@ -34,7 +34,7 @@ class AutoregressiveTests(MixinBase):
         x = ir.RV(ir.Constant(0.1))
         y = ir.RV(op, x)
 
-        out = self._sample_flat([y], [], [], niter=1)
+        out = self.sample_flat([y], [], [], niter=1)
         assert np.allclose(expected, out[0])
 
     def test_repeated_exp_with_dummy(self):

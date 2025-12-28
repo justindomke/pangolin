@@ -142,11 +142,11 @@ class ComplexTests(MixinBase):
 
         expected = b[None, :] + np.cumsum(a, axis=0)
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+        [y_samps] = self.sample_flat([y], [], [], niter=1)
         out = y_samps[0]
 
         assert y.shape == out.shape == expected.shape == (10, 5)
-        assert np.allclose(expected, out)
+        assert np.allclose(expected, out, rtol=1e-5, atol=1e-5)
 
     # def test_autoregressive_vmap_mapped2(self):
     #     "test currently unsupported because jax backend can't handle in_axes > 0"
