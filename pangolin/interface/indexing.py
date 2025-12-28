@@ -4,7 +4,7 @@ Interface for fully-orthogonal indexing.
 
 from __future__ import annotations
 from . import InfixRV
-from pangolin.ir import Op, RV, VMap, Constant, print_upstream
+from pangolin.ir import Op, RV, VMap, Constant, print_upstream, Shape
 from pangolin.ir import SimpleIndex
 from pangolin import dag, ir, util
 from collections.abc import Callable
@@ -20,8 +20,10 @@ import types
 
 # TODO: Clarify exactly how indexing works, how related to broadcasting
 
+_IdxType = RVLike | slice | types.EllipsisType
 
-def eliminate_ellipses(ndim: int, idx: tuple):
+
+def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RVLike, ...]:
     """Given indices, if there is an ellipsis, insert full slices
 
     Examples
@@ -96,7 +98,7 @@ def convert_index(size: int, index: RVLike | slice) -> RV:
         return constant(A)
 
 
-def convert_indices(shape: tuple[int], *indices: RVLike | slice) -> tuple[RV]:
+def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[RV, ...]:
     """
     Examples
     --------
@@ -107,9 +109,6 @@ def convert_indices(shape: tuple[int], *indices: RVLike | slice) -> tuple[RV]:
     """
 
     return tuple(convert_index(size, index) for size, index in zip(shape, indices, strict=True))
-
-
-_IdxType = RVLike | slice | types.EllipsisType
 
 
 def index(var: RV, *indices: _IdxType):
