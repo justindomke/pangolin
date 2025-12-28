@@ -1890,13 +1890,14 @@ class RV(dag.Node, Generic[OpT]):
     _frozen = False
     _n = 1  # convenient to store order all RVs were created
 
-    def __init__(self, op: OpT, *parents: "RV"):
+    def __init__(self, op: OpT, *parents: RV):
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)
         self._n = RV._n
         RV._n += 1
         self.op = op
-        super().__init__(*parents)
+        # some weird type system here, maybe look into it someday
+        super().__init__(*parents)  # type: ignore
         self._frozen = True
 
     @property
