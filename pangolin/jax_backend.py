@@ -9,13 +9,15 @@ import numpy as np
 from typing import Callable, Type, Sequence, Optional, Any
 from pangolin import ir
 from pangolin.ir import Op, RV
-from numpy.typing import ArrayLike
+
+# from numpy.typing import ArrayLike
 from numpyro import distributions as dist
 from jax.scipy import special as jspecial
 from jax import nn as jnn
 from jax import Array as JaxArray
 from pangolin import dag, util
 from jaxtyping import PyTree
+from jax.typing import ArrayLike
 
 __all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 
@@ -88,10 +90,10 @@ simple_dists: dict[Type[Op], Callable] = {
 
 def make_simple_log_prob(
     op_class: Type[Op],
-) -> Callable[[Op, ArrayLike, Sequence[ArrayLike]], jnp.ndarray]:
+) -> Callable[[Op, ArrayLike, Sequence[ArrayLike]], ArrayLike]:
     bind = simple_dists[op_class]
 
-    def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike]) -> jnp.ndarray:
+    def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
         bound_dist: dist.Distribution = bind(*parent_values)
         return bound_dist.log_prob(value)
 
