@@ -16,6 +16,7 @@ from typing import Protocol, TypeVar, Any
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
+import types
 
 # TODO: Clarify exactly how indexing works, how related to broadcasting
 
@@ -35,9 +36,7 @@ def eliminate_ellipses(ndim: int, idx: tuple):
     num_ellipsis = len([i for i in idx if i is ...])
     if num_ellipsis == 0:
         if len(idx) != ndim:
-            raise ValueError(
-                f"Number of indices ({len(idx)}) does not match ndim ({ndim})"
-            )
+            raise ValueError(f"Number of indices ({len(idx)}) does not match ndim ({ndim})")
 
     if num_ellipsis > 1:
         raise ValueError("an index can only have a single ellipsis ('...')")
@@ -107,15 +106,13 @@ def convert_indices(shape: tuple[int], *indices: RVLike | slice) -> tuple[RV]:
     (InfixRV(Constant([4,0,1])), InfixRV(Constant([3,3])))
     """
 
-    return tuple(
-        convert_index(size, index) for size, index in zip(shape, indices, strict=True)
-    )
+    return tuple(convert_index(size, index) for size, index in zip(shape, indices, strict=True))
 
 
-IdxType = RVLike | slice | type(Ellipsis)
+_IdxType = RVLike | slice | types.EllipsisType
 
 
-def index(var: RV, *indices: IdxType):
+def index(var: RV, *indices: _IdxType):
     """Index a RV.
 
     Examples
