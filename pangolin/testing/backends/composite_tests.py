@@ -7,9 +7,12 @@ import scipy.special
 from pangolin.jax_backend import ancestor_sample_flat
 import jax
 from pangolin import ir
+from .base import MixinBase
+from pangolin.testing import test_util
+from pangolin import interface as pi
 
 
-class CompositeTests:
+class CompositeTests(MixinBase):
     """
     Intended to be used as a mixin
     """
@@ -53,35 +56,44 @@ class CompositeTests:
         y = ir.RV(op, x)
         assert isinstance(y.op, ir.Composite)
 
-        key = jax.random.PRNGKey(0)
-        value = sample_op(y.op, key, [0.7])
+        def testfun(samps):
+            [y_samps] = samps
+            return np.abs(np.mean(y_samps) - 0.7) < 0.05
 
-        l = log_prob_op(y.op, value, [0.7])
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
+        [y_samp] = self.ancestor_sample_flat([y])
+
+        assert y_samp.shape == ()
+
+        l = self.ancestor_log_prob_flat([y], [y_samp])
         numpyro_dist = numpyro.distributions.Bernoulli(0.7)
-        assert isinstance(numpyro_dist, numpyro.distributions.Distribution)
-        expected = numpyro_dist.log_prob(value)
+        expected = numpyro_dist.log_prob(y_samp)
 
         assert np.allclose(l, expected)
 
-    def test_exponential():
+    def test_exponential(self):
         op = ir.Composite(1, [ir.Exponential()], [[0]])
 
-        x = ir.RV(ir.Constant(0.7))
+        x = ir.RV(ir.Constant(0.23))
         y = ir.RV(op, x)
         assert isinstance(y.op, ir.Composite)
 
-        key = jax.random.PRNGKey(0)
-        value = sample_op(y.op, key, [0.7])
+        def testfun(samps):
+            [y_samps] = samps
+            return np.abs(np.mean(y_samps) - 1 / 0.23) < 0.05
 
-        l = log_prob_op(y.op, value, [0.7])
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
-        numpyro_dist = numpyro.distributions.Exponential(0.7)
-        expected = numpyro_dist.log_prob(value)
+        [y_samp] = self.ancestor_sample_flat([y])
+        assert y_samp.shape == ()
 
+        l = self.ancestor_log_prob_flat([y], [y_samp])
+        numpyro_dist = numpyro.distributions.Exponential(0.23)
+        expected = numpyro_dist.log_prob(y_samp)
         assert np.allclose(l, expected)
 
-    def test_add_normal():
+    def test_add_normal(self):
         # z ~ Normal(x+y, y)
         op = ir.Composite(2, [ir.Add(), ir.Normal()], [[0, 1], [2, 1]])
 
@@ -89,74 +101,82 @@ class CompositeTests:
         y = ir.RV(ir.Constant(0.1))
         z = ir.RV(op, x, y)
 
-        key = jax.random.PRNGKey(0)
+        expected_mean = 0.4
+        expected_std = 0.1
 
-        value = sample_op(z.op, jax.random.split(key)[1], [0.3, 0.1])
-        [value2] = ancestor_sample_flat([z], key)
+        def testfun(samps):
+            [z_samps] = samps
+            return np.abs(np.mean(z_samps) - expected_mean) < 0.05 and np.abs(np.std(z_samps) - expected_std) < 0.05
 
-        assert value == value2
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [z], testfun)
 
-        l = log_prob_op(z.op, value, [0.3, 0.1])
-        l2 = ancestor_log_prob_flat([z], [value])
+        [z_samp] = self.ancestor_sample_flat([z])
+        assert z_samp.shape == ()
 
-        tmp = 0.3 + 0.1
-        numpyro_dist = numpyro.distributions.Normal(tmp, 0.1)
-        expected = numpyro_dist.log_prob(value)
+        l = self.ancestor_log_prob_flat([z], [z_samp])
+        numpyro_dist = numpyro.distributions.Normal(0.4, 0.1)
+        expected = numpyro_dist.log_prob(z_samp)
         assert np.allclose(l, expected)
-        assert np.allclose(l2, expected)
 
+    def test_composite_deterministic(self):
+        @pi.composite
+        def f(x):
+            a = x + 2
+            b = x * x
+            return a + b
 
-# def test_composite_deterministic():
-#     @composite
-#     def f(x):
-#         a = x + 2
-#         b = x * x
-#         return a + b
+        x = pi.constant(1.5)
+        y = f(x)
+        assert isinstance(y.op, ir.Composite)
 
-#     x = constant(1.5)
-#     y = f(x)
-#     assert isinstance(y.op, ir.Composite)
+        expected_mean = (1.5 + 2) + (1.5**2)
 
-#     expected = (1.5 + 2) + (1.5**2)
+        def testfun(samps):
+            [y_samps] = samps
+            return np.abs(np.mean(y_samps) - expected_mean) < 0.05
 
-#     [ys] = sample_flat([y], [], [], niter=100)
-#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
-#     ys = sample(y, None, None, niter=100)
-#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+    def test_composite_random(self):
+        @pi.composite
+        def f(x):
+            a = x + 2
+            b = x * x
+            return pi.normal(a**b, 1e-5)
 
+        x = pi.constant(1.5)
+        y = f(x)
+        assert isinstance(y.op, ir.Composite)
 
-# def test_composite_random():
-#     @composite
-#     def f(x):
-#         a = x + 2
-#         b = x * x
-#         return normal(a**b, 1e-5)
+        expected_mean = (1.5 + 2) ** (1.5**2)
 
-#     x = constant(1.5)
-#     y = f(x)
-#     assert isinstance(y.op, ir.Composite)
+        def testfun(samps):
+            [y_samps] = samps
+            return np.abs(np.mean(y_samps) - expected_mean) < 0.05
 
-#     expected = (1.5 + 2) ** (1.5**2)
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
-#     [ys] = sample_flat([y], [], [], niter=100)
-#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+        [y_samp] = self.ancestor_sample_flat([y])
+        l = self.ancestor_log_prob_flat([y], [y_samp])
+        a_samp = 1.5 + 2
+        b_samp = 1.5 * 1.5
+        numpyro_dist = numpyro.distributions.Normal(a_samp**b_samp, 1e-5)
+        expected = numpyro_dist.log_prob(y_samp)
+        assert np.allclose(l, expected)
 
-#     ys = sample(y, None, None, niter=100)
-#     assert np.allclose(ys[-1], expected, rtol=1e-3, atol=1e-3)
+    def test_composite_simple_const_rv(self):
+        x = pi.constant(0.5)
+        noise = pi.constant(1e-3)
 
+        @pi.composite
+        def f(last):
+            return pi.normal(last, noise)  # +1
 
-# def test_composite_simple_const_rv():
-#     x = constant(0.5)
-#     noise = constant(1e-3)
+        y = f(x)
 
-#     @composite
-#     def f(last):
-#         return normal(last, noise)  # +1
+        def testfun(samps):
+            [y_samps] = samps
+            E_y = np.mean(y_samps)
+            return np.abs(E_y - 0.5) < 0.05
 
-#     y = f(x)
-
-#     def testfun(E_y):
-#         return np.abs(E_y - 0.5) < 0.1
-
-#     inf_until_match(E, y, [], [], testfun)
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)

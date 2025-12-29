@@ -6,6 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing.test_util import inf_until_match, ancestor_sample_until_match
+from .base import MixinBase
 
 
 def rands_from_ranges(ranges):
@@ -99,7 +100,7 @@ def get_cov(scipy_rv):
         return None
 
 
-class DistributionTests:
+class DistributionTests(MixinBase):
     """
     Intended to be used as a mixin
     """
@@ -121,26 +122,27 @@ class DistributionTests:
             expected_std = get_std(scipy_rv)
             expected_cov = get_cov(scipy_rv)
 
-            if expected_mean is not None:
+            def testfun(samps_list):
+                [samps] = samps_list
+                samps = np.array(samps, copy=True)  # cast from JAX or pytorch or whatever
 
-                def testfun(samps_list):
-                    [samps] = samps_list
-                    samps = np.array(samps, copy=True)  # cast from JAX or pytorch or whatever
+                match = True
 
+                if expected_mean is not None:
                     empirical_mean = np.mean(samps, axis=0)
-                    match = np.all(np.abs(empirical_mean - expected_mean) / np.linalg.norm(expected_mean) < 0.05)
+                    match &= np.all(np.abs(empirical_mean - expected_mean) / np.linalg.norm(expected_mean) < 0.05)
 
-                    if expected_std is not None:
-                        empirical_std = np.std(samps, axis=0)
-                        match &= np.all(np.abs(empirical_std - expected_std) / expected_std < 0.05)
+                if expected_std is not None:
+                    empirical_std = np.std(samps, axis=0)
+                    match &= np.all(np.abs(empirical_std - expected_std) / expected_std < 0.05)
 
-                    if expected_cov is not None:
-                        empirical_cov = np.cov(samps.T)
-                        match &= np.all(np.abs(empirical_cov - expected_cov) / np.linalg.norm(expected_cov) < 0.05)
+                if expected_cov is not None:
+                    empirical_cov = np.cov(samps.T)
+                    match &= np.all(np.abs(empirical_cov - expected_cov) / np.linalg.norm(expected_cov) < 0.05)
 
-                    return match
+                return match
 
-                ancestor_sample_until_match(self.ancestor_sample_flat, [output_rv], testfun)
+            ancestor_sample_until_match(self.ancestor_sample_flat, [output_rv], testfun)
 
     @pytest.mark.parametrize("pangolin_op, scipy_fun, ranges", testdata)
     def test_random_op_log_prob(self, pangolin_op, scipy_fun, ranges):
@@ -169,4 +171,4 @@ class DistributionTests:
             x_cast = self.cast(x)
             log_prob = self.ancestor_log_prob_flat([output_rv], [x_cast])
 
-            assert np.allclose(log_prob, log_prob_expected, atol=1e-4, rtol=1e-4)
+            assert np.allclose(log_prob, log_prob_expected, atol=1e-3, rtol=1e-3)

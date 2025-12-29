@@ -1,15 +1,18 @@
 from .deterministic_tests import DeterministicTests
-#from .composite_tests import CompositeTests
-from .distribution_tests import DistributionTests
 
-class BackendTests(DeterministicTests, DistributionTests):
+# from .composite_tests import CompositeTests
+from .distribution_tests import DistributionTests
+from .composite_tests import CompositeTests
+
+
+class BackendTests(DeterministicTests, DistributionTests, CompositeTests):
     """
     This class assumes a fixture named 'ancestor_sample_flat' will be available at runtime.
     """
 
-    _ancestor_sample_flat = None
-    _ancestor_log_prob_flat = None
-    _cast = None
+    # _ancestor_sample_flat = None
+    # _ancestor_log_prob_flat = None
+    # _cast = None
     _ops_without_sampling_support = {}
     "A set of pangolin random ops that this backend cannot sample from. Corresponding tests will be skipped"
     _ops_without_log_prob_support = {}
@@ -23,7 +26,7 @@ class BackendTests(DeterministicTests, DistributionTests):
 
         if not callable(fun):
             raise TypeError(f"'_ancestor_sample_flat' must be callable, not {type(fun)}")
-        
+
         return fun
 
     @property
@@ -32,7 +35,7 @@ class BackendTests(DeterministicTests, DistributionTests):
 
         if not callable(fun):
             raise TypeError(f"'_ancestor_log_prob_flat' must be callable, not {type(fun)}")
-        
+
         return fun
 
     @property
@@ -41,5 +44,5 @@ class BackendTests(DeterministicTests, DistributionTests):
 
         if not callable(fun):
             raise TypeError(f"'_cast' must be callable, not {type(fun)}")
-        
+
         return fun
