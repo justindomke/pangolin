@@ -4,7 +4,7 @@ Interface for fully-orthogonal indexing.
 
 from __future__ import annotations
 from . import InfixRV
-from pangolin.ir import Op, RV, VMap, Constant, print_upstream, Shape
+from pangolin.ir import Op, VMap, Constant, print_upstream, Shape
 from pangolin.ir import SimpleIndex
 from pangolin import dag, ir, util
 from collections.abc import Callable
@@ -56,7 +56,7 @@ def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RV
     return idx
 
 
-def convert_index(size: int, index: RVLike | slice) -> RV:
+def convert_index(size: int, index: RVLike | slice) -> InfixRV:
     """Convert an index which could be RV or ArrayLike or slice to an RV
 
     Parameters
@@ -88,7 +88,7 @@ def convert_index(size: int, index: RVLike | slice) -> RV:
 
     """
 
-    if isinstance(index, RV):
+    if isinstance(index, InfixRV):
         return index
     elif isinstance(index, slice):
         # TODO: insist that elements of the slice are constants
@@ -99,7 +99,7 @@ def convert_index(size: int, index: RVLike | slice) -> RV:
         return constant(A)
 
 
-def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[RV, ...]:
+def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[InfixRV, ...]:
     """
     Examples
     --------
@@ -112,7 +112,7 @@ def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[RV, ...]:
     return tuple(convert_index(size, index) for size, index in zip(shape, indices, strict=True))
 
 
-def index(var: RV, *indices: _IdxType):
+def index(var: InfixRV, *indices: _IdxType):
     """Index a RV.
 
     Examples

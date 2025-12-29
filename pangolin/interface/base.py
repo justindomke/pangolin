@@ -3,12 +3,12 @@ This package defines a special subtype of RV that supports operator overloading
 """
 
 from __future__ import annotations
-from pangolin.ir import RV, Op, Constant, ScalarOp, VMap
+from pangolin.ir import Op, Constant, ScalarOp, VMap
 from pangolin import ir, util
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING, get_type_hints
+from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING, get_type_hints, Union
 import inspect
 
 # from typing import Generic, TypeAlias, Final
@@ -20,7 +20,7 @@ from contextlib import contextmanager
 import makefun
 import types
 
-RVLike: typing.TypeAlias = RV | ArrayLike
+RVLike: typing.TypeAlias = Union[ArrayLike, "InfixRV"]
 
 # RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
 
@@ -231,7 +231,7 @@ def override(**kwargs):
 OpU = TypeVar("OpU", bound=Op)
 
 
-class InfixRV(RV[OpU], typing.Generic[OpU]):
+class InfixRV(ir.RV[OpU], typing.Generic[OpU]):
     """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
     operations.
 
@@ -261,7 +261,7 @@ class InfixRV(RV[OpU], typing.Generic[OpU]):
 
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op: OpU, *parents: RV):
+    def __init__(self, op: OpU, *parents: InfixRV):
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -398,7 +398,7 @@ def constant(value: ArrayLike) -> InfixRV[Constant]:
 #     return False
 
 
-def makerv(x: RVLike) -> RV:
+def makerv(x: RVLike) -> InfixRV:
     """
     If the input is `RV`, then it just returns it. Otherwise, creates an InfixRV.
 
@@ -417,7 +417,10 @@ def makerv(x: RVLike) -> RV:
     True
     """
 
-    if isinstance(x, RV):
+    if isinstance(x, ir.RV) and not isinstance(x, InfixRV):
+        raise ValueError("makerv called with base ir RV (only handles InfixRV)")
+
+    if isinstance(x, InfixRV):
         return x
     else:
         return InfixRV(Constant(x))
@@ -479,7 +482,7 @@ def get_shape(arg: RVLike):
 
     """
 
-    if isinstance(arg, RV):
+    if isinstance(arg, InfixRV):
         return arg.shape
     else:
         return np.shape(arg)
@@ -936,7 +939,7 @@ def softmax(a: RVLike) -> InfixRV[ir.Softmax]:
     return create_rv(ir.Softmax(), a)
 
 
-def sum(x: RV, axis: int) -> InfixRV[ir.Sum]:
+def sum(x: InfixRV, axis: int) -> InfixRV[ir.Sum]:
     """
     Take the sum of a random variable along a given axis
 

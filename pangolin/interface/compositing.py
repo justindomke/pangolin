@@ -1,4 +1,4 @@
-from pangolin.ir import Composite, RV, Shape
+from pangolin.ir import Composite, Shape
 from pangolin.interface import InfixRV, makerv, normal, create_rv
 from .vmapping import generated_nodes, AbstractOp
 from pangolin import util
@@ -60,7 +60,7 @@ def make_composite(flat_fun: Callable[..., InfixRV], *input_shapes: Shape):
     # generated_nodes runs on "flat" functions that return arrays, not single RVs
     f = lambda *args: [flat_fun(*args)]
     all_vars, [out] = generated_nodes(f, *dummy_args)
-    assert isinstance(out, RV), "output of function must be a single InfixRV"
+    assert isinstance(out, InfixRV), "output of function must be a single InfixRV"
 
     ops = []
     par_nums = []
@@ -134,7 +134,7 @@ def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Co
     return myfun
 
 
-def composite(fun: Callable) -> Callable[..., RV[Composite]]:
+def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
     """Turn a function into a new function that returns a single Composite RV. Typically this would be used to create autoregressive distributions via the `autoregressive` function, rather than called directly by the user.
 
     Parameters

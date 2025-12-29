@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pangolin.ir import Composite, RV
+from pangolin.ir import Composite
 from pangolin.ir import Autoregressive
 from pangolin.interface import (
     InfixRV,
@@ -77,7 +77,7 @@ A type alias intended to indicate a function that takes one `InfixRV` input plus
 """
 
 
-def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[RV]) -> int:
+def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[InfixRV]) -> int:
     "If length is given, checks that it's compatible with all args. Otherwise, infers from args and chcecks they are compatible."
 
     my_length = length

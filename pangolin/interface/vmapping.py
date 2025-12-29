@@ -1,7 +1,7 @@
 import collections
 
 from . import InfixRV
-from pangolin.ir import Op, RV, VMap, Constant, print_upstream
+from pangolin.ir import Op, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RVLike, constant, exp, log
@@ -68,10 +68,10 @@ class AbstractOp(Op):
 
 
 def vmap_subgraph(
-    dummy_roots: Sequence[RV],
-    dummy_nodes: Sequence[RV],
-    dummy_outputs: Sequence[RV],
-    roots: Sequence[RV],
+    dummy_roots: Sequence[InfixRV],
+    dummy_nodes: Sequence[InfixRV],
+    dummy_outputs: Sequence[InfixRV],
+    roots: Sequence[InfixRV],
     roots_axes: Sequence[int | None],
     axis_size: int | None,
 ) -> list[InfixRV]:
@@ -101,22 +101,22 @@ def vmap_subgraph(
 
     Examples
     --------
-    >>> a_dummy = RV(AbstractOp())
-    >>> b_dummy = RV(AbstractOp())
-    >>> c_dummy = RV(ir.Add(), a_dummy, b_dummy)
-    >>> a = RV(Constant([0, 1, 2]))
-    >>> b = RV(Constant([4, 5, 6]))
+    >>> a_dummy = InfixRV(AbstractOp())
+    >>> b_dummy = InfixRV(AbstractOp())
+    >>> c_dummy = InfixRV(ir.Add(), a_dummy, b_dummy)
+    >>> a = InfixRV(Constant([0, 1, 2]))
+    >>> b = InfixRV(Constant([4, 5, 6]))
     >>> [c] = vmap_subgraph([a_dummy, b_dummy], [c_dummy], [c_dummy], [a, b], [0, 0], 3)
     >>> print(str(c_dummy))
     add(abstract_op, abstract_op)
     >>> print(str(c))
     vmap(add, (0, 0), 3)([0 1 2], [4 5 6])
     >>> print(repr(c_dummy))
-    RV(Add(), RV(AbstractOp()), RV(AbstractOp()))
+    InfixRV(Add(), InfixRV(AbstractOp()), InfixRV(AbstractOp()))
     >>> print(repr(c))
-    InfixRV(VMap(Add(), (0, 0), 3), RV(Constant([0,1,2])), RV(Constant([4,5,6])))
+    InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([4,5,6])))
 
-    >>> d_dummy = RV(ir.Mul(), a_dummy, c_dummy)
+    >>> d_dummy = InfixRV(ir.Mul(), a_dummy, c_dummy)
     >>> print_upstream(d_dummy)
     shape | statement
     ----- | ---------
@@ -131,7 +131,7 @@ def vmap_subgraph(
     (3,)  | a = [0 1 2]
     (3,)  | b = [4 5 6]
     (3,)  | c = vmap(add, (0, 0), 3)(a,b)
-    (3,)  | d = vmap(mul, (0, 0eval_f), 3)(a,c)
+    (3,)  | d = vmap(mul, (0, 0), 3)(a,c)
     """
     # TODO: Should we allow axis_size=None here?
 
@@ -171,23 +171,23 @@ def vmap_subgraph(
     return real_nodes
 
 
-def vmap_dummy_args(args: Sequence[RV], in_axes: Sequence[int | None], axis_size: int | None):
+def vmap_dummy_args(args: Sequence[InfixRV], in_axes: Sequence[int | None], axis_size: int | None):
     """
     Given a "full" arguments, get a list of dummy/sliced arguments.
 
     Parameters
     ----------
-    args: Sequence[RV]
+    args
         Sequence of RVs for which sliced "dummies" are required.
-    in_axes: tuple[int|None]
+    in_axes
         What axis to map each argument over. Should have same length as `args`.
-    axis_size: int | None
+    axis_size
         Anticipated axis size (or None if it should be inferred)
 
     Examples
     --------
-    >>> A = RV(Constant([[0,1,2],[4,5,6]]))
-    >>> B = RV(Constant([7,8,9]))
+    >>> A = InfixRV(Constant([[0,1,2],[4,5,6]]))
+    >>> B = InfixRV(Constant([7,8,9]))
     >>> dummy_args, axis_size = vmap_dummy_args([A, B], [1, 0], None)
     >>> dummy_args
     (InfixRV(AbstractOp((2,))), InfixRV(AbstractOp()))
@@ -239,28 +239,28 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
     Examples
     --------
     >>> def fun(x,y):
-    ...     a = RV(ir.Exp(), x)
-    ...     b = RV(ir.Add(), a, y)
+    ...     a = InfixRV(ir.Exp(), x)
+    ...     b = InfixRV(ir.Add(), a, y)
     ...     return [b]
-    >>> x = RV(ir.Constant(0))
-    >>> y = RV(ir.Constant(1))
+    >>> x = InfixRV(ir.Constant(0))
+    >>> y = InfixRV(ir.Constant(1))
     >>> all_vars, out = generated_nodes(fun, x, y)
     >>> len(all_vars)
     2
     >>> all_vars[0]
-    InfixRV(Exp(), RV(Constant(0)))
+    InfixRV(Exp(), InfixRV(Constant(0)))
     >>> all_vars[1]
-    InfixRV(Add(), InfixRV(Exp(), RV(Constant(0))), RV(Constant(1)))
+    InfixRV(Add(), InfixRV(Exp(), InfixRV(Constant(0))), InfixRV(Constant(1)))
     >>> out
-    [InfixRV(Add(), InfixRV(Exp(), RV(Constant(0))), RV(Constant(1)))]
+    [InfixRV(Add(), InfixRV(Exp(), InfixRV(Constant(0))), InfixRV(Constant(1)))]
     """
     for a in args:
-        assert isinstance(a, RV), "arguments must be RVs"
+        assert isinstance(a, InfixRV), "arguments must be InfixRV"
 
     # all generated nodes must have higher n
-    n_before_call = RV._n
+    n_before_call = InfixRV._n
 
-    def is_abstract(rv: RV) -> bool:
+    def is_abstract(rv: InfixRV) -> bool:
         # if not isinstance(rv, InfixRV):
         #    raise ValueError("Generated nodes found a node that is not an InfixRV")
         return rv._n >= n_before_call
@@ -274,7 +274,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
     for a in abstract_out:
         if a in args:
             raise ValueError("fun passed to generated_nodes cannot return inputs.")
-        if not isinstance(a, RV):
+        if not isinstance(a, InfixRV):
             raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
 
     all_abstract_vars = dag.upstream_nodes(abstract_out, node_block=lambda var: not is_abstract(var))
@@ -539,7 +539,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callabl
     return call
 
 
-def convert_args(rv_type: Type[RV], *args: RV):
+def convert_args(rv_type: Type[InfixRV], *args: InfixRV):
     """
     Given some set of (interdependent) RVs, get a new set where all are converted to a new type
     but all inter-RV parent links are preserved.
@@ -558,7 +558,7 @@ def convert_args(rv_type: Type[RV], *args: RV):
     """
     abstract_args = {}
     for a in args:
-        new_parents: list[RV] = [abstract_args[p] if p in abstract_args else p for p in a.parents]
+        new_parents: list[InfixRV] = [abstract_args[p] if p in abstract_args else p for p in a.parents]
         abstract_a = rv_type(a.op, *new_parents)
         abstract_args[a] = abstract_a
     return tuple(abstract_args[a] for a in args)
