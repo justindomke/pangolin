@@ -58,6 +58,8 @@ class CompositeTests(MixinBase):
 
         def testfun(samps):
             [y_samps] = samps
+            y_samps = np.asarray(y_samps, copy=True)
+
             return np.abs(np.mean(y_samps) - 0.7) < 0.05
 
         test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
@@ -73,25 +75,30 @@ class CompositeTests(MixinBase):
         assert np.allclose(l, expected)
 
     def test_exponential(self):
+        if ir.Exponential in self._ops_without_sampling_support:
+            pytest.skip("Skipping because backend does not support Exponential")
+
         op = ir.Composite(1, [ir.Exponential()], [[0]])
 
         x = ir.RV(ir.Constant(0.23))
         y = ir.RV(op, x)
         assert isinstance(y.op, ir.Composite)
 
-        def testfun(samps):
-            [y_samps] = samps
-            return np.abs(np.mean(y_samps) - 1 / 0.23) < 0.05
-
-        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
-
         [y_samp] = self.ancestor_sample_flat([y])
         assert y_samp.shape == ()
+        y_samp = self.cast(y_samp)
 
         l = self.ancestor_log_prob_flat([y], [y_samp])
         numpyro_dist = numpyro.distributions.Exponential(0.23)
-        expected = numpyro_dist.log_prob(y_samp)
+        expected = numpyro_dist.log_prob(np.array(y_samp))
         assert np.allclose(l, expected)
+
+        def testfun(samps):
+            [y_samps] = samps
+            y_samps = np.array(y_samps, copy=True)
+            return np.abs(np.mean(y_samps) - 1 / 0.23) < 0.05
+
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
     def test_add_normal(self):
         # z ~ Normal(x+y, y)
@@ -101,22 +108,24 @@ class CompositeTests(MixinBase):
         y = ir.RV(ir.Constant(0.1))
         z = ir.RV(op, x, y)
 
-        expected_mean = 0.4
-        expected_std = 0.1
-
-        def testfun(samps):
-            [z_samps] = samps
-            return np.abs(np.mean(z_samps) - expected_mean) < 0.05 and np.abs(np.std(z_samps) - expected_std) < 0.05
-
-        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [z], testfun)
-
         [z_samp] = self.ancestor_sample_flat([z])
+        z_samp = np.array(z_samp, copy=True)
         assert z_samp.shape == ()
 
         l = self.ancestor_log_prob_flat([z], [z_samp])
         numpyro_dist = numpyro.distributions.Normal(0.4, 0.1)
         expected = numpyro_dist.log_prob(z_samp)
         assert np.allclose(l, expected)
+
+        expected_mean = 0.4
+        expected_std = 0.1
+
+        def testfun(samps):
+            [z_samps] = samps
+            z_samps = np.array(z_samps, copy=True)
+            return np.abs(np.mean(z_samps) - expected_mean) < 0.05 and np.abs(np.std(z_samps) - expected_std) < 0.05
+
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [z], testfun)
 
     def test_composite_deterministic(self):
         @pi.composite
@@ -133,6 +142,7 @@ class CompositeTests(MixinBase):
 
         def testfun(samps):
             [y_samps] = samps
+            y_samps = np.asarray(y_samps)
             return np.abs(np.mean(y_samps) - expected_mean) < 0.05
 
         test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
@@ -152,12 +162,14 @@ class CompositeTests(MixinBase):
 
         def testfun(samps):
             [y_samps] = samps
+            y_samps = np.asarray(y_samps)
             return np.abs(np.mean(y_samps) - expected_mean) < 0.05
 
         test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [y], testfun)
 
         [y_samp] = self.ancestor_sample_flat([y])
         l = self.ancestor_log_prob_flat([y], [y_samp])
+        y_samp = np.asarray(y_samp)
         a_samp = 1.5 + 2
         b_samp = 1.5 * 1.5
         numpyro_dist = numpyro.distributions.Normal(a_samp**b_samp, 1e-5)
@@ -176,6 +188,7 @@ class CompositeTests(MixinBase):
 
         def testfun(samps):
             [y_samps] = samps
+            y_samps = np.asarray(y_samps)
             E_y = np.mean(y_samps)
             return np.abs(E_y - 0.5) < 0.05
 

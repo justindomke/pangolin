@@ -33,7 +33,7 @@ def rands_from_ranges(ranges):
             scores = np.random.randn(dims)
             new = np.exp(scores - scipy.special.logsumexp(scores))
         elif domain == "positive-vector":
-            new = np.abs(np.random.randn(dims))
+            new = 0.01 + np.abs(np.random.randn(dims))
         else:
             raise NotImplementedError()
         out.append(new)
@@ -170,5 +170,7 @@ class DistributionTests(MixinBase):
 
             x_cast = self.cast(x)
             log_prob = self.ancestor_log_prob_flat([output_rv], [x_cast])
+
+            print("LOG PROB", log_prob, log_prob_expected)
 
             assert np.allclose(log_prob, log_prob_expected, atol=1e-3, rtol=1e-3)

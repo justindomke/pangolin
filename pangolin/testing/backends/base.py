@@ -18,7 +18,6 @@ class MixinBase:
     def ancestor_log_prob_flat(self) -> Callable:
         return type(self)._ancestor_log_prob_flat
 
-
     @property
     def cast(self):
         return type(self)._cast

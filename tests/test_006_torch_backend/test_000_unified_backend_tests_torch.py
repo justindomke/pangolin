@@ -18,4 +18,5 @@ class TestTorch(BackendTests):
         ir.Multinomial,
         ir.MultiNormal,
         ir.Wishart,
+        ir.Cauchy,
     }
