@@ -6,7 +6,7 @@ import jax.tree_util
 from typing import Callable
 
 
-def make_composite(flat_fun: Callable[..., RV], *input_shapes: Shape):
+def make_composite(flat_fun: Callable[..., InfixRV], *input_shapes: Shape):
     """
     Given a function and input shapes, create a composite Op representing that function.
     Crucially, it *is* allowed for `fun` to depend on variables declared elsewhere through a closure.
@@ -92,7 +92,7 @@ def make_composite(flat_fun: Callable[..., RV], *input_shapes: Shape):
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
 
 
-def composite_flat(flat_fun: Callable[..., RV]) -> Callable[..., RV[Composite]]:
+def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Composite]]:
     """Turn a function into a new function that returns a single Composite RV
 
     Parameters
@@ -235,12 +235,8 @@ def function_factory(name, description):
 
 
 # Example usage:
-my_func_a = function_factory(
-    "my_specific_function_A", "This function performs operation A."
-)
-my_func_b = function_factory(
-    "my_specific_function_B", "This function handles data processing B."
-)
+my_func_a = function_factory("my_specific_function_A", "This function performs operation A.")
+my_func_b = function_factory("my_specific_function_B", "This function handles data processing B.")
 
 
 class MyBaseProcessor:
@@ -328,9 +324,7 @@ method_specs = [
     {
         "name": "log_activity",
         "doc": "Logs a specific activity.\n\nArgs:\n    activity (str): The activity to log.\n\nReturns: None",
-        "logic": lambda self, activity: print(
-            f"[{self.data_source}] Logging activity: {activity}"
-        ),
+        "logic": lambda self, activity: print(f"[{self.data_source}] Logging activity: {activity}"),
     },
 ]
 

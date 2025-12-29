@@ -17,14 +17,11 @@ from typing import Protocol
 
 Shape = ir.Shape
 
-# FlatCallable = Callable[
-#     ..., Sequence[RV]
-# ]  # don't know how to enforce that inputs are RV
-# # TODO: Force inputs to be list?
+FlatCallable = Callable[..., list[InfixRV]]  # don't know how to enforce that inputs are RV
 
 
-class FlatCallable(Protocol):
-    def __call__(self, *args: RV) -> list[RV]: ...
+# class FlatCallable(Protocol):
+#     def __call__(self, *args: RV) -> list[InfixRV]: ...
 
 
 class AbstractOp(Op):
@@ -77,7 +74,7 @@ def vmap_subgraph(
     roots: Sequence[RV],
     roots_axes: Sequence[int | None],
     axis_size: int | None,
-) -> list[RV]:
+) -> list[InfixRV]:
     """
     Takes a graph of "dummy" RVs that represent some non-vmapped computation, then creates a parallel graph of "real" RVs that represent a vmapped computation
 
@@ -134,7 +131,7 @@ def vmap_subgraph(
     (3,)  | a = [0 1 2]
     (3,)  | b = [4 5 6]
     (3,)  | c = vmap(add, (0, 0), 3)(a,b)
-    (3,)  | d = vmap(mul, (0, 0), 3)(a,c)
+    (3,)  | d = vmap(mul, (0, 0eval_f), 3)(a,c)
     """
     # TODO: Should we allow axis_size=None here?
 
@@ -157,11 +154,7 @@ def vmap_subgraph(
 
         no_mapped_axes = all(axis is None for axis in my_in_axes)
         # if no mapped axes AND non-random AND not in output, no need to map
-        if (
-            no_mapped_axes
-            and not dummy_node.op.random
-            and dummy_node not in dummy_outputs
-        ):
+        if no_mapped_axes and not dummy_node.op.random and dummy_node not in dummy_outputs:
             new_op = dummy_node.op
             new_axis = None
         else:
@@ -178,9 +171,7 @@ def vmap_subgraph(
     return real_nodes
 
 
-def vmap_dummy_args(
-    args: Sequence[RV], in_axes: Sequence[int | None], axis_size: int | None
-):
+def vmap_dummy_args(args: Sequence[RV], in_axes: Sequence[int | None], axis_size: int | None):
     """
     Given a "full" arguments, get a list of dummy/sliced arguments.
 
@@ -227,7 +218,7 @@ def vmap_dummy_args(
     return tuple(dummy_args), axis_size
 
 
-def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[RV]]:
+def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], list[InfixRV]]:
     """
     Given a "flat" function and some number of RV arguments, get all the nodes that the function
     creates. This *includes* nodes that do not depend on the inputs.
@@ -274,7 +265,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
         #    raise ValueError("Generated nodes found a node that is not an InfixRV")
         return rv._n >= n_before_call
 
-    abstract_out: list[RV[AbstractOp]] = fun(*args)
+    abstract_out: list[InfixRV[AbstractOp]] = fun(*args)
 
     if not isinstance(abstract_out, list):
         raise ValueError("generated_nodes must take a function that returns a list")
@@ -284,35 +275,25 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[RV], list[R
         if a in args:
             raise ValueError("fun passed to generated_nodes cannot return inputs.")
         if not isinstance(a, RV):
-            raise ValueError(
-                f"fun passed to generated_nodes returned non-RV output (got {type(a)}"
-            )
+            raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
 
-    all_abstract_vars = dag.upstream_nodes(
-        abstract_out, node_block=lambda var: not is_abstract(var)
-    )
+    all_abstract_vars = dag.upstream_nodes(abstract_out, node_block=lambda var: not is_abstract(var))
 
     all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node._n)
 
     # convert abstract nodes to concrete
-    abstract_to_concrete: dict[RV, RV] = {}
+    abstract_to_concrete: dict[InfixRV, InfixRV] = {}
     for abstract_var in all_abstract_vars:
         if abstract_var in args:
             where_var = args.index(abstract_var)
             concrete_var = args[where_var]
         else:
-            new_parents = tuple(
-                abstract_to_concrete[p] if is_abstract(p) else p
-                for p in abstract_var.parents
-            )
+            new_parents = tuple(abstract_to_concrete[p] if is_abstract(p) else p for p in abstract_var.parents)
             concrete_var = create_rv(abstract_var.op, *new_parents)
         abstract_to_concrete[abstract_var] = concrete_var
 
     all_vars = [abstract_to_concrete[v] for v in all_abstract_vars if v not in args]
-    out = [
-        abstract_to_concrete[v] if v in abstract_to_concrete else v
-        for v in abstract_out
-    ]
+    out = [abstract_to_concrete[v] if v in abstract_to_concrete else v for v in abstract_out]
 
     return all_vars, out
 
@@ -360,9 +341,7 @@ def vmap_eval_flat(
     dummy_args, axis_size = vmap_dummy_args(rv_args, in_axes, axis_size)
     dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
 
-    return vmap_subgraph(
-        dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size
-    )
+    return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size)
 
 
 def get_dummy_args(in_axes, args):
@@ -418,9 +397,7 @@ def get_dummy_args(in_axes, args):
         op = AbstractOp(new_shape)
         return create_rv(op)
 
-    dummy_args = util.tree_map_recurse_at_leaf(
-        get_dummy, in_axes, args, is_leaf=util._is_leaf_with_none
-    )
+    dummy_args = util.tree_map_recurse_at_leaf(get_dummy, in_axes, args, is_leaf=util._is_leaf_with_none)
 
     return dummy_args
 
@@ -553,9 +530,7 @@ def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callabl
 
         flat_in_axes, flat_args = util.dual_flatten(my_in_axes, args)
 
-        flat_f, flatten_inputs, unflatten_output = util.flatten_fun(
-            f, *dummy_args, is_leaf=util._is_leaf_with_none
-        )
+        flat_f, flatten_inputs, unflatten_output = util.flatten_fun(f, *dummy_args, is_leaf=util._is_leaf_with_none)
         flat_args = flatten_inputs(*args)
         flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, *flat_args)
         output = unflatten_output(flat_output)
@@ -583,9 +558,7 @@ def convert_args(rv_type: Type[RV], *args: RV):
     """
     abstract_args = {}
     for a in args:
-        new_parents: list[RV] = [
-            abstract_args[p] if p in abstract_args else p for p in a.parents
-        ]
+        new_parents: list[RV] = [abstract_args[p] if p in abstract_args else p for p in a.parents]
         abstract_a = rv_type(a.op, *new_parents)
         abstract_args[a] = abstract_a
     return tuple(abstract_args[a] for a in args)
@@ -601,8 +574,6 @@ def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int |
         args = list(makerv(a) for a in args)
         dummy_args, my_axis_size = vmap_dummy_args(args, in_axes, axis_size)
         dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
-        return vmap_subgraph(
-            dummy_args, dummy_nodes, dummy_outputs, args, in_axes, my_axis_size
-        )
+        return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, args, in_axes, my_axis_size)
 
     return vec_f
