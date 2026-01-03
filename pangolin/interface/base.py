@@ -361,6 +361,13 @@ class InfixRV(ir.RV[OpU], typing.Generic[OpU]):
 
         return index(self, *idx)
 
+    @property
+    def parent_ops(self):
+        """
+        Just a shortcut for ``tuple(p.op for p in self.parents)``. Intended mostly for testing.
+        """
+        return tuple(p.op for p in self.parents)
+
 
 ########################################################################################
 # makerv
@@ -614,9 +621,14 @@ def vmap_scalars_simple(op: OpU, *parent_shapes: ir.Shape) -> VMap | OpU:
 
     in_axes = tuple(0 if shape == array_shape else None for shape in parent_shapes)
 
+    print(f"{parent_shapes=}")
+    print(f"{array_shape=}")
+
     new_op = op
     for size in reversed(array_shape):
         new_op = VMap(new_op, in_axes, size)
+
+    print(f"{new_op=}")
 
     assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
 
