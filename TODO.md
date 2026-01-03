@@ -2,11 +2,16 @@
 
 * Bring sanity to indexing
 
-* Careful typing for ir
+* Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
 
-
+* Offer optional OCD array indexing mode
 
 # After 0.0.1
+
+* Make VMap generic so you can have VMap[VMap] etc.
+
+* Generalize numpy broadcasting
+  * Unify with logic for indexing
 
 * Offer field for vmap
 
@@ -39,10 +44,6 @@
     init = lambda i, j: a[j]
   )
   ```
-
-* Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
-
-* Offer optional OCD array indexing mode
 
 * Fakeloops
 
