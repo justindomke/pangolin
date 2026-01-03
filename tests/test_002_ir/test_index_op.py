@@ -1,6 +1,7 @@
 import pytest
 from pangolin.ir import Index
 import numpy as np
+from pangolin import ir
 
 fslice = slice(None)  # full slice
 
@@ -67,3 +68,18 @@ def test_index_class(start_shape, idx):
     shape = d.get_shape(x.shape, *non_slice_shapes)
     # print(f"{shape=}")
     assert expected_shape == shape
+
+
+def test_scalar_index_get_shape():
+    op = ir.ScalarIndex()
+    assert op.get_shape((3,), ()) == ()
+    assert op.get_shape((3, 4), (), ()) == ()
+
+    vmapped_op = ir.VMap(op, (None, 0))
+    assert vmapped_op.get_shape((3,), (2,)) == (2,)
+
+    vmapped_op = ir.VMap(op, (None, 0, 0))
+    assert vmapped_op.get_shape((3, 4), (2,), (2,)) == (2,)
+
+    vmapped_op = ir.VMap(op, (None, 0, None))
+    assert vmapped_op.get_shape((3, 4), (2,), ()) == (2,)

@@ -1666,6 +1666,40 @@ def index_orthogonal_no_slices(A, *index_arrays):
 
 
 ########################################################################################
+# Scalar Indexing
+########################################################################################
+
+
+class ScalarIndex(Op):
+    """
+    Create an `Op` to index into a `RV` in a simple scalar way. Takes no parameters. When used in a RV, takes one parent `RV` (which can be any shape) and some number or indexing `RV` which all must be scalars.
+
+    Examples
+    --------
+    >>> A = RV(Constant([[1,2,3],[4,5,6]]))
+    >>> B = RV(Constant(1))
+    >>> C = RV(Constant(2))
+    >>> op = ScalarIndex()
+    >>> D = RV(op, A, B, C)
+    >>> D.shape
+    ()
+    """
+
+    _random = False
+
+    def _get_shape(self, var_shape: Shape, *indices_shapes: Shape) -> Shape:
+        num_indexed = len(indices_shapes)
+        num_dims = len(var_shape)
+        if num_indexed != num_dims:
+            raise ValueError(f"Indexed RV with {num_dims} dims with {num_indexed} indices.")
+
+        if any(index_shape != () for index_shape in indices_shapes):
+            raise ValueError(f"All indices must be scalar.")
+
+        return ()
+
+
+########################################################################################
 # Transformations
 ########################################################################################
 
