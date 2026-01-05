@@ -39,7 +39,7 @@ o1 = OtherNode()
 
 n2 = MyNode(20, n1)
 
-n3 = MyNode(20, o1)  # error!
+# n3 = MyNode(20, o1)  # error!
 
 result = get_first_neighbor(n1)
 added = result + result
