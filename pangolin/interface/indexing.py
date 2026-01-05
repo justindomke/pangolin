@@ -25,6 +25,8 @@ import types
 
 _IdxType = RVLike | slice | types.EllipsisType
 
+# _IdxTypeNoEllipsis = RVLike | slice
+
 
 def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RVLike, ...]:
     """Given indices, if there is an ellipsis, insert full slices
@@ -150,7 +152,7 @@ def index(var: InfixRV, *indices: _IdxType):
     return InfixRV(SimpleIndex(), var, *rv_indices)
 
 
-def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.ScalarIndex | ir.VMap:
+def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.VectorIndex | ir.VMap:
     """ """
 
     array_shape = None
@@ -165,11 +167,11 @@ def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir
                 raise ValueError(f"Can't broadcast non-matching shapes {shape} and {array_shape}")
 
     if array_shape is None:
-        return ir.ScalarIndex()
+        return ir.VectorIndex()
 
     in_axes = (None,) + tuple(0 if shape == array_shape else None for shape in index_shapes)
 
-    new_op = ir.ScalarIndex()
+    new_op = ir.VectorIndex()
     for size in reversed(array_shape):
         new_op = VMap(new_op, in_axes, size)
 
@@ -178,14 +180,14 @@ def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir
     return new_op
 
 
-def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.ScalarIndex | ir.VMap:
+def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.VectorIndex | ir.VMap:
     # will raise ValueError if not broadcastable
     array_shape = np.broadcast_shapes(*index_shapes)
 
     if array_shape is None:
-        return ir.ScalarIndex()
+        return ir.VectorIndex()
 
-    new_op = ir.ScalarIndex()
+    new_op = ir.VectorIndex()
     for n, size in enumerate(reversed(array_shape)):
         in_axes = []
         for index_shape in index_shapes:
@@ -203,19 +205,25 @@ def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.
 
 
 # TODO: should merge this with functionality from base? (Especially when add new numpy functionality)
-def scalar_index(var: RVLike, *indices: RVLike) -> InfixRV[ir.ScalarIndex | ir.VMap]:
+def vector_index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.VectorIndex | ir.VMap]:
+    var_shape = get_shape(var)
+    var_ndim = len(var_shape)
+
+    indices = eliminate_ellipses(var_ndim, indices)
+    rv_indices = convert_indices(var_shape, *indices)
+
     if config.broadcasting == Broadcasting.OFF:
-        op = ir.ScalarIndex()
-        return create_rv(op, var, *indices)
+        op = ir.VectorIndex()
+        return create_rv(op, var, *rv_indices)
     elif config.broadcasting == Broadcasting.SIMPLE:
         var_shape = get_shape(var)
-        index_shapes = [get_shape(idx) for idx in indices]
+        index_shapes = [get_shape(idx) for idx in rv_indices]
         vmapped_op = vmap_scalar_index_simple(var_shape, *index_shapes)
-        return create_rv(vmapped_op, var, *indices)
+        return create_rv(vmapped_op, var, *rv_indices)
     elif config.broadcasting == Broadcasting.NUMPY:
         var_shape = get_shape(var)
-        index_shapes = [get_shape(idx) for idx in indices]
+        index_shapes = [get_shape(idx) for idx in rv_indices]
         vmapped_op = vmap_scalar_index_numpy(var_shape, *index_shapes)
-        return create_rv(vmapped_op, var, *indices)
+        return create_rv(vmapped_op, var, *rv_indices)
     else:
         raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")

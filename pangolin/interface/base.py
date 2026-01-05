@@ -228,6 +228,19 @@ def override(**kwargs):
 ########################################################################################
 
 
+class VectorIndexProxy:
+    def __init__(self, var: InfixRV):
+        self.var = var
+
+    def __getitem__(self, args):
+        from .indexing import vector_index
+
+        if isinstance(args, tuple):
+            return vector_index(self.var, *args)
+        else:
+            return vector_index(self.var, args)
+
+
 OpU = TypeVar("OpU", bound=Op)
 
 
@@ -262,6 +275,7 @@ class InfixRV(ir.RV[OpU], typing.Generic[OpU]):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
     def __init__(self, op: OpU, *parents: InfixRV):
+        self.s = VectorIndexProxy(self)
         super().__init__(op, *parents)
 
     def __neg__(self):

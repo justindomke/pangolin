@@ -70,16 +70,43 @@ def test_index_class(start_shape, idx):
     assert expected_shape == shape
 
 
-def test_scalar_index_get_shape():
-    op = ir.ScalarIndex()
+def test_scalar_index_unsliced():
+    op = ir.VectorIndex()
     assert op.get_shape((3,), ()) == ()
+
+    op = ir.VectorIndex()
     assert op.get_shape((3, 4), (), ()) == ()
 
+    op = ir.VectorIndex()
     vmapped_op = ir.VMap(op, (None, 0))
     assert vmapped_op.get_shape((3,), (2,)) == (2,)
 
+    op = ir.VectorIndex()
     vmapped_op = ir.VMap(op, (None, 0, 0))
     assert vmapped_op.get_shape((3, 4), (2,), (2,)) == (2,)
 
+    op = ir.VectorIndex()
     vmapped_op = ir.VMap(op, (None, 0, None))
     assert vmapped_op.get_shape((3, 4), (2,), ()) == (2,)
+
+
+# def test_scalar_index_sliced():
+#     op = ir.ScalarIndex((True,))
+#     assert op.get_shape((3,)) == (3,)
+
+#     op = ir.ScalarIndex((False, True))
+#     assert op.get_shape((3, 4), ()) == (4,)
+
+#     op = ir.ScalarIndex((True, False))
+#     assert op.get_shape((3, 4), ()) == (3,)
+
+#     op = ir.ScalarIndex((True, True))
+#     assert op.get_shape((3, 4)) == (3, 4)
+
+#     op = ir.ScalarIndex((False, True))
+#     vmapped_op = ir.VMap(op, (None, 0))
+#     assert vmapped_op.get_shape((3, 4), (2,)) == (2, 4)
+
+#     op = ir.ScalarIndex((True, False))
+#     vmapped_op = ir.VMap(op, (None, 0))
+#     assert vmapped_op.get_shape((3, 4), (2,)) == (2, 3)

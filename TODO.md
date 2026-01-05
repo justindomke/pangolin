@@ -6,7 +6,15 @@
 
 * Offer optional OCD array indexing mode
 
+* Add super().__init__ to all Op
+
 # After 0.0.1
+
+* Figure out what to do about vectorized indexing.
+  * Maybe allow special slices? Maybe do something else?
+
+* Special Slice type that's a subtype of Constant
+  * Possibly other Constant types?
 
 * Make VMap generic so you can have VMap[VMap] etc.
 
