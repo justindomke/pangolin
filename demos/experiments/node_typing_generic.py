@@ -41,7 +41,7 @@ n_str_1 = MyNode("Hello")
 n_str_2 = MyNode(" World", n_str_1)
 res_str = n_str_1 + n_str_2
 
-n_mix = n_int_1 + n_str_1  # error!
+# n_mix = n_int_1 + n_str_1  # error!
 
 x = get_first_neighbor(n_int_2)
 print(x.val + 5)
