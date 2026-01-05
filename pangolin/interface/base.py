@@ -8,7 +8,7 @@ from pangolin import ir, util
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import TypeVar, Type, Callable, Sequence, TYPE_CHECKING, get_type_hints, Union
+from typing import Type, Callable, Sequence, TYPE_CHECKING, get_type_hints, Union
 import inspect
 
 # from typing import Generic, TypeAlias, Final
@@ -241,10 +241,10 @@ class VectorIndexProxy:
             return vector_index(self.var, args)
 
 
-OpU = TypeVar("OpU", bound=Op)
+# OpU = TypeVar("OpU", bound=Op)
 
 
-class InfixRV(ir.RV[OpU], typing.Generic[OpU]):
+class InfixRV[O: Op](ir.RV[O]):
     """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
     operations.
 
@@ -274,7 +274,7 @@ class InfixRV(ir.RV[OpU], typing.Generic[OpU]):
 
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
-    def __init__(self, op: OpU, *parents: InfixRV):
+    def __init__(self, op: O, *parents: InfixRV):
         self.s = VectorIndexProxy(self)
         super().__init__(op, *parents)
 
@@ -514,7 +514,7 @@ def get_shape(arg: RVLike):
 ########################################################################################
 
 
-def create_rv(op: OpU, *args) -> InfixRV[OpU]:
+def create_rv[O: Op](op: O, *args) -> InfixRV[O]:
     args = tuple(makerv(a) for a in args)
     # args = tuple(a if isinstance(a,RV) else constant(a) for a in args)
     op.get_shape(*[a.shape for a in args])  # checks shapes
@@ -585,7 +585,7 @@ def _scalar_op_doc(OpClass):
     return __doc__
 
 
-def vmap_scalars_simple(op: OpU, *parent_shapes: ir.Shape) -> VMap | OpU:
+def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This only accepts a very limited amount of broadcasting: All parents shapes must
     either be *scalar* or *exactly equal*.
@@ -635,21 +635,21 @@ def vmap_scalars_simple(op: OpU, *parent_shapes: ir.Shape) -> VMap | OpU:
 
     in_axes = tuple(0 if shape == array_shape else None for shape in parent_shapes)
 
-    print(f"{parent_shapes=}")
-    print(f"{array_shape=}")
+    # print(f"{parent_shapes=}")
+    # print(f"{array_shape=}")
 
     new_op = op
     for size in reversed(array_shape):
         new_op = VMap(new_op, in_axes, size)
 
-    print(f"{new_op=}")
+    # print(f"{new_op=}")
 
     assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
 
     return new_op
 
 
-def vmap_scalars_numpy(op: OpU, *parent_shapes: ir.Shape) -> OpU | ir.VMap:
+def vmap_scalars_numpy[O: Op](op: O, *parent_shapes: ir.Shape) -> O | ir.VMap:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This implements most of numpy-style scalar broadcasting. The only limitation is that
     broadcasting of singleton dimensions against non-singleton dimensions is not
@@ -716,12 +716,10 @@ def vmap_scalars_numpy(op: OpU, *parent_shapes: ir.Shape) -> OpU | ir.VMap:
 # Generate interface for scalar functions
 ########################################################################################
 
-ScalarOpU = typing.TypeVar("ScalarOpU", bound=ScalarOp)
-
-ScalarInterfaceFun: typing.TypeAlias = Callable[..., InfixRV[ScalarOpU | VMap]]
+type ScalarInterfaceFun[ScalarO: ScalarOp] = Callable[..., InfixRV[ScalarO | VMap]]
 
 
-def get_base_op_from_scalar_fun(fun: Callable[..., InfixRV[ScalarOpU | VMap]]) -> Type[ScalarOpU]:
+def get_base_op_from_scalar_fun[ScalarO: ScalarOp](fun: ScalarInterfaceFun[ScalarO]) -> Type[ScalarO]:
     hints = get_type_hints(fun)
     return_type = hints.get("return")
 

@@ -153,7 +153,7 @@ class Op(ABC):
     def __repr__(self):
         return self.name + "()"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Provides a more compact representation, e.g. `normal` instead of `Normal()`
         """
@@ -1894,12 +1894,8 @@ class Transformed(Op):
 # RVs
 ########################################################################################
 
-from typing import TypeVar, Generic
 
-OpT = TypeVar("OpT", bound=Op, covariant=True)  # TODO: covariant=True? does it matter?
-
-
-class RV(dag.Node, Generic[OpT]):
+class RV[O: Op](dag.Node):
     """
     A `RV` is essentially just an `Op` and a tuple of parent `RV`.
 
@@ -1939,7 +1935,7 @@ class RV(dag.Node, Generic[OpT]):
     _frozen = False
     _n = 1  # convenient to store order all RVs were created
 
-    def __init__(self, op: OpT, *parents: RV):
+    def __init__(self, op: O, *parents: RV):
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)
         self._n = RV._n

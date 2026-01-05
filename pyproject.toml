@@ -2,7 +2,7 @@
 name = "pangolin"
 version = "0.0.1"
 description = "Probabilistic inference focused on fun"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "jax",
     "jaxtyping",

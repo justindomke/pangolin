@@ -12,20 +12,13 @@ from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RVLike, constant, exp, log, config, Broadcasting, get_shape
 from . import base
-from typing import Sequence, Type, cast
-import jax.tree_util
-
-from typing import Protocol, TypeVar, Any
-from numpy.typing import ArrayLike
+from typing import cast
 import numpy as np
 from jax import numpy as jnp
 import types
 
-# TODO: Clarify exactly how indexing works, how related to broadcasting
 
 _IdxType = RVLike | slice | types.EllipsisType
-
-# _IdxTypeNoEllipsis = RVLike | slice
 
 
 def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RVLike, ...]:

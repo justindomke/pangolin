@@ -57,14 +57,12 @@ class AbstractOp(Op):
             return "AbstractOp()"
         else:
             return f"AbstractOp({self.shape})"
-        # return f"AbstractOp({self.shape})" #, {self.random}
 
     def __str__(self):
         if self.shape == ():
             return "abstract_op"
         else:
             return f"abstract_op({self.shape})"
-        # return f"abstract_op({self.shape})" # , {self.random}
 
 
 def vmap_subgraph(
