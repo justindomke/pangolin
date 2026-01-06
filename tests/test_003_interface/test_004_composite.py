@@ -266,7 +266,7 @@ def test_composite_normal_const_rv():
 
     z = fun(2.2)
 
-    assert z.op == ir.Composite(2, [ir.Normal()], [[0, 1]])
+    assert z.op == ir.Composite(2, (ir.Normal(),), ((0, 1),))
     assert z.parents[0].op == ir.Constant(2.2)
     assert z.parents[1].op == ir.Constant(3.3)
 
@@ -280,7 +280,7 @@ def test_composite_normal_const_rv_reversed():
 
     z = fun(2.2)
 
-    assert z.op == ir.Composite(2, [ir.Normal()], [[1, 0]])
+    assert z.op == ir.Composite(2, (ir.Normal(),), ((1, 0),))
     assert z.parents[0].op == ir.Constant(2.2)
     assert z.parents[1].op == ir.Constant(3.3)
 
@@ -383,9 +383,7 @@ def test_composite_complex_inputs():
 
     z = f((0, (1, 2)))
 
-    assert z.op == ir.Composite(
-        3, (ir.Add(), ir.Div(), ir.Mul()), ((0, 2), (1, 2), (3, 4))
-    )
+    assert z.op == ir.Composite(3, (ir.Add(), ir.Div(), ir.Mul()), ((0, 2), (1, 2), (3, 4)))
 
 
 def test_composite_norm():

@@ -1,4 +1,4 @@
-from pangolin.ir import Composite, Shape
+from pangolin.ir import Composite, Shape, Op
 from pangolin.interface import InfixRV, makerv, normal, create_rv
 from .vmapping import generated_nodes, AbstractOp
 from pangolin import util
@@ -6,7 +6,7 @@ import jax.tree_util
 from typing import Callable
 
 
-def make_composite(flat_fun: Callable[..., InfixRV], *input_shapes: Shape):
+def make_composite[LastOp: Op](flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape) -> InfixRV[Composite[LastOp]]:
     """
     Given a function and input shapes, create a composite Op representing that function.
     Crucially, it *is* allowed for `fun` to depend on variables declared elsewhere through a closure.

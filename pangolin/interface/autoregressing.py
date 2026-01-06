@@ -1,5 +1,4 @@
 from __future__ import annotations
-from pangolin.ir import Composite
 from pangolin.ir import Autoregressive
 from pangolin.interface import (
     InfixRV,
@@ -25,7 +24,7 @@ import numpy as np
 # would like to insist that the function takes RV args but type system not up to the task
 
 
-FlatAutoregressable: TypeAlias = (
+type FlatAutoregressable = (
     Callable[[InfixRV], InfixRV]
     | Callable[[InfixRV, InfixRV], InfixRV]
     | Callable[[InfixRV, InfixRV, InfixRV], InfixRV]
@@ -34,7 +33,7 @@ FlatAutoregressable: TypeAlias = (
     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV]
 )
-FlatAutoregressable.__doc__ = """
+"""
 A type alias for a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
 """
 
