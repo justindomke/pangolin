@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
 from typing import Protocol
+from jaxtyping import PyTree
 
 Shape = ir.Shape
 
@@ -169,7 +170,9 @@ def vmap_subgraph(
     return real_nodes
 
 
-def vmap_dummy_args(args: Sequence[InfixRV], in_axes: Sequence[int | None], axis_size: int | None):
+def vmap_dummy_args(
+    args: Sequence[InfixRV], in_axes: Sequence[int | None], axis_size: int | None
+) -> tuple[tuple[InfixRV[AbstractOp], ...], int]:
     """
     Given a "full" arguments, get a list of dummy/sliced arguments.
 
@@ -181,6 +184,13 @@ def vmap_dummy_args(args: Sequence[InfixRV], in_axes: Sequence[int | None], axis
         What axis to map each argument over. Should have same length as `args`.
     axis_size
         Anticipated axis size (or None if it should be inferred)
+
+    Returns
+    -------
+    dummy_args
+        tuple of abstract RVs with sliced shapes
+    axis_size
+        inferred axis_size (or arg if provided)
 
     Examples
     --------
@@ -204,7 +214,6 @@ def vmap_dummy_args(args: Sequence[InfixRV], in_axes: Sequence[int | None], axis
         # else:
         #     new_op = AbstractOp(new_shape, a.op.random)
 
-        # TODO: Why do we preserve random? Does it matter? Should AbstractOp even have this option?
         new_op = AbstractOp(new_shape)
         my_dummy = create_rv(new_op)  # no parents!
 
@@ -213,6 +222,9 @@ def vmap_dummy_args(args: Sequence[InfixRV], in_axes: Sequence[int | None], axis
             axis_size = new_axis_size
         elif new_axis_size is not None:
             assert axis_size == new_axis_size, "incoherent axis size"
+    if axis_size is None:
+        raise ValueError("axis_size could not be inferred")
+
     return tuple(dummy_args), axis_size
 
 
@@ -227,6 +239,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
         A function that takes some number of `RV` arguments and returns a list of `RV`s
     *args
         arguments to call the function on.
+
     Returns
     -------
     all_vars
@@ -302,7 +315,7 @@ def vmap_eval_flat(
     in_axes: Sequence[int | None],
     axis_size: int | None,
     *args: RVLike,
-):
+) -> list[InfixRV]:
     """
     This function (but not vmap itself) works on "flat" function f, meaning that each
     argument of the function is just a RV. And the function must return
@@ -343,7 +356,7 @@ def vmap_eval_flat(
     return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size)
 
 
-def get_dummy_args(in_axes, args):
+def get_dummy_args(in_axes, args) -> tuple[list[int], list[InfixRV]]:
     """Converts PyTree args and axes to flat args and axes
 
     Parameters
@@ -401,7 +414,13 @@ def get_dummy_args(in_axes, args):
     return dummy_args
 
 
-def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callable:
+# RVCallable = Callable[[PyTree[InfixRV]], PyTree[InfixRV]]
+
+
+# def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callable:
+def vmap[*Args](
+    f: Callable[[*Args], PyTree[InfixRV]], in_axes: Any = 0, axis_size: int | None = None
+) -> Callable[[*Args], PyTree[InfixRV]]:
     """
     Vectorizing map. Create a function which maps ``f`` over argument axes.
 
