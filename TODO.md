@@ -2,7 +2,8 @@
 
 * Bring sanity to indexing
 
-* Offer pointwise / scalar indexing `A._[x,y,z]` (obey scalar broadcasting rules?)
+  * Outer indexing by default
+  * Offer vectorized indexing `A.v[x,y,z]` obey scalar broadcasting
 
 * Offer optional OCD array indexing mode
 
