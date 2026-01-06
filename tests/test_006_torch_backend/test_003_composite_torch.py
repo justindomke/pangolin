@@ -14,7 +14,7 @@ import torch
 def test_add():
     # x -> x+x
 
-    op = ir.Composite(1, [ir.Add()], [[0, 0]])
+    op = ir.Composite(1, (ir.Add(),), [[0, 0]])
 
     out = eval_op(op, [1.5])
     expected = 3.0
@@ -30,7 +30,14 @@ def test_add():
 
 def test_add_mul():
     # x,y -> (x+x)*y
-    op = ir.Composite(2, [ir.Add(), ir.Mul()], [[0, 0], [2, 1]])
+    op = ir.Composite(
+        2,
+        (
+            ir.Add(),
+            ir.Mul(),
+        ),
+        [[0, 0], [2, 1]],
+    )
 
     x = ir.RV(ir.Constant(3.3))
     y = ir.RV(ir.Constant(4.4))
@@ -46,7 +53,7 @@ def test_add_mul():
 
 
 def test_bernoulli():
-    op = ir.Composite(1, [ir.Bernoulli()], [[0]])
+    op = ir.Composite(1, (ir.Bernoulli(),), [[0]])
 
     x = ir.RV(ir.Constant(0.7))
     y = ir.RV(op, x)
@@ -64,7 +71,7 @@ def test_bernoulli():
 
 
 def test_exponential():
-    op = ir.Composite(1, [ir.Exponential()], [[0]])
+    op = ir.Composite(1, (ir.Exponential(),), [[0]])
 
     x = ir.RV(ir.Constant(0.7))
     y = ir.RV(op, x)
@@ -82,7 +89,7 @@ def test_exponential():
 
 def test_add_normal():
     # z ~ Normal(x+y, y)
-    op = ir.Composite(2, [ir.Add(), ir.Normal()], [[0, 1], [2, 1]])
+    op = ir.Composite(2, (ir.Add(), ir.Normal()), [[0, 1], [2, 1]])
 
     x = ir.RV(ir.Constant(0.3))
     y = ir.RV(ir.Constant(0.1))

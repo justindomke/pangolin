@@ -52,9 +52,7 @@ def test_autoregressive_const_rv_mapped():
     expected = 0.0
     last = x.op.value
     for yi, sigma_i in zip(y_samp, noises.op.value, strict=True):
-        expected += torch.distributions.Normal(
-            torch.tensor(last), torch.tensor(sigma_i)
-        ).log_prob(torch.tensor(yi))
+        expected += torch.distributions.Normal(torch.tensor(last), torch.tensor(sigma_i)).log_prob(torch.tensor(yi))
         last = yi
     assert np.allclose(l, expected)
 
@@ -72,9 +70,9 @@ def test_autoregressive_const_rv_unmapped():
     expected = 0.0
     last = x.op.value
     for yi in y_samp:
-        expected += torch.distributions.Normal(
-            torch.tensor(last), torch.tensor(noise.op.value)
-        ).log_prob(torch.tensor(yi))
+        expected += torch.distributions.Normal(torch.tensor(last), torch.tensor(noise.op.value)).log_prob(
+            torch.tensor(yi)
+        )
         last = yi
     assert np.allclose(l, expected)
 
@@ -83,9 +81,7 @@ def test_autoregressive_simple_const_rv():
     # y = autoregressive(lambda last: normal(last + 1, noise), length)(x)
 
     length = 12
-    base_op = ir.Composite(
-        2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]]
-    )
+    base_op = ir.Composite(2, (ir.Constant(1), ir.Add(), ir.Normal()), [[], [0, 2], [3, 1]])
     op = ir.Autoregressive(base_op, length, [None], 0)
 
     x = ir.RV(ir.Constant(0.5))
@@ -98,9 +94,9 @@ def test_autoregressive_simple_const_rv():
     expected = 0.0
     last = x.op.value
     for yi in y_samp:
-        expected += torch.distributions.Normal(
-            torch.tensor(last + 1), torch.tensor(noise.op.value)
-        ).log_prob(torch.tensor(yi))
+        expected += torch.distributions.Normal(torch.tensor(last + 1), torch.tensor(noise.op.value)).log_prob(
+            torch.tensor(yi)
+        )
         last = yi
 
     assert np.allclose(l, expected)

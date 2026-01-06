@@ -24,7 +24,7 @@ def test_normal():
     value = -0.3
 
     log_prob = log_prob_op(op, value, parent_values)
-    expected = torch.distributions.Normal(*parent_values).log_prob(torch.tensor(value))
+    expected = torch.distributions.Normal(*parent_values).log_prob(torch.tensor(value))  # type: ignore
     assert np.allclose(log_prob, expected)
 
     out = sample_op(op, parent_values)

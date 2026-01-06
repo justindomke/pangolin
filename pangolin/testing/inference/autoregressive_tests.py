@@ -83,7 +83,15 @@ class AutoregressiveTests(MixinBase):
         assert isinstance(y.op, ir.Autoregressive)
         base_op = y.op.base_op
         assert isinstance(base_op, ir.Composite)
-        assert base_op == ir.Composite(2, [ir.Constant(1), ir.Add(), ir.Normal()], [[], [0, 2], [3, 1]])
+        assert base_op == ir.Composite(
+            2,
+            (
+                ir.Constant(1),
+                ir.Add(),
+                ir.Normal(),
+            ),
+            [[], [0, 2], [3, 1]],
+        )
         assert y.op == ir.Autoregressive(base_op, length, [None], 0)
 
         def testfun(samps):

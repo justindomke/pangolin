@@ -19,6 +19,8 @@
 
 * Make VMap generic so you can have VMap[VMap] etc.
 
+* Maybe give in_axes arguments for VMap type hints
+
 * Generalize numpy broadcasting
   * Unify with logic for indexing
 

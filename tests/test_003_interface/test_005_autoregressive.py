@@ -16,7 +16,7 @@ def test_simple_flat():
 
     u = constant(2.2)
     y = autoregressive_flat(fun, 10, ())(u)
-    base_op = ir.Composite(1, [ir.Exponential()], [[0]])
+    base_op = ir.Composite(1, (ir.Exponential(),), [[0]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [])
     assert y.parents == (u,)
@@ -28,7 +28,7 @@ def test_normal():
 
     u = constant(2.2)
     y = autoregressive_flat(fun, 10, ())(u)
-    base_op = ir.Composite(1, [ir.Constant(1.1), ir.Normal()], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(1.1), ir.Normal()), [[], [0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [])
 
@@ -41,7 +41,7 @@ def test_normal_external_scale():
 
     u = constant(2.2)
     y = autoregressive_flat(fun, 10, ())(u)
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+    base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [None])
     assert y.parents == (u, scale)
@@ -54,7 +54,7 @@ def test_normal_with_param():
     u = constant(2.2)
     scales = constant(np.arange(1, 11))
     y = autoregressive_flat(fun, 10, (0,))(u, scales)
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+    base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [0])
     assert y.parents == (u, scales)
@@ -65,7 +65,7 @@ def test_pass_constants():
         return normal(x, scale)
 
     y = autoregressive_flat(fun, 10, (0,))(2.2, np.arange(1, 11))
-    base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+    base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [0])
     assert y.parents[0].op == ir.Constant(2.2)
@@ -78,7 +78,7 @@ def test_simple_non_flat():
 
     u = constant(2.2)
     y = autoregressive(fun, 10)(u)
-    base_op = ir.Composite(1, [ir.Exponential()], [[0]])
+    base_op = ir.Composite(1, (ir.Exponential(),), [[0]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [])
     assert y.parents == (u,)
@@ -90,7 +90,7 @@ def test_normal_non_flat():
 
     u = constant(2.2)
     y = autoregressive(fun, 10)(u)
-    base_op = ir.Composite(1, [ir.Constant(1.1), ir.Normal()], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(1.1), ir.Normal()), [[], [0, 1]])
     assert y.op.base_op == base_op
     assert y.op == ir.Autoregressive(base_op, 10, [])
 
@@ -110,7 +110,7 @@ def test_normal_with_param_non_flat():
             for scales in [scales_rv, scales_np]:
                 y = autoregressive(fun, length)(u, scales)
 
-                base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+                base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
                 assert y.op.base_op == base_op
                 assert y.op == ir.Autoregressive(base_op, 10, [0])
 
@@ -140,7 +140,7 @@ def test_normal_with_unmapped_param_non_flat():
             for in_axes in [None]:
                 y = autoregressive(fun, length, in_axes)(u, scales)
 
-                base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+                base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
                 assert y.op.base_op == base_op
                 assert y.op == ir.Autoregressive(base_op, 10, [None])
 
@@ -181,7 +181,7 @@ def test_dict_non_flat():
         for params in [{"scale": constant(3.3)}]:
             y = autoregressive(fun, 10, None)(u, params)
 
-            base_op = ir.Composite(2, [ir.Normal()], [[0, 1]])
+            base_op = ir.Composite(2, (ir.Normal(),), [[0, 1]])
             assert y.op.base_op == base_op
             assert y.op == ir.Autoregressive(base_op, 10, [None])
             # assert y.parents == (u, params["scale"])
@@ -207,7 +207,7 @@ def test_interesting_autoregressive():
     y = autoregressive(fun, length=10, in_axes=None)(init, x, y, stuff)
     base_op = ir.Composite(
         8,
-        [ir.Add(), ir.Mul(), ir.Div(), ir.Div(), ir.Pow(), ir.Sub()],
+        (ir.Add(), ir.Mul(), ir.Div(), ir.Div(), ir.Pow(), ir.Sub()),
         [[1, 6], [2, 7], [3, 4], [8, 9], [10, 11], [0, 12]],
     )
     assert y.op.base_op == base_op
@@ -233,7 +233,7 @@ def test_interesting_closure_autoregressive():
     y = autoregressive(fun, length=10)(init)
     base_op = ir.Composite(
         7,  # now, y[1][0] is invisible, never included
-        [ir.Add(), ir.Mul(), ir.Div(), ir.Div(), ir.Pow(), ir.Sub()],
+        (ir.Add(), ir.Mul(), ir.Div(), ir.Div(), ir.Pow(), ir.Sub()),
         [
             [1, 2],
             [3, 4],
@@ -255,7 +255,7 @@ def test_decorator():
 
     x = fun(0)
     assert isinstance(x.op, ir.Autoregressive)
-    base_op = ir.Composite(1, [ir.Constant(2.2), ir.Normal()], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(2.2), ir.Normal()), [[], [0, 1]])
     assert x.op.base_op == base_op
     op = ir.Autoregressive(base_op, 10, [], 0)
     assert x.op == op
@@ -263,7 +263,7 @@ def test_decorator():
 
 def test_snappy_syntax():
     y = autoregress(10)(lambda last: normal(last, 7.5))(0)
-    base_op = ir.Composite(1, [ir.Constant(7.5), ir.Normal()], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(7.5), ir.Normal()), [[], [0, 1]])
     assert y.op.base_op == base_op
     op = ir.Autoregressive(base_op, 10, [], 0)
     assert y.op == op
@@ -275,7 +275,7 @@ def test_vmap_inside_autoregressive():
         return vmap(normal, (0, None))(last, 7.5)
 
     y = f(np.zeros(5))
-    base_op = ir.Composite(1, [ir.Constant(7.5), ir.VMap(ir.Normal(), (0, None), 5)], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(7.5), ir.VMap(ir.Normal(), [0, None], 5)), [[], [0, 1]])
     assert y.op.base_op == base_op
     op = ir.Autoregressive(base_op, 10, [], 0)
     assert y.op == op
@@ -287,7 +287,7 @@ def test_autoregressive_inside_vmap():
         return normal(last, 7.5)
 
     y = vmap(f)(np.zeros(5))
-    base_op = ir.Composite(1, [ir.Constant(7.5), ir.Normal()], [[], [0, 1]])
+    base_op = ir.Composite(1, (ir.Constant(7.5), ir.Normal()), [[], [0, 1]])
     assert y.op.base_op.base_op == base_op
     auto_op = ir.Autoregressive(base_op, 10, [], 0)
     assert y.op.base_op == auto_op

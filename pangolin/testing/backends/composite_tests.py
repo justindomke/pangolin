@@ -20,7 +20,7 @@ class CompositeTests(MixinBase):
     def test_add(self):
         # x -> x+x
 
-        op = ir.Composite(1, [ir.Add()], [[0, 0]])
+        op = ir.Composite(1, (ir.Add(),), [[0, 0]])
 
         expected = 3.0
         # out = eval_op(op, [1.5])
@@ -35,7 +35,14 @@ class CompositeTests(MixinBase):
 
     def test_add_mul(self):
         # x,y -> (x+x)*y
-        op = ir.Composite(2, [ir.Add(), ir.Mul()], [[0, 0], [2, 1]])
+        op = ir.Composite(
+            2,
+            (
+                ir.Add(),
+                ir.Mul(),
+            ),
+            [[0, 0], [2, 1]],
+        )
 
         x = ir.RV(ir.Constant(3.3))
         y = ir.RV(ir.Constant(4.4))
@@ -50,7 +57,7 @@ class CompositeTests(MixinBase):
         assert np.allclose(expected, out)
 
     def test_bernoulli(self):
-        op = ir.Composite(1, [ir.Bernoulli()], [[0]])
+        op = ir.Composite(1, (ir.Bernoulli(),), [[0]])
 
         x = ir.RV(ir.Constant(0.7))
         y = ir.RV(op, x)
@@ -78,7 +85,7 @@ class CompositeTests(MixinBase):
         if ir.Exponential in self._ops_without_sampling_support:
             pytest.skip("Skipping because backend does not support Exponential")
 
-        op = ir.Composite(1, [ir.Exponential()], [[0]])
+        op = ir.Composite(1, (ir.Exponential(),), [[0]])
 
         x = ir.RV(ir.Constant(0.23))
         y = ir.RV(op, x)
@@ -102,7 +109,7 @@ class CompositeTests(MixinBase):
 
     def test_add_normal(self):
         # z ~ Normal(x+y, y)
-        op = ir.Composite(2, [ir.Add(), ir.Normal()], [[0, 1], [2, 1]])
+        op = ir.Composite(2, (ir.Add(), ir.Normal()), [[0, 1], [2, 1]])
 
         x = ir.RV(ir.Constant(0.3))
         y = ir.RV(ir.Constant(0.1))

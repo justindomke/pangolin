@@ -396,5 +396,5 @@ def test_composite_norm():
 
     y = f(x)
 
-    assert y.op == Composite(2, [ir.Normal()], [[0, 1]])
+    assert y.op == Composite(2, (ir.Normal(),), [[0, 1]])
     assert y.parents == (x, noise)

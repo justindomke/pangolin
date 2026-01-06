@@ -6,7 +6,9 @@ import jax.tree_util
 from typing import Callable
 
 
-def make_composite[LastOp: Op](flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape) -> InfixRV[Composite[LastOp]]:
+def make_composite[LastOp: Op](
+    flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape
+) -> tuple[Composite[LastOp], list[InfixRV]]:
     """
     Given a function and input shapes, create a composite Op representing that function.
     Crucially, it *is* allowed for `fun` to depend on variables declared elsewhere through a closure.
