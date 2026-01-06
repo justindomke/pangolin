@@ -995,7 +995,7 @@ def get_sliced_shapes(
     return remaining_shapes, axis_size
 
 
-class VMap(Op):
+class VMap[BaseOp: Op](Op):
     """
     Create a ``VMap`` Op. That's *one specific* op vectorized over some number of arguments.
 
@@ -1052,7 +1052,7 @@ class VMap(Op):
     # list[int | None] means a list of any length (... not appropriate)
     def __init__(
         self,
-        base_op: Op,
+        base_op: BaseOp,
         in_axes: tuple[int | None, ...],
         axis_size: int | None = None,
     ):
@@ -1204,7 +1204,6 @@ class Autoregressive(Op):
         self,
         base_op: Op,
         length: int,
-        # in_axes: tuple[int | None, ...] | list[int | None],
         in_axes: Sequence[int | None],
         where_self: int = 0,
     ):
@@ -1219,11 +1218,9 @@ class Autoregressive(Op):
             the number of times to repeat (optional if there are )
         """
         self.base_op = base_op
-        # self.num_constants = num_constants
         self.length = length
         self.in_axes = tuple(in_axes)
         self.where_self = where_self
-        # self._random = base_op.random
         super().__init__()
 
     def _random(self) -> bool:
