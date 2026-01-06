@@ -14,7 +14,7 @@ import torch
 
 
 def test_handle_nonrandom_exp():
-    op = ir.VMap(ir.Exp(), [None], 5)
+    op = ir.VMap(ir.Exp(), (None,), 5)
     x = np.array(1.0)
     out = eval_op(op, [x])
     expected = np.exp(1.0) * np.ones(5)
@@ -26,7 +26,7 @@ def test_handle_nonrandom_exp():
 
 
 def test_handle_nonrandom_exp_2d():
-    op = ir.VMap(ir.VMap(ir.Exp(), [None], 5), [0])
+    op = ir.VMap(ir.VMap(ir.Exp(), (None,), 5), (0,))
     x = np.array([1.0, 2.0])
     out = eval_op(op, [x])
     expected = np.exp(np.array([1.0, 2.0]))[:, None] * np.ones((2, 5))
@@ -34,7 +34,13 @@ def test_handle_nonrandom_exp_2d():
 
 
 def test_handle_nonrandom_add():
-    op = ir.VMap(ir.Add(), [None, 0])
+    op = ir.VMap(
+        ir.Add(),
+        (
+            None,
+            0,
+        ),
+    )
     x = np.array(1.0)
     y = np.array([2.0, 3.0, 4.0])
     z = eval_op(op, [x, y])
@@ -43,7 +49,7 @@ def test_handle_nonrandom_add():
 
 
 def test_handle_nonrandom_add_2d():
-    op = ir.VMap(ir.VMap(ir.Add(), [None, 0]), [None, 0])
+    op = ir.VMap(ir.VMap(ir.Add(), (None, 0)), (None, 0))
     x = np.array(1.0)
     y = np.array([[2.0, 3.0, 4.0], [5.0, 6.0, 7.0]])
     z = eval_op(op, [x, y])

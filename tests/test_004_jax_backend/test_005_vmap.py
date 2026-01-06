@@ -16,7 +16,7 @@ from jax import numpy as jnp
 
 
 def test_handle_nonrandom_exp():
-    op = ir.VMap(ir.Exp(), [None], 5)
+    op = ir.VMap(ir.Exp(), (None,), 5)
     x = jnp.array(1.0)
     out = eval_op(op, [x])
     expected = jnp.exp(1.0) * jnp.ones(5)
@@ -28,7 +28,7 @@ def test_handle_nonrandom_exp():
 
 
 def test_handle_nonrandom_exp_2d():
-    op = ir.VMap(ir.VMap(ir.Exp(), [None], 5), [0])
+    op = ir.VMap(ir.VMap(ir.Exp(), (None,), 5), (0,))
     x = jnp.array([1.0, 2.0])
     out = eval_op(op, [x])
     expected = jnp.exp(jnp.array([1.0, 2.0]))[:, None] * jnp.ones((2, 5))
@@ -36,7 +36,7 @@ def test_handle_nonrandom_exp_2d():
 
 
 def test_handle_nonrandom_add():
-    op = ir.VMap(ir.Add(), [None, 0])
+    op = ir.VMap(ir.Add(), (None, 0))
     x = jnp.array(1.0)
     y = jnp.array([2.0, 3.0, 4.0])
     z = eval_op(op, [x, y])
@@ -45,7 +45,7 @@ def test_handle_nonrandom_add():
 
 
 def test_handle_nonrandom_add_2d():
-    op = ir.VMap(ir.VMap(ir.Add(), [None, 0]), [None, 0])
+    op = ir.VMap(ir.VMap(ir.Add(), (None, 0)), (None, 0))
     x = jnp.array(1.0)
     y = jnp.array([[2.0, 3.0, 4.0], [5.0, 6.0, 7.0]])
     z = eval_op(op, [x, y])
@@ -54,7 +54,7 @@ def test_handle_nonrandom_add_2d():
 
 
 def test_normal_iid():
-    op = ir.VMap(ir.Normal(), [None, None], 5)
+    op = ir.VMap(ir.Normal(), (None, None), 5)
     mu = jnp.array(1.0)
     sigma = jnp.array(1.0)
     key = jax.random.PRNGKey(0)
@@ -76,7 +76,7 @@ def test_normal_iid():
 
 
 def test_normal_non_iid():
-    op = ir.VMap(ir.Normal(), [0, 0])
+    op = ir.VMap(ir.Normal(), (0, 0))
     mu = jnp.array([1.0, 2.0, 3.0])
     sigma = jnp.array([3.0, 2.0, 1.0])
     key = jax.random.PRNGKey(0)
@@ -98,7 +98,7 @@ def test_normal_non_iid():
 
 
 def test_normal_iid_2d():
-    op = ir.VMap(ir.VMap(ir.Normal(), [None, None], 5), [None, None], 3)
+    op = ir.VMap(ir.VMap(ir.Normal(), (None, None), 5), (None, None), 3)
     mu = jnp.array(1.0)
     sigma = jnp.array(1.0)
     key = jax.random.PRNGKey(0)

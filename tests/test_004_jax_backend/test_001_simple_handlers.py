@@ -32,7 +32,7 @@ def test_normal():
 
     key = jax.random.PRNGKey(3)
     out = sample_op(op, key, parent_values)
-    expected = numpyro.distributions.Normal(*parent_values).sample(key)
+    expected = numpyro.distributions.Normal(*parent_values).sample(key)  # type: ignore
     assert np.allclose(out, expected)
 
 

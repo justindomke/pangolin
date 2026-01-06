@@ -259,9 +259,10 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
     n_before_call = InfixRV._n
 
     def is_abstract(rv: InfixRV) -> bool:
-        # if not isinstance(rv, InfixRV):
-        #    raise ValueError("Generated nodes found a node that is not an InfixRV")
         return rv._n >= n_before_call
+
+    def not_abstract(var: InfixRV):
+        return not is_abstract(var)
 
     abstract_out: list[InfixRV[AbstractOp]] = fun(*args)
 
@@ -275,7 +276,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
         if not isinstance(a, InfixRV):
             raise ValueError(f"fun passed to generated_nodes returned non-RV output (got {type(a)}")
 
-    all_abstract_vars = dag.upstream_nodes(abstract_out, node_block=lambda var: not is_abstract(var))
+    all_abstract_vars = dag.upstream_nodes(abstract_out, node_block=not_abstract)
 
     all_abstract_vars = sorted(all_abstract_vars, key=lambda node: node._n)
 
