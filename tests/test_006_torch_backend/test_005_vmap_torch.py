@@ -58,7 +58,7 @@ def test_handle_nonrandom_add_2d():
 
 
 def test_normal_iid():
-    op = ir.VMap(ir.Normal(), [None, None], 5)
+    op = ir.VMap(ir.Normal(), (None, None), 5)
     mu = torch.tensor(1.0)
     sigma = torch.tensor(1.0)
 
@@ -80,7 +80,7 @@ def test_normal_iid():
 
 
 def test_normal_non_iid():
-    op = ir.VMap(ir.Normal(), [0, 0])
+    op = ir.VMap(ir.Normal(), (0, 0))
     mu = torch.tensor([1.0, 2.0, 3.0])
     sigma = torch.tensor([3.0, 2.0, 1.0])
 
