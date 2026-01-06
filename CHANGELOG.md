@@ -1,3 +1,5 @@
+**2026.01.06:** Bump Python requirement to 3.12, make VMap, Composite, Autoregressive generic for your OCD `x: RV[AutoRegressive[Composite[VMap[Normal]]]]` type-hinting pleasure.
+
 **2025.12.22:** Much less magical scalar Op generation in IR and somewhat less magical scalar function generation in interface.
 
 **2025.12.18:** Add Wishart
