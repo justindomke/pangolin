@@ -15,6 +15,14 @@ In addition, there are three "private" submodules that end-users would not typic
 - :mod:`pangolin.ir` - The internal representation (IR) for probabilistic models in Pangolin.
 """
 
+import warnings
+
+with warnings.catch_warnings():
+    # Only ignore DeprecationWarning
+    warnings.simplefilter("ignore", category=DeprecationWarning)
+    import numpyro
+
+
 from pangolin import dag, util, ir, interface, jax_backend, blackjax
 
 __all__ = ["dag", "util", "ir", "interface", "jax_backend"]

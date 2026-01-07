@@ -25,3 +25,11 @@ interface Module
 .. autodata:: pangolin.interface.Autoregressable
 
 .. autodata:: pangolin.interface.Autoregressed
+
+Sub-Packages
+------------
+
+.. toctree::
+   :maxdepth: 1
+
+   transforming
