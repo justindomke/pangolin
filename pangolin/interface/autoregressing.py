@@ -130,9 +130,9 @@ def autoregressive_flat[O: Op](
     --------
     >>> x = autoregressive_flat(exp, length=5, in_axes=())(constant(7.7))
     >>> x.op
-    Autoregressive(Composite(1, (Exp(),), ((0,),)), 5, (), 0)
+    Autoregressive(Composite(1, (Exp(),), [[0]]), 5, (), 0)
     >>> x.op.base_op
-    Composite(1, (Exp(),), ((0,),))
+    Composite(1, (Exp(),), [[0]])
     >>> x.op.length
     5
     >>> x.op.in_axes
@@ -146,9 +146,9 @@ def autoregressive_flat[O: Op](
     >>> b = makerv([1,2,3,4,5])
     >>> x = autoregressive_flat(add, length=5, in_axes=(0,))(a, b)
     >>> x.op
-    Autoregressive(Composite(2, (Add(),), ((0, 1),)), 5, (0,), 0)
+    Autoregressive(Composite(2, (Add(),), [[0, 1]]), 5, (0,), 0)
     >>> x.op.base_op
-    Composite(2, (Add(),), ((0, 1),))
+    Composite(2, (Add(),), [[0, 1]])
     >>> x.op.length
     5
     >>> x.op.in_axes
@@ -253,7 +253,7 @@ def autoregressive[O: Op](
     >>> isinstance(z.op, Autoregressive)
     True
     >>> z.op.base_op
-    Composite(1, (Exp(), Constant(1), Normal()), ((0,), (), (1, 2)))
+    Composite(1, (Exp(), Constant(1), Normal()), [[0], [], [1, 2]])
     >>> z.op.length
     5
     >>> z.op.in_axes
@@ -272,7 +272,7 @@ def autoregressive[O: Op](
     >>> isinstance(z.op, Autoregressive)
     True
     >>> z.op.base_op
-    Composite(2, (Mul(), Exponential()), ((0, 1), (2,)))
+    Composite(2, (Mul(), Exponential()), [[0, 1], [2]])
     >>> z.op.length # note this was inferred!
     3
     >>> z.op.in_axes
@@ -289,7 +289,7 @@ def autoregressive[O: Op](
     >>> isinstance(z.op, Autoregressive)
     True
     >>> z.op.base_op
-    Composite(2, (Mul(), Exponential()), ((0, 1), (2,)))
+    Composite(2, (Mul(), Exponential()), [[0, 1], [2]])
     >>> z.op.length
     3
     >>> z.op.in_axes

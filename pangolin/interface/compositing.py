@@ -42,7 +42,7 @@ def make_composite[LastOp: Op](
     ...     return normal(a, y)
     >>> op, consts = make_composite(fun, (), ())
     >>> op
-    Composite(2, (Add(), Normal()), ((0, 1), (2, 1)))
+    Composite(2, (Add(), Normal()), [[0, 1], [2, 1]])
     >>> consts
     []
 
@@ -52,7 +52,7 @@ def make_composite[LastOp: Op](
     ...     return normal(a, y)
     >>> op, consts = make_composite(fun, ())
     >>> op
-    Composite(2, (Add(), Normal()), ((1, 0), (2, 0)))
+    Composite(2, (Add(), Normal()), [[1, 0], [2, 0]])
     >>> consts
     [InfixRV(Constant(3))]
     """
@@ -113,7 +113,7 @@ def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Co
     >>> y = makerv(2)
     >>> z = composite_flat(f)(x, y)
     >>> z.op
-    Composite(2, (Add(), Normal()), ((0, 1), (2, 1)))
+    Composite(2, (Add(), Normal()), [[0, 1], [2, 1]])
     >>> z.parents == (x, y)
     True
 
@@ -123,7 +123,7 @@ def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Co
     ...     return normal(a, y)
     >>> z = composite_flat(f)(y)
     >>> z.op
-    Composite(2, (Add(), Normal()), ((1, 0), (2, 0)))
+    Composite(2, (Add(), Normal()), [[1, 0], [2, 0]])
     >>> z.parents == (x, y)
     True
     """
@@ -157,7 +157,7 @@ def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
     >>> y = makerv(2)
     >>> z = composite(f)({'cat':x, 'dog': y})
     >>> z.op
-    Composite(2, (Add(), Normal()), ((0, 1), (2, 1)))
+    Composite(2, (Add(), Normal()), [[0, 1], [2, 1]])
     >>> z.parents == (x, y)
     True
 
@@ -168,7 +168,7 @@ def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
     ...     return normal(a, y)
     >>> z = composite(f)({'dog':y})
     >>> z.op
-    Composite(2, (Add(), Normal()), ((1, 0), (2, 0)))
+    Composite(2, (Add(), Normal()), [[1, 0], [2, 0]])
     >>> z.parents == (y, x)
     True
     """

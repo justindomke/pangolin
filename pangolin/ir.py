@@ -37,7 +37,7 @@ In addition, this module provides `print_upstream`, which provides a nice human-
 from __future__ import annotations  # so it's possible to preserve type aliases
 from abc import ABC, abstractmethod
 
-from typing import Sequence, Callable, Self, cast, TypeAlias
+from typing import Sequence, Callable, Self, cast, TypeAlias, Any, ClassVar
 from pangolin import util, dag
 import numpy as np
 from numpy.typing import ArrayLike
@@ -196,13 +196,29 @@ class Op(ABC):
 
 
 ################################################################################
+# The identity function
+################################################################################
+
+
+class Identity(Op):
+    """
+    Represents an "identity" `Op`. Has one parent.
+    """
+
+    _random = False
+
+    def _get_shape(self, par_shape: Shape) -> Shape:
+        return par_shape
+
+
+################################################################################
 # Constant
 ################################################################################
 
 
 class Constant(Op):
     """
-    Represents a "constant" distribution. Has no parents. Data is always stored
+    Represents a "constant" `Op`. Has no parents. Data is always stored
     as a numpy array. If you want to live dangerously, you may be able to switch to
     jax's version of numpy by setting ``ir.np = jax.numpy``.
 
@@ -1175,14 +1191,15 @@ class Composite[LastOp: Op](Op):
     # TODO: str and repr should be much more descriptive
     # should this print f"Composite({ops[-1].name})"?
     def __str__(self):
-        if len(self.ops) == 1:
-            str_ops = f"({self.ops[0]},)"
-        else:
-            str_ops = f"({', '.join(str(op) for op in self.ops)})"
-        return f"composite({self.num_inputs}, {str_ops}, {self.par_nums})"
+
+        str_ops = f"[{', '.join(map(str, self.ops))}]"
+
+        par_nums_list = list(list(a) for a in self.par_nums)
+        return f"composite({self.num_inputs}, {str_ops}, {par_nums_list})"
 
     def __repr__(self):
-        return f"Composite({self.num_inputs}, {self.ops}, {self.par_nums})"
+        par_nums_list = list(list(a) for a in self.par_nums)
+        return f"Composite({self.num_inputs}, {self.ops}, {par_nums_list})"
 
     def __eq__(self, other):
         if isinstance(other, Composite):
@@ -1717,13 +1734,21 @@ class VectorIndex(Op):
 
 
 ########################################################################################
-# Transformations
+# Bijectors
 ########################################################################################
 
+"""
+A Bijector is a special class of Op that is invertible and has a log-determinant-jacobian These are constantly used in PPLs e.g. for transforming distributions or "unconstraining" parameters for MCMC. The principles of Pangolin would seem to dictate the following:
 
-class Bijection(Op):
+1. Users can create their own Bijectors.
+2. Bijectors should use the same ingredients as the rest of pangolin.
+3. Transformed densities should be represents *as part of the graph* in a way that's independent of the backend.
+"""
+
+
+class Bijector(Op):
     """
-    The intended use for bijections is for defining transformed distributions where we start with the density ``P(x)`` and we would like to quickly evaluate ``P(y)`` where ``y`` is some transformed version of x.
+    The intended use for bijectors is for defining transformed distributions where we start with the density ``P(x)`` and we would like to quickly evaluate ``P(y)`` where ``y`` is some transformed version of x.
 
     In general if ``Y=T(X)`` then
 
@@ -1740,38 +1765,38 @@ class Bijection(Op):
     Args:
         forward: Implements ``T(x)``
         inverse: Implements ``T⁻¹(y)``
-        inverse_log_det_jac: Impelements ``log(|det ∇T⁻¹(y)|)``
+        log_det_jac: Implements ``log(|det ∇T(x)|) == -log(|det ∇T⁻¹(y)|)`` (given both ``x`` and ``y``).
 
     Examples
     --------
-    An implementation of the ``exp`` transformation, using the fact that the inverse is ``log`` and the log-derivative of the inverse is ``log(d/dy log(y)) = log(1/y) = -log(y)``.
+    An implementation of the ``exp`` transformation.
 
     >>> forward = Exp()
     >>> inverse = Log()
-    >>> inverse_log_jac_det = Composite(
-    ...     1,
-    ...     (Log(), Constant(-1), Mul()),
-    ...     ((0,), (), (2, 1)))
-    >>> bijector = Bijection(forward, inverse, inverse_log_jac_det)
+    >>> log_jac_det = Composite(
+    ...     2,
+    ...     (Identity(),),
+    ...     [[0]])
+    >>> bijector = Bijector(forward, inverse, log_jac_det)
     >>> print(bijector)
-    bijection(exp, log, composite(1, (log, -1, mul), ((0,), (), (2, 1))))
+    bijector(exp, log, composite(2, [identity], [[0]]))
     """
+
+    # TODO: Maybe someday this should accept functions like forward_and_log_det
 
     _random = False
 
-    def __init__(self, forward: Op, inverse: Op, inverse_log_det_jac: Op):
+    def __init__(self, forward: Op, inverse: Op, log_det_jac: Op):
         if forward.random:
             raise ValueError("forward op cannot be random")
-
         if inverse.random:
             raise ValueError("inverse op cannot be random")
-
-        if inverse_log_det_jac.random:
-            raise ValueError("log_det_jac cannot be random")
+        if log_det_jac.random:
+            raise ValueError("log_det_jac op cannot be random")
 
         self.forward = forward
         self.inverse = inverse
-        self.inverse_log_det_jac = inverse_log_det_jac
+        self.log_det_jac = log_det_jac
 
     def _get_shape(self, y_shape: Shape, *param_shapes: Shape) -> Shape:
         x_shape = self.forward.get_shape(y_shape, *param_shapes)
@@ -1783,29 +1808,69 @@ class Bijection(Op):
         return x_shape
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, Bijection):
+        if not isinstance(other, Bijector):
             return False
-        return (
-            self.forward == other.forward
-            and self.inverse == other.inverse
-            and self.inverse_log_det_jac == other.inverse_log_det_jac
-        )
+        return self.forward == other.forward and self.inverse == other.inverse and self.log_det_jac == other.log_det_jac
 
     def __hash__(self):
-        return hash((self.forward, self.inverse, self.inverse_log_det_jac))
+        return hash((self.forward, self.inverse, self.log_det_jac))
 
     def __repr__(self):
-        return f"Bijection({repr(self.forward)}, {repr(self.inverse)}, {repr(self.inverse_log_det_jac)})"
+        return f"Bijector({repr(self.forward)}, {repr(self.inverse)}, {repr(self.log_det_jac)})"
 
     def __str__(self):
-        """
-        Return a string representation of the VMap op. Just like ``__repr__`` except
-        uses str for calling the recursive distribution.
-        """
-        return f"bijection({str(self.forward)}, {str(self.inverse)}, {str(self.inverse_log_det_jac)})"
+        return f"bijector({str(self.forward)}, {str(self.inverse)}, {str(self.log_det_jac)})"
 
 
-class Transformed(Op):
+class NamedBijector(Bijector):
+    forward: ClassVar[Op]
+    inverse: ClassVar[Op]
+    log_det_jac: ClassVar[Op]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        if cls.__name__ == "NamedBijector":
+            return
+
+        required = {"forward", "inverse", "log_det_jac"}
+        missing = [attr for attr in required if attr not in cls.__dict__]
+
+        if missing:
+            raise TypeError(f"Definition Error: Class '{cls.__name__}' is missing required attributes: {missing}")
+
+    def __init__(self) -> None:
+        super().__init__(self.forward, self.inverse, self.log_det_jac)
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + "()"
+
+    def __str__(self) -> str:
+        return util.camel_case_to_snake_case(self.__class__.__name__)
+
+
+class ExpBijector(NamedBijector):
+    """
+    The Exp bijector. This is given as a subclass mostly to simplify printing.
+    """
+
+    forward = Exp()
+    inverse = Log()
+    log_det_jac = Composite(2, (Identity(),), [[0]])
+
+
+class MulBijector(NamedBijector):
+    forward = Mul()
+    inverse = Div()
+    log_det_jac = Composite(3, (Identity(),), [[2]])
+
+
+########################################################################################
+# Transformed distributions
+########################################################################################
+
+
+class Transformed[O: Op, B: Bijector](Op):
     """
     Given some distribution ``P(X)`` and some bijection ``Y=T(X)``, create the distribution ``P(Y)``.
 
@@ -1817,9 +1882,9 @@ class Transformed(Op):
 
     .. code-block:: python
 
-        >>> bijection = Bijection(forward, inverse, inverse_log_jac_det) # doctest: +SKIP
-        >>> op = Transformed(base_op, bijection, n_biject_args)          # doctest: +SKIP
-        >>> y = RV(op, *p)                                               # doctest: +SKIP
+        >>> bijector = Bijector(forward, inverse, inverse_log_jac_det) # doctest: +SKIP
+        >>> op = Transformed(base_op, bijector, n_biject_args)         # doctest: +SKIP
+        >>> y = RV(op, *p)                                             # doctest: +SKIP
 
     That produces a `RV` ``y`` that is equal *in distribution* to doing this:
 
@@ -1836,35 +1901,27 @@ class Transformed(Op):
     --------
     This is equivalent to a lognormal:
 
-    >>> base_op = Normal()
-    >>> forward = Exp()
-    >>> inverse = Log()
-    >>> inverse_log_jac_det = Composite(
-    ...     1,
-    ...     (Log(), Constant(-1), Mul()),
-    ...     ((0,), (), (2, 1)))
-    >>> exp_bijector = Bijection(forward, inverse, inverse_log_jac_det)
-    >>> op = Transformed(Normal(), exp_bijector, 0)
+    >>> op = Transformed(Normal(), ExpBijector())
     >>> op
-    Transformed(Normal(), Bijection(Exp(), Log(), Composite(1, (Log(), Constant(-1), Mul()), ((0,), (), (2, 1)))), 0)
+    Transformed(Normal(), ExpBijector())
     >>> print(op)
-    transformed(normal, bijection(exp, log, composite(1, (log, -1, mul), ((0,), (), (2, 1)))), 0)
+    transformed(normal, exp_bijector)
     >>> op.get_shape((),())
     ()
 
     Args:
         base_op: The base op to transform (must be random)
         bijection: The bijection to apply
-        n_biject_args: Number of parameter parents for bijection
+        n_biject_args: Number of parameter parents for bijection (default 0)
     """
 
     _random = True
 
     def __init__(
         self,
-        base_op: Op,
-        bijector: Bijection,
-        n_biject_args: int,
+        base_op: O,
+        bijector: B,
+        n_biject_args: int = 0,
     ):
         if not base_op.random:
             raise ValueError("base_op must be random")
@@ -1882,14 +1939,20 @@ class Transformed(Op):
         return new_shape
 
     def __repr__(self):
-        return f"Transformed({repr(self.base_op)}, {repr(self.bijector)}, {repr(self.n_biject_args)})"
+        if self.n_biject_args:
+            return f"Transformed({repr(self.base_op)}, {repr(self.bijector)}, {repr(self.n_biject_args)})"
+        else:
+            return f"Transformed({repr(self.base_op)}, {repr(self.bijector)})"
 
     def __str__(self):
         """
         Return a string representation of the VMap op. Just like ``__repr__`` except
         uses str for calling the recursive distribution.
         """
-        return f"transformed({str(self.base_op)}, {str(self.bijector)}, {str(self.n_biject_args)})"
+        if self.n_biject_args:
+            return f"transformed({str(self.base_op)}, {str(self.bijector)}, {str(self.n_biject_args)})"
+        else:
+            return f"transformed({str(self.base_op)}, {str(self.bijector)})"
 
 
 ########################################################################################
