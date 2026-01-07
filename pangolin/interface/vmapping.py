@@ -109,11 +109,11 @@ def vmap_subgraph(
     >>> print(str(c_dummy))
     add(abstract_op, abstract_op)
     >>> print(str(c))
-    vmap(add, (0, 0), 3)([0 1 2], [4 5 6])
+    vmap(add, [0, 0], 3)([0 1 2], [4 5 6])
     >>> print(repr(c_dummy))
     InfixRV(Add(), InfixRV(AbstractOp()), InfixRV(AbstractOp()))
     >>> print(repr(c))
-    InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([4,5,6])))
+    InfixRV(VMap(Add(), [0, 0], 3), InfixRV(Constant([0,1,2])), InfixRV(Constant([4,5,6])))
 
     >>> d_dummy = InfixRV(ir.Mul(), a_dummy, c_dummy)
     >>> print_upstream(d_dummy)
@@ -129,8 +129,8 @@ def vmap_subgraph(
     ----- | ---------
     (3,)  | a = [0 1 2]
     (3,)  | b = [4 5 6]
-    (3,)  | c = vmap(add, (0, 0), 3)(a,b)
-    (3,)  | d = vmap(mul, (0, 0), 3)(a,c)
+    (3,)  | c = vmap(add, [0, 0], 3)(a,b)
+    (3,)  | d = vmap(mul, [0, 0], 3)(a,c)
     """
     # TODO: Should we allow axis_size=None here?
 
@@ -345,7 +345,7 @@ def vmap_eval_flat(
     >>> B = constant([2,3])
     >>> [C] = vmap_eval_flat(f, (0,0), 2, A, B)
     >>> print(repr(C))
-    InfixRV(VMap(Add(), (0, 0), 2), InfixRV(Constant([0,1])), InfixRV(Constant([2,3])))
+    InfixRV(VMap(Add(), [0, 0], 2), InfixRV(Constant([0,1])), InfixRV(Constant([2,3])))
     """
 
     # make sure inputs are RVs
@@ -448,7 +448,7 @@ def vmap[*Args](
     ...     return exp(a)
     >>> A = constant([0,1,2])
     >>> vmap(fun)(A)
-    InfixRV(VMap(Exp(), (0,), 3), InfixRV(Constant([0,1,2])))
+    InfixRV(VMap(Exp(), [0], 3), InfixRV(Constant([0,1,2])))
 
     Multiple inputs are OK.
 
@@ -457,7 +457,7 @@ def vmap[*Args](
     >>> A = constant([1,2,3])
     >>> B = constant([4,5,6])
     >>> vmap(fun)(A, B)
-    InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))
+    InfixRV(VMap(Mul(), [0, 0], 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))
 
     Unmapped inputs are OK.
 
@@ -465,7 +465,7 @@ def vmap[*Args](
     ...     return a*b
     >>> A = constant([1,2,3])
     >>> vmap(fun, [0, None])(A, constant(7))
-    InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(7)))
+    InfixRV(VMap(Mul(), [0, None], 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(7)))
 
     Multiple outputs are OK.
 
@@ -473,9 +473,9 @@ def vmap[*Args](
     ...     return [exp(a), log(a)]
     >>> [out1, out2] = vmap(fun)(A)
     >>> out1
-    InfixRV(VMap(Exp(), (0,), 3), InfixRV(Constant([1,2,3])))
+    InfixRV(VMap(Exp(), [0], 3), InfixRV(Constant([1,2,3])))
     >>> out2
-    InfixRV(VMap(Log(), (0,), 3), InfixRV(Constant([1,2,3])))
+    InfixRV(VMap(Log(), [0], 3), InfixRV(Constant([1,2,3])))
 
     Pytree inputs and pytree in_axes are OK
 
@@ -484,14 +484,14 @@ def vmap[*Args](
     >>> x = {'cat': A, 'dog': constant(3)}
     >>> in_axes = {'cat': 0, 'dog': None}
     >>> vmap(fun, in_axes)(x)
-    InfixRV(VMap(Mul(), (0, None), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(3)))
+    InfixRV(VMap(Mul(), [0, None], 3), InfixRV(Constant([1,2,3])), InfixRV(Constant(3)))
 
     Pytree outputs are OK
 
     >>> def fun(a, b):
     ...     return {"add": a+b, "mul": a*b}
     >>> vmap(fun)(A, B)
-    {'add': InfixRV(VMap(Add(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6]))), 'mul': InfixRV(VMap(Mul(), (0, 0), 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))}
+    {'add': InfixRV(VMap(Add(), [0, 0], 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6]))), 'mul': InfixRV(VMap(Mul(), [0, 0], 3), InfixRV(Constant([1,2,3])), InfixRV(Constant([4,5,6])))}
 
     Pytree in_axis prefixes are OK
 
@@ -510,17 +510,17 @@ def vmap[*Args](
     ----- | ---------
     (3,)  | a = [1 2 3]
     ()    | b = 7
-    (3,)  | c = vmap(mul, (0, None), 3)(a,b)
+    (3,)  | c = vmap(mul, [0, None], 3)(a,b)
     ()    | d = 8
-    (3,)  | e = vmap(add, (0, None), 3)(c,d)
+    (3,)  | e = vmap(add, [0, None], 3)(c,d)
     >>> print_upstream(out2)
     shape | statement
     ----- | ---------
     (3,)  | a = [1 2 3]
     ()    | b = 7
-    (3,)  | c = vmap(mul, (0, None), 3)(a,b)
+    (3,)  | c = vmap(mul, [0, None], 3)(a,b)
     ()    | d = 8
-    (3,)  | e = vmap(add, (0, None), 3)(c,d)
+    (3,)  | e = vmap(add, [0, None], 3)(c,d)
 
     See Also
     --------

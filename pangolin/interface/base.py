@@ -605,16 +605,16 @@ def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
     Examples
     --------
     >>> vmap_scalars_simple(ir.Exp(), (3,))
-    VMap(Exp(), (0,), 3)
+    VMap(Exp(), [0], 3)
 
     >>> vmap_scalars_simple(ir.Normal(), (3,), ())
-    VMap(Normal(), (0, None), 3)
+    VMap(Normal(), [0, None], 3)
 
     >>> vmap_scalars_simple(ir.Normal(), (3,), ())
-    VMap(Normal(), (0, None), 3)
+    VMap(Normal(), [0, None], 3)
 
     >>> vmap_scalars_simple(ir.StudentT(), (3,5), (), (3,5))
-    VMap(VMap(StudentT(), (0, None, 0), 5), (0, None, 0), 3)
+    VMap(VMap(StudentT(), [0, None, 0], 5), [0, None, 0], 3)
     """
 
     # TODO: Always return VMap
@@ -670,16 +670,16 @@ def vmap_scalars_numpy[O: Op](op: O, *parent_shapes: ir.Shape) -> O | ir.VMap:
     Examples
     --------
     >>> vmap_scalars_numpy(ir.Exp(), (3,))
-    VMap(Exp(), (0,), 3)
+    VMap(Exp(), [0], 3)
 
     >>> vmap_scalars_numpy(ir.Normal(), (3,), ())
-    VMap(Normal(), (0, None), 3)
+    VMap(Normal(), [0, None], 3)
 
     >>> vmap_scalars_numpy(ir.Normal(), (), (2,3))
-    VMap(VMap(Normal(), (None, 0), 3), (None, 0), 2)
+    VMap(VMap(Normal(), [None, 0], 3), [None, 0], 2)
 
     >>> vmap_scalars_numpy(ir.Normal(), (3,), (2,3))
-    VMap(VMap(Normal(), (0, 0), 3), (None, 0), 2)
+    VMap(VMap(Normal(), [0, 0], 3), [None, 0], 2)
     """
 
     # will raise ValueError if not broadcastable

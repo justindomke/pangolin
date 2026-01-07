@@ -1031,27 +1031,27 @@ class VMap[BaseOp: Op](Op):
     Examples
     --------
     >>> # diagonal normal
-    >>> op = VMap(Normal(), in_axes=(0, 0))
+    >>> op = VMap(Normal(), in_axes=[0, 0])
     >>> op.get_shape((5,), (5,))
     (5,)
 
     >>> # diagonal normal with shared scale
-    >>> op = VMap(Normal(), in_axes=(0, None))
+    >>> op = VMap(Normal(), in_axes=[0, None])
     >>> op.get_shape((5,), ())
     (5,)
 
     >>> # 2D diagonal normal with shared scale
-    >>> op = VMap(VMap(Normal(), in_axes=(0, None)), in_axes=(0, None))
+    >>> op = VMap(VMap(Normal(), in_axes=[0, None]), in_axes=[0, None])
     >>> op.get_shape((6,4), ())
     (6, 4)
 
     >>> # 2D diagonal normal with "outer product" of location and scale
-    >>> op = VMap(VMap(Normal(), in_axes=(None, 0)), in_axes=(0, None))
+    >>> op = VMap(VMap(Normal(), in_axes=[None, 0]), in_axes=[0, None])
     >>> op.get_shape((6,), (4,))
     (6, 4)
 
     >>> # 2D diagonal normal with "outer product" in the other order
-    >>> op = VMap(VMap(Normal(), in_axes=(0, None)), in_axes=(None, 0))
+    >>> op = VMap(VMap(Normal(), in_axes=[0, None]), in_axes=[None, 0])
     >>> op.get_shape((6,), (4,))
     (4, 6)
     """
@@ -1104,7 +1104,7 @@ class VMap[BaseOp: Op](Op):
         return (axis_size,) + dummy_shape
 
     def __repr__(self):
-        out = f"VMap({repr(self.base_op)}, {repr(self.in_axes)}"
+        out = f"VMap({repr(self.base_op)}, {repr(list(self.in_axes))}"
         if self.axis_size:
             out += f", {repr(self.axis_size)}"
         out += ")"
@@ -1122,7 +1122,7 @@ class VMap[BaseOp: Op](Op):
         #     is_leaf=util.is_leaf_with_none,
         # )
         # out = f"vmap({str(self.base_op)}, {str(new_in_axes)}"
-        out = f"vmap({str(self.base_op)}, {str(self.in_axes)}"
+        out = f"vmap({str(self.base_op)}, {str(list(self.in_axes))}"
         if self.axis_size:
             out += f", {repr(self.axis_size)}"
         out += ")"
