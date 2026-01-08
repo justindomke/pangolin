@@ -41,6 +41,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Cos: jnp.cos,
     ir.Cosh: jnp.cosh,
     ir.Exp: jnp.exp,
+    ir.Identity: lambda a: a,
     ir.InvLogit: dist.transforms.SigmoidTransform(),
     ir.Log: jnp.log,
     ir.Loggamma: jspecial.gammaln,
