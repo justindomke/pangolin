@@ -57,6 +57,7 @@ Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
 Control flow                 :func:`vmap` :func:`composite` :func:`autoregressive` :func:`autoregress`
 Indexing                     :func:`index` (or :func:`InfixRV.__getitem__` / ``[]`` operator)
+Transformations              `Transform` `transforms`
 ============================ ======
 
 Auto-casting
@@ -99,6 +100,7 @@ from .vmapping import vmap
 from .compositing import composite
 from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
 from .indexing import index
+from .transforming import Transform, transforms
 from pangolin.ir import print_upstream
 
 RVLike = RVLike  # no-op assignment so it can be documented
@@ -191,6 +193,8 @@ __all__ = [
     "Config",
     "config",
     "override",
+    "Transform",
+    "transforms",
 ]
 
 
