@@ -9,6 +9,8 @@
 
 * Add super().__init__ to all Op
 
+* Add softplus et al.
+
 # After 0.0.1
 
 * Figure out what to do about vectorized indexing.
