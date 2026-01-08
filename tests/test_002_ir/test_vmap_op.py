@@ -134,9 +134,9 @@ def test_vmap_index2():
 
 def test_repr():
     d = VMap(Normal(), (0, 0))
-    assert repr(d) == "VMap(Normal(), (0, 0))"
+    assert repr(d) == "VMap(Normal(), [0, 0])"
 
 
 def test_str():
     d = VMap(Normal(), (0, 0))
-    assert str(d) == "vmap(normal, (0, 0))"
+    assert str(d) == "vmap(normal, [0, 0])"
