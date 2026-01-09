@@ -362,6 +362,46 @@ def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLi
 log_prob_handlers[ir.VMap] = log_prob_vmap
 
 ################################################################################
+# Transformed
+################################################################################
+
+
+def sample_transformed[O: Op, B: ir.Bijector](op: ir.Transformed[O, B], key, parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Transformed)
+    assert op.random
+    assert op.base_op.random
+
+    bijector_args = tuple(parent_values[: op.n_biject_args])
+    dist_args = parent_values[op.n_biject_args :]
+
+    x = sample_op(op.base_op, key, dist_args)
+    y = eval_op(op.bijector.forward, (x,) + bijector_args)
+    return y
+
+
+sample_handlers[ir.Transformed] = sample_transformed
+
+
+def log_prob_transformed[O: Op, B: ir.Bijector](
+    op: ir.Transformed[O, B], y: ArrayLike, parent_values: Sequence[ArrayLike]
+):
+    assert isinstance(op, ir.Transformed)
+    assert op.random
+    assert op.base_op.random
+
+    bijector_args = tuple(parent_values[: op.n_biject_args])
+    dist_args = parent_values[op.n_biject_args :]
+
+    x = eval_op(op.bijector.inverse, (y,) + bijector_args)
+    log_px = log_prob_op(op.base_op, x, dist_args)
+    log_jac_det = eval_op(op.bijector.log_det_jac, (x, y) + bijector_args)
+    return log_px - log_jac_det
+
+
+log_prob_handlers[ir.Transformed] = log_prob_transformed
+
+
+################################################################################
 # Functions to do sample and/or log prob on a single node
 ################################################################################
 

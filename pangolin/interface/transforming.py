@@ -22,9 +22,11 @@ class Transform:
 
     Three functions must be provided as inputs:
 
-    1. ``y = forward(x, b1, ..., bN)`` performs the forward transformation. This takes a single `RVLike` ``x`` along with some number of `RVLike` parameters ``b1, ..., bN`` and produces a single **random** `InfixRV`` ``y`` as output. Any number of intermediate `InfixRV` can be created internally, but these must all be non-random. Must be a diffeomorphism with respect to ``x`` for any fixed values of ``b1, ..., bN``.
+    1. ``y = forward(x, b1, ..., bN)`` performs the forward transformation. This takes a single `RVLike` ``x`` along with some number of `RVLike` parameters ``b1, ..., bN`` and produces a single **random** `InfixRV` ``y`` as output. Any number of intermediate `InfixRV` can be created internally, but these must all be non-random. Must be a diffeomorphism with respect to ``x`` for any fixed values of ``b1, ..., bN``.
     2. ``x = inverse(y, b1, ..., bN)`` performs the inverse transformation, with similar properties as ``forward``. Must be an inverse in the sense that ``inverse(forward(x,*args),*args)==x``.
     3.  ``log_jac_det(x, y, b1, ..., bN)`` computes the log-determinant Jacobian ``log|det ∇forward(x,*args)| == -log|det ∇backwards(y,*args)|``. Both ``x`` and ``y`` are provided since it may be more convenient to use one rather than the other.
+
+    When a transform is called, by default it returns a wrapped function that produces only a transformed random variable (``y``). However, if the keyword-only argument ``orig`` is ``True``, then the wrapped function also returns a deterministic version of the original variable. That is, it returns ``x`` that is a deterministic function of ``y``.
 
 
     Args:
@@ -40,15 +42,23 @@ class Transform:
 
     Create an `inverse-exponential <https://en.wikipedia.org/wiki/Inverse_distribution#Inverse_exponential_distribution>`__ distributed random variable:
 
-    >>> myfun = exponential
     >>> reciprocal = Transform(lambda x: 1/x, lambda y: 1/y, lambda x, y: -2*log(abs(x)))
-    >>> print(myfun(1.5))
+    >>> print(exponential(1.5))
     exponential(1.5)
-    >>> print(reciprocal(myfun)(1.5)) # doctest: +NORMALIZE_WHITESPACE
+    >>> print(reciprocal(exponential)(1.5)) # doctest: +NORMALIZE_WHITESPACE
     transformed(exponential,
                 bijector(composite(1, [1, div], [[], [1, 0]]),
                          composite(1, [1, div], [[], [1, 0]]),
                          composite(2, [abs, log, -2, mul], [[0], [2], [], [4, 3]])))(1.5)
+
+    Create an inverse-exponential-distributed random variable. But also return a deterministic random variable where the inverse is un-done.
+
+    >>> reciprocal = Transform(lambda x: 1/x, lambda y: 1/y, lambda x, y: -2*log(abs(x)))
+    >>> y, x = reciprocal(exponential, orig=True)(1.5)
+    >>> x.op
+    Div()
+    >>> y in x.parents
+    True
 
     Create a random variable distributed like ``x*4.4`` for ``x ~ normal(3.3, 3.3)``
 
@@ -87,15 +97,15 @@ class Transform:
         self.inverse = inverse
         self.log_det_jac = log_det_jac
 
-    def __call__[O: Op](
-        self, fun: Callable[..., InfixRV[O]], *biject_args: RVLike
-    ) -> Callable[..., InfixRV[Transformed[O, Bijector]]]:
+    def __call__[O: Op](self, fun: Callable[..., InfixRV[O]], *biject_args: RVLike, orig: bool = False):
 
         biject_args = tuple(makerv(a) for a in biject_args)
         biject_arg_shapes = [a.shape for a in biject_args]
         n_biject_args = len(biject_args)
 
-        def transformed_fun(*args: RVLike) -> InfixRV[Transformed[O, Any]]:
+        def transformed_fun(
+            *args: RVLike,
+        ) -> InfixRV[Transformed[O, Bijector]] | tuple[InfixRV[Transformed[O, Bijector]], InfixRV]:
             args = tuple(makerv(a) for a in args)
             x: InfixRV[O] = fun(*args)
             bijector = make_bijector(self.forward, self.inverse, self.log_det_jac, x.shape, *biject_arg_shapes)
@@ -103,7 +113,14 @@ class Transform:
                 raise ValueError(f"Cannot transform non-random op {x.op}")
 
             transformed_op = Transformed(x.op, bijector, n_biject_args)
-            return InfixRV(transformed_op, *biject_args, *x.parents)
+
+            y = InfixRV(transformed_op, *biject_args, *x.parents)
+
+            if orig:
+                x_dependent = self.inverse(y, *biject_args)
+                return y, x_dependent
+
+            return y
 
         return transformed_fun
 
@@ -140,7 +157,7 @@ class transforms:
 
     """
 
-    exp = Transform(exp, log, lambda x, y: y + 0)
+    exp = Transform(exp, log, lambda x, y: log(y))
     """
     A `Transform` instance that applies the exp bijector ``y = exp(x)``. Commonly used to transform from reals to positive reals.
     """

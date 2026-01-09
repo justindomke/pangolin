@@ -1,11 +1,11 @@
 from .deterministic_tests import DeterministicTests
-
-# from .composite_tests import CompositeTests
 from .distribution_tests import DistributionTests
 from .composite_tests import CompositeTests
+from .transformation_tests import TransformationTests
 
 
-class BackendTests(DeterministicTests, DistributionTests, CompositeTests):
+# class BackendTests(DeterministicTests, DistributionTests, CompositeTests):
+class BackendTests(TransformationTests):
     """
     This class assumes a fixture named 'ancestor_sample_flat' will be available at runtime.
     """
