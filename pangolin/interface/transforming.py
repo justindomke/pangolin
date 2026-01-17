@@ -2,7 +2,21 @@ from . import InfixRV
 from pangolin.ir import Op, VMap, Constant, print_upstream, Bijector, Transformed
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RVLike, constant, exp, log, normal, abs, exponential, beta, uniform
+from .base import (
+    makerv,
+    create_rv,
+    RVLike,
+    constant,
+    exp,
+    log,
+    normal,
+    abs,
+    exponential,
+    beta,
+    uniform,
+    cholesky,
+    matmul,
+)
 from typing import Sequence
 from typing import Any, Self
 from jaxtyping import PyTree
@@ -297,6 +311,11 @@ class tforms:
     """
     A `Transform` instance that applies the scaled logit ``y = logit((y-a)/(a-b)``. Commonly used to transform from [a,b] to reals.
     """
+
+    # cholesky = Transform(
+    #     lambda X: cholesky(X),
+    #     lambda Y: base.matmul(Y, base.transpose(Y)),
+    # )
 
     def __init__(self):
         raise TypeError("Use tforms as a static namespace, do not instantiate.")

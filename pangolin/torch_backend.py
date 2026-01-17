@@ -97,9 +97,11 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Matmul: torch.matmul,
     ir.Inv: torch.linalg.inv,
     ir.Cholesky: torch.linalg.cholesky,
+    ir.Transpose: torch.t,
     ir.Softmax: lambda x, axis=-1: torch.nn.Softmax(dim=axis)(x),
     ir.SimpleIndex: ir.index_orthogonal_no_slices,
 }
+
 
 ################################################################################
 # Dict of Ops that correspond to simple (Numpyro) distributions

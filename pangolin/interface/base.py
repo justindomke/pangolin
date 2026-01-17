@@ -317,6 +317,10 @@ class InfixRV[O: Op](ir.RV[O]):
     def __rmatmul__(self, other):
         return matmul(other, self)
 
+    @property
+    def T(self):
+        return transpose(self)
+
     def __repr__(self):
         return "Infix" + super().__repr__()
 
@@ -939,6 +943,13 @@ def matmul(a: RVLike, b: RVLike) -> InfixRV[ir.Matmul]:
         second argument (1d or 2d array, matching shape of ``a``)
     """
     return create_rv(ir.Matmul(), a, b)
+
+
+def transpose(a: RVLike) -> InfixRV[ir.Transpose]:
+    """
+    Tranpose a matrix. Input must be a 2-D array.
+    """
+    return create_rv(ir.Transpose(), a)
 
 
 def inv(a: RVLike) -> InfixRV[ir.Inv]:

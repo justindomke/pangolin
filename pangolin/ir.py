@@ -23,7 +23,7 @@ Constants                    :class:`Constant`
 Arithmetic                   :class:`Add` :class:`Sub` :class:`Mul` :class:`Div`
 Trigonometry                 :class:`Arccos` :class:`Arccosh` :class:`Arcsin` :class:`Arcsinh` :class:`Arctan` :class:`Arctanh` :class:`Cos` :class:`Cosh` :class:`Sin` :class:`Sinh` :class:`Tan` :class:`Tanh`
 Other scalar functions       :class:`Pow` :class:`Abs` :class:`Exp` :class:`InvLogit` :class:`Log` :class:`Loggamma` :class:`Logit` :class:`Step`
-Linear algebra               :class:`Matmul` :class:`Inv` `Cholesky`
+Linear algebra               `Matmul` `Transpose` `Inv` `Cholesky`
 Other multivariate functions :class:`Sum` :class:`Softmax`
 Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognormal` :class:`Cauchy` :class:`Bernoulli` :class:`BernoulliLogit` :class:`Beta` :class:`Binomial` :class:`Categorical` :class:`Uniform` :class:`BetaBinomial` :class:`Exponential` :class:`Gamma` :class:`Poisson` :class:`StudentT`
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
@@ -707,6 +707,29 @@ class Cholesky(Op):
         if p_shape[0] != p_shape[1]:
             raise ValueError("cholesky only for square arrays")
         return p_shape
+
+
+class Transpose(Op):
+    """
+    Take a transpose.
+
+    Unlike in many libraries this *only* works for 2D arrays, rather than reversing all dimensions. The logic is that 99% of the time, calling transpose on a 1D array and getting the original array (like in NumPy / JAX / Pytorch) is a bug. And calling transpose on a 4d array and reversing the dimensions is almost never useful. So, 2D transpose only!
+    """
+
+    _random = False
+
+    def _get_shape(self, p_shape: Shape) -> Shape:
+        """
+        Args:
+            p_shape: A 2D shape
+
+        Returns
+            ``p_shape``, except reversed
+        """
+
+        if len(p_shape) != 2:
+            raise ValueError("transpose only applies to 2d arrays")
+        return (p_shape[1], p_shape[0])
 
 
 ################################################################################

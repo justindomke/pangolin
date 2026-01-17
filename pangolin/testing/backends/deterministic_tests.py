@@ -19,6 +19,8 @@ def rands_from_ranges(ranges):
             new = np.random.randn(dims)
         elif domain == "matrix":
             new = np.random.randn(dims, dims)
+        elif domain == "rectangular-matrix":
+            new = np.random.randn(dims, dims + 2)
         elif domain == "positive-definite":
             factor = np.random.randn(dims, dims)
             new = factor @ factor.T
@@ -59,6 +61,7 @@ testdata = [
     (Matmul, np.dot, ["matrix", "matrix"]),
     (Inv, np.linalg.inv, ["matrix"]),
     (Cholesky, np.linalg.cholesky, ["positive-definite"]),
+    (Transpose, np.transpose, ["rectangular-matrix"]),
     (Identity, lambda a: a, ["real"]),
 ]
 
