@@ -380,10 +380,7 @@ def scan(
         if isinstance(ys_list[0], torch.Tensor):
             ys = torch.stack(ys_list, dim=0)
         elif isinstance(ys_list[0], tuple):
-            ys = tuple(
-                torch.stack([y[i] for y in ys_list], dim=0)
-                for i in range(len(ys_list[0]))
-            )
+            ys = tuple(torch.stack([y[i] for y in ys_list], dim=0) for i in range(len(ys_list[0])))
         else:
             ys = ys_list
     else:
@@ -392,21 +389,15 @@ def scan(
     return carry, ys
 
 
-def handle_autoregressive_inputs(
-    op: ir.Autoregressive, *numpyro_parents
-) -> tuple[tuple[torch.Tensor, ...], Callable]:
+def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents) -> tuple[tuple[torch.Tensor, ...], Callable]:
     for in_axis in op.in_axes:
         assert in_axis in [
             0,
             None,
         ], "Torch only supports Autoregressive with in_axis of 0 or None"
 
-    mapped_parents = tuple(
-        p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0
-    )
-    unmapped_parents = tuple(
-        p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis is None
-    )
+    mapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0)
+    unmapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis is None)
 
     def merge_args(mapped_args):
         ret = []
@@ -451,9 +442,7 @@ eval_handlers[ir.Autoregressive] = eval_autoregressive
 
 
 # TODO: This should be parallel!
-def log_prob_autoregressive(
-    op: ir.Autoregressive, value: ArrayLike, parent_values: Sequence[ArrayLike]
-):
+def log_prob_autoregressive(op: ir.Autoregressive, value: ArrayLike, parent_values: Sequence[ArrayLike]):
     assert isinstance(op, ir.Autoregressive)
     assert op.random
 
@@ -523,9 +512,7 @@ def my_vmap(fun, in_dims, axis_size):
         my_in_dims = (0,) + in_dims
 
         def evaluator(*args):
-            return torch.vmap(dummy_fun, my_in_dims, randomness="different")(
-                dummy, *args
-            )
+            return torch.vmap(dummy_fun, my_in_dims, randomness="different")(dummy, *args)
 
         return evaluator
 
@@ -580,14 +567,49 @@ def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLi
     in_axes = (0,) + op.in_axes
     axis_size = op.axis_size
 
-    return torch.sum(
-        my_vmap(base_log_prob, in_dims=in_axes, axis_size=axis_size)(
-            value, *parent_values
-        )
-    )
+    return torch.sum(my_vmap(base_log_prob, in_dims=in_axes, axis_size=axis_size)(value, *parent_values))
 
 
 log_prob_handlers[ir.VMap] = log_prob_vmap
+
+################################################################################
+# Transformed
+################################################################################
+
+
+def sample_transformed[O: Op, B: ir.Bijector](op: ir.Transformed[O, B], parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Transformed)
+    assert op.random
+    assert op.base_op.random
+
+    bijector_args = tuple(parent_values[: op.n_biject_args])
+    dist_args = parent_values[op.n_biject_args :]
+
+    x = sample_op(op.base_op, dist_args)
+    y = eval_op(op.bijector.forward, (x,) + bijector_args)
+    return y
+
+
+sample_handlers[ir.Transformed] = sample_transformed
+
+
+def log_prob_transformed[O: Op, B: ir.Bijector](
+    op: ir.Transformed[O, B], y: ArrayLike, parent_values: Sequence[ArrayLike]
+):
+    assert isinstance(op, ir.Transformed)
+    assert op.random
+    assert op.base_op.random
+
+    bijector_args = tuple(parent_values[: op.n_biject_args])
+    dist_args = parent_values[op.n_biject_args :]
+
+    x = eval_op(op.bijector.inverse, (y,) + bijector_args)
+    log_px = log_prob_op(op.base_op, x, dist_args)
+    log_jac_det = eval_op(op.bijector.log_det_jac, (x, y) + bijector_args)
+    return log_px - log_jac_det
+
+
+log_prob_handlers[ir.Transformed] = log_prob_transformed
 
 ################################################################################
 # Functions to do sample and/or log prob on a single node
@@ -646,9 +668,7 @@ def log_prob_op(
     op_class = type(op)
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     if shape(value) != expected_shape:
-        raise ValueError(
-            f"shape(value) {shape(value)} not {expected_shape} as expected"
-        )
+        raise ValueError(f"shape(value) {shape(value)} not {expected_shape} as expected")
     return log_prob_handlers[op_class](op, value, parent_values)
 
 
@@ -692,7 +712,7 @@ def ancestor_sample_flat(vars: list[RV], size: Optional[int] = None):
     else:
         mysample = lambda dummy: ancestor_sample_flat_single(vars)
         dummy = torch.zeros(size)
-        #return torch.vmap(mysample, randomness="different")(dummy)
+        # return torch.vmap(mysample, randomness="different")(dummy)
         return my_vmap(mysample, in_dims=(0,), axis_size=size)(dummy)
 
 
@@ -707,9 +727,7 @@ def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike]):
             l += log_prob_op(var.op, value, parent_values)
         else:
             if var in vars:
-                raise ValueError(
-                    "Can't provide value for non-random variable in ancestor_log_prob_flat"
-                )
+                raise ValueError("Can't provide value for non-random variable in ancestor_log_prob_flat")
             out = eval_op(var.op, parent_values)
             all_values[var] = out
     return l
@@ -834,9 +852,7 @@ def flatten_args_torch(
         - unflatten_given (Callable): A function to reconstruct the `given_vars_pytree` structure.
     """
 
-    given_vals_pytree = assimilate_vals_pytorch(
-        given_vars_pytree, given_vals_pytree
-    )  # casts lists and such to tensor
+    given_vals_pytree = assimilate_vals_pytorch(given_vars_pytree, given_vals_pytree)  # casts lists and such to tensor
 
     flat_vars, vars_treespec = tree_flatten(vars_pytree)
     flat_given_vars, given_vars_treespec = tree_flatten(given_vars_pytree)
@@ -851,9 +867,7 @@ def flatten_args_torch(
 
     # Create simple lambda functions to capture the treespecs for unflattening.
     unflatten_vars = lambda flat_leaves: tree_unflatten(flat_leaves, vars_treespec)
-    unflatten_given = lambda flat_leaves: tree_unflatten(
-        flat_leaves, given_vars_treespec
-    )
+    unflatten_given = lambda flat_leaves: tree_unflatten(flat_leaves, given_vars_treespec)
 
     return flat_vars, flat_given_vars, flat_given_vals, unflatten_vars, unflatten_given
 

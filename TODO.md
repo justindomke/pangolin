@@ -13,6 +13,8 @@
 
 # After 0.0.1
 
+* Use __slots__ on RV / Op
+
 * Figure out what to do about vectorized indexing.
   * Maybe allow special slices? Maybe do something else?
 
