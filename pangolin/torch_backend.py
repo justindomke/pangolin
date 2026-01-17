@@ -1,20 +1,31 @@
 """
-This is an **experimental** sub-module to compile pangolin models into
-plain-old pytorch functions.
+This is an **experimental** sub-module to compile pangolin models into plain-old pytorch functions.
 
-This backend currently has some limitation in it's support for *sampling* from ``Beta``, ``BetaBinomial``, ``Exponential``, ``StudentT``, ``Dirichlet``, ``Multinomial``, ``Wishart``, and ``MultiNormal`` distributions. This is due to some basic ~~bugs~~ limitations in PyTorch's distribution implementation. For example, you often cannot sample inside a vmap. While
+This backend has some limitations in its support for certain distributions, as shown in the following table:
+
+============================ ======== ================ ========= =================
+Op                           sampling vmapped sampling log probs vmapped log probs
+============================ ======== ================ ========= =================
+``Beta``                     Yes      No               Yes       Yes
+``StudentT``                 Yes      No               Yes       Yes
+``Dirichlet``                Yes      No               Yes       Yes
+``Multinomial``              Yes      No               Yes       Yes
+``Wishart``                  Yes      No               Yes       Yes
+``MultiNormal``              Yes      No               Yes       Yes
+``BetaBinomial``             No       No               No        No
+============================ ======== ================ ========= =================
+
+(Everything else is fully supported.)
+
+For ``BetaBinomial`` this is due to torch lacking a beta-binomial distribution. For ``Beta``, ``StudentT``, ``Dirichlet``, ``Multinomial``, ``Wishart``, and ``MultiNormal``, this limitation is due to some basic ~~bugs~~ limitations in PyTorch's distribution implementation. In pure PyTorch code, this works fine:
 
 ``torch.vmap(lambda dummy: torch.distributions.Normal(0,1).sample(), randomness='different')(torch.zeros(2))``
 
-works fine (and so ``Normal`` is supported), the similar call
+(and so ``Normal`` is supported), yet the analogous call
 
 ``torch.vmap(lambda dummy: torch.distributions.Exponential(2.0).rsample(), randomness='different')(torch.zeros(2))``
 
-raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.``
-
-Log-probability calculations work fine for all those distributions.
-
-This backend has very limited support for ``Multinomial`` and no support for ``BetaBinomial``.
+raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.`` (Bizarrely, ``Exponential`` has the same problem, but ``Gamma`` does not, so this backend just creates a ``Gamma`` when an ``Exponential`` is needed.) Log-probability calculations work fine for all those distributions!
 
 **Note**: Because pytorch is large and sometimes annoying to install, and many users
 will not use this functionality, pangolin does not install pytorch as a requirement by
@@ -23,8 +34,8 @@ default. This might lead you to get this error:
 ``ImportError: Using torch backend requires torch to be installed``
 
 To fix this, either install pangolin with the pytorch requirements
-(e.g. with ``uv sync --extra torch``) or manually install pytorch and funtorch yourself
-(e.g. with ``pip install torch funtorch`` or ``uv pip install torch funtorch``).
+(e.g. with ``uv sync --extra torch``) or manually install pytorch yourself
+(e.g. with ``pip install torch`` or ``uv pip install torch``).
 """
 
 from __future__ import annotations
@@ -44,7 +55,6 @@ from jaxtyping import PyTree
 try:
     import torch
     import torch.distributions as dist
-    import torch.nn.functional as F
 except ImportError:
     raise ImportError("Using torch backend requires torch to be installed")
 
@@ -84,7 +94,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Tanh: torch.tanh,
     ir.Matmul: torch.matmul,
     ir.Inv: torch.linalg.inv,
-    ir.Softmax: lambda x, axis=-1: F.softmax(x, dim=axis),
+    ir.Softmax: lambda x, axis=-1: torch.nn.Softmax(dim=axis)(x),
     ir.SimpleIndex: ir.index_orthogonal_no_slices,
 }
 
@@ -119,7 +129,7 @@ simple_dists: dict[Type[Op], Callable] = {
     ir.Binomial: wrap(dist.Binomial),
     ir.Categorical: wrap(dist.Categorical),
     ir.Cauchy: wrap(dist.Cauchy),
-    ir.Exponential: wrap(dist.Exponential),
+    ir.Exponential: lambda scale: wrap(dist.Gamma)(1, scale),  # dist.exponential doesn't support vmap
     ir.Dirichlet: wrap(dist.Dirichlet),
     ir.Gamma: wrap(dist.Gamma),
     ir.Lognormal: wrap(dist.LogNormal),
