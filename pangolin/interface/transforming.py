@@ -16,6 +16,7 @@ from .base import (
     uniform,
     cholesky,
     matmul,
+    diag,
 )
 from typing import Sequence
 from typing import Any, Self
@@ -316,17 +317,14 @@ class tforms:
         # X is original matrix
         # Y is cholesky factor
         k = Y.shape[0]
-        diag_indices = constant(range(k))
-        # Powers correspond to (k, k-1, ..., 1)
-        powers = k - diag_indices
+        powers = constant(range(k, 0, -1))
+        return -k * log(2) - matmul(powers, log(diag(Y)))
 
-        # log_det_jac = k * log(2) + matmul(powers, log(diag(Y)))
-
-    # cholesky = Transform(
-    #     lambda X: cholesky(X),
-    #     lambda Y: base.matmul(Y, base.transpose(Y)),
-
-    # )
+    cholesky = Transform(
+        lambda X: cholesky(X),
+        lambda Y: base.matmul(Y, base.transpose(Y)),
+        _cholesky_log_det_jac,
+    )
 
     def __init__(self):
         raise TypeError("Use tforms as a static namespace, do not instantiate.")
