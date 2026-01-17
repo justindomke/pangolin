@@ -12,7 +12,6 @@ class TestTorch(BackendTests):
     _ops_without_sampling_support = {
         ir.Beta,
         ir.BetaBinomial,
-        ir.Exponential,
         ir.StudentT,
         ir.Dirichlet,
         ir.Multinomial,
