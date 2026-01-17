@@ -36,7 +36,7 @@ docs = [
 ]
 
 [project.optional-dependencies]
-torch = ["torch","funtorch"]
+torch = ["torch"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests","pangolin"]
