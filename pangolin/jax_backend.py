@@ -53,6 +53,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Tanh: jnp.tanh,
     ir.Matmul: jnp.matmul,
     ir.Inv: jnp.linalg.inv,
+    ir.Cholesky: jnp.linalg.cholesky,
     ir.Softmax: jnn.softmax,
     ir.SimpleIndex: ir.index_orthogonal_no_slices,
 }

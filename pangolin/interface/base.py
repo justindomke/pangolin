@@ -948,6 +948,13 @@ def inv(a: RVLike) -> InfixRV[ir.Inv]:
     return create_rv(ir.Inv(), a)
 
 
+def cholesky(a: RVLike) -> InfixRV[ir.Cholesky]:
+    """
+    Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
+    """
+    return create_rv(ir.Cholesky(), a)
+
+
 def softmax(a: RVLike) -> InfixRV[ir.Softmax]:
     """
     Take `softmax <https://en.wikipedia.org/wiki/Softmax_function>`_ function.

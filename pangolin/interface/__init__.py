@@ -51,7 +51,7 @@ Constants                    :func:`constant`
 Arithmetic                   :func:`add` :func:`sub` :func:`mul` :func:`div` (or infix ``+``, ``-``, ``*``, ``/``)
 Trigonometry                 :func:`arccos` :func:`arccosh` :func:`arcsin` :func:`arcsinh` :func:`arctan` :func:`arctanh` :func:`cos` :func:`cosh` :func:`sin` :func:`sinh` :func:`tan` :func:`tanh`
 Other scalar functions       :func:`pow` (or infix ``**``) :func:`sqrt` :func:`abs` :func:`exp` :func:`inv_logit` :func:`expit` :func:`sigmoid` :func:`log` :func:`loggamma` :func:`logit` :func:`step`
-Linear algebra               :func:`matmul` (or infix ``@``) :func:`inv`
+Linear algebra               :func:`matmul` (or infix ``@``) :func:`inv` `cholesky`
 Other multivariate functions :func:`sum` :func:`softmax`
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
@@ -180,6 +180,7 @@ __all__ = [
     "wishart",
     "matmul",
     "inv",
+    "cholesky",
     "softmax",
     "sum",
     "base",

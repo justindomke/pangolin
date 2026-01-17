@@ -23,7 +23,7 @@ Constants                    :class:`Constant`
 Arithmetic                   :class:`Add` :class:`Sub` :class:`Mul` :class:`Div`
 Trigonometry                 :class:`Arccos` :class:`Arccosh` :class:`Arcsin` :class:`Arcsinh` :class:`Arctan` :class:`Arctanh` :class:`Cos` :class:`Cosh` :class:`Sin` :class:`Sinh` :class:`Tan` :class:`Tanh`
 Other scalar functions       :class:`Pow` :class:`Abs` :class:`Exp` :class:`InvLogit` :class:`Log` :class:`Loggamma` :class:`Logit` :class:`Step`
-Linear algebra               :class:`Matmul` :class:`Inv`
+Linear algebra               :class:`Matmul` :class:`Inv` `Cholesky`
 Other multivariate functions :class:`Sum` :class:`Softmax`
 Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognormal` :class:`Cauchy` :class:`Bernoulli` :class:`BernoulliLogit` :class:`Beta` :class:`Binomial` :class:`Categorical` :class:`Uniform` :class:`BetaBinomial` :class:`Exponential` :class:`Gamma` :class:`Poisson` :class:`StudentT`
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
@@ -683,6 +683,29 @@ class Inv(Op):
             raise ValueError("inverse only applies to 2d arrays")
         if p_shape[0] != p_shape[1]:
             raise ValueError("inverse only for square arrays")
+        return p_shape
+
+
+class Cholesky(Op):
+    """
+    Do a cholesky decomposition
+    """
+
+    _random = False
+
+    def _get_shape(self, p_shape: Shape) -> Shape:
+        """
+        Args:
+            p_shape: A square 2D shape
+
+        Returns
+            Same as ``p_shape``
+        """
+
+        if len(p_shape) != 2:
+            raise ValueError("cholesky only applies to 2d arrays")
+        if p_shape[0] != p_shape[1]:
+            raise ValueError("cholesky only for square arrays")
         return p_shape
 
 

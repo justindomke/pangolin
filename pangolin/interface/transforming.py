@@ -238,7 +238,7 @@ def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *bijec
 
 class tforms:
     """
-    A namespace containing a bunch of pre-baked `Transform` instances for common transforms.
+    A namespace containing a bunch of pre-baked `Transform` instances for common transforms of distributions.
 
     Examples
     --------
