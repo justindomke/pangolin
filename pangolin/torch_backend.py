@@ -1,32 +1,6 @@
 """
 This is an **experimental** sub-module to compile pangolin models into plain-old pytorch functions.
 
-This backend has some limitations in its support for certain distributions, as shown in the following table:
-
-============================ ======== ================ ========= =================
-Op                           sampling vmapped sampling log probs vmapped log probs
-============================ ======== ================ ========= =================
-``Beta``                     Yes      No               Yes       Yes
-``StudentT``                 Yes      No               Yes       Yes
-``Dirichlet``                Yes      No               Yes       Yes
-``Multinomial``              Yes      No               Yes       Yes
-``Wishart``                  Yes      No               Yes       Yes
-``MultiNormal``              Yes      No               Yes       Yes
-``BetaBinomial``             No       No               No        No
-============================ ======== ================ ========= =================
-
-(Everything else is fully supported.)
-
-For ``BetaBinomial`` this is due to torch lacking a beta-binomial distribution. For ``Beta``, ``StudentT``, ``Dirichlet``, ``Multinomial``, ``Wishart``, and ``MultiNormal``, this limitation is due to some basic ~~bugs~~ limitations in PyTorch's distribution implementation. In pure PyTorch code, this works fine:
-
-``torch.vmap(lambda dummy: torch.distributions.Normal(0,1).sample(), randomness='different')(torch.zeros(2))``
-
-(and so ``Normal`` is supported), yet the analogous call
-
-``torch.vmap(lambda dummy: torch.distributions.Exponential(2.0).rsample(), randomness='different')(torch.zeros(2))``
-
-raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.`` (Bizarrely, ``Exponential`` has the same problem, but ``Gamma`` does not, so this backend just creates a ``Gamma`` when an ``Exponential`` is needed.) Log-probability calculations work fine for all those distributions!
-
 **Note**: Because pytorch is large and sometimes annoying to install, and many users
 will not use this functionality, pangolin does not install pytorch as a requirement by
 default. This might lead you to get this error:
@@ -36,6 +10,33 @@ default. This might lead you to get this error:
 To fix this, either install pangolin with the pytorch requirements
 (e.g. with ``uv sync --extra torch``) or manually install pytorch yourself
 (e.g. with ``pip install torch`` or ``uv pip install torch``).
+
+**Also note**: This backend has some limitations in its support for certain distributions, as shown in the following table:
+
+============================ ======== ================ ========= =================
+Op                           sampling vmapped sampling log probs vmapped log probs
+============================ ======== ================ ========= =================
+``Beta``                     ✔        ❌               ✔         ✔
+``StudentT``                 ✔        ❌               ✔         ✔
+``Dirichlet``                ✔        ❌               ✔         ✔
+``Multinomial``              ✔        ❌               ✔         ✔
+``Wishart``                  ✔        ❌               ✔         ✔
+``MultiNormal``              ✔        ❌               ✔         ✔
+``BetaBinomial``             ❌       ❌               ❌        ❌
+============================ ======== ================ ========= =================
+
+Everything else is fully supported.
+
+For ``BetaBinomial`` this is due to torch lacking a beta-binomial distribution. For the others, this is due to some basic ~~bugs~~ limitations in PyTorch. Namely, in PyTorch, this works fine:
+
+``torch.vmap(lambda dummy: torch.distributions.Normal(0,1).sample(), randomness='different')(torch.zeros(2))``
+
+And this *should* work fine:
+
+``torch.vmap(lambda dummy: torch.distributions.Exponential(2.0).rsample(), randomness='different')(torch.zeros(2))``
+
+But the latter raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.`` (Said issue is `here <https://github.com/pytorch/functorch/issues/996>`_ .) Bizarrely, ``Gamma`` does not have this issue, so this backend just creates a ``Gamma`` when an ``Exponential`` is needed.
+
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Cos: torch.cos,
     ir.Cosh: torch.cosh,
     ir.Exp: torch.exp,
+    ir.Identity: lambda a: a,
     ir.InvLogit: torch.sigmoid,
     ir.Log: torch.log,
     ir.Loggamma: torch.lgamma,
