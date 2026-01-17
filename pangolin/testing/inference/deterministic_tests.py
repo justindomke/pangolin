@@ -63,6 +63,7 @@ testdata = [
     (Cholesky, np.linalg.cholesky, ["positive-definite"]),
     (Transpose, np.transpose, ["rectangular-matrix"]),
     (Identity, lambda a: a, ["real"]),
+    (Diag, np.diag, ["matrix"]),
 ]
 
 

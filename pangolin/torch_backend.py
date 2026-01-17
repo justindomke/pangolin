@@ -98,6 +98,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Inv: torch.linalg.inv,
     ir.Cholesky: torch.linalg.cholesky,
     ir.Transpose: torch.t,
+    ir.Diag: torch.diag,
     ir.Softmax: lambda x, axis=-1: torch.nn.Softmax(dim=axis)(x),
     ir.SimpleIndex: ir.index_orthogonal_no_slices,
 }

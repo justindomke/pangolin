@@ -312,9 +312,20 @@ class tforms:
     A `Transform` instance that applies the scaled logit ``y = logit((y-a)/(a-b)``. Commonly used to transform from [a,b] to reals.
     """
 
+    def _cholesky_log_det_jac(X, Y):
+        # X is original matrix
+        # Y is cholesky factor
+        k = Y.shape[0]
+        diag_indices = constant(range(k))
+        # Powers correspond to (k, k-1, ..., 1)
+        powers = k - diag_indices
+
+        # log_det_jac = k * log(2) + matmul(powers, log(diag(Y)))
+
     # cholesky = Transform(
     #     lambda X: cholesky(X),
     #     lambda Y: base.matmul(Y, base.transpose(Y)),
+
     # )
 
     def __init__(self):

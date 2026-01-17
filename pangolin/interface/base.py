@@ -952,6 +952,13 @@ def transpose(a: RVLike) -> InfixRV[ir.Transpose]:
     return create_rv(ir.Transpose(), a)
 
 
+def diag(a: RVLike) -> InfixRV[ir.Diag]:
+    """
+    Get the diagonal of a matrix. Input must be a 2-D square array. Does not construct diagonal matrices.
+    """
+    return create_rv(ir.Diag(), a)
+
+
 def inv(a: RVLike) -> InfixRV[ir.Inv]:
     """
     Take the inverse of a matrix. Input must be a 2-D square (invertible) array.
