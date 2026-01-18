@@ -17,8 +17,10 @@ from .base import (
     cholesky,
     matmul,
     diag,
+    diag_matrix,
     config,
     override,
+    sum,
 )
 from .indexing import vector_index
 from typing import Sequence
@@ -28,20 +30,6 @@ from .compositing import make_composite, generated_nodes, Composite
 from .vmapping import AbstractOp
 from . import base
 from .util import fill_tril, extract_tril
-
-"""
-x = dist(p1, p2)
-y = tform.forward(x, b1, b2)
-
-yields RVs with distribution as
-
-y = tform(dist, b1, b2)(p1, p2)
-x = tform.inverse(y, b1, b2)
-
-Or, if you want to them in one step:
-
-y, x = tform.apply_and_invert(y, b1, b2)
-"""
 
 
 Shape = ir.Shape
@@ -138,10 +126,12 @@ class Transform:
         forward: Callable[..., InfixRV],
         inverse: Callable[..., InfixRV],
         log_det_jac: Callable[..., InfixRV],
+        n_biject_args: int = 0,
     ):
         self.forward = forward
         self.inverse = inverse
         self.log_det_jac = log_det_jac
+        self.n_biject_args = n_biject_args
 
     def apply_and_invert[O: Op](self, fun: Callable[..., InfixRV[O]], *biject_args: RVLike):
         """
@@ -155,7 +145,8 @@ class Transform:
 
         biject_args = tuple(makerv(a) for a in biject_args)
         biject_arg_shapes = [a.shape for a in biject_args]
-        n_biject_args = len(biject_args)
+        if len(biject_args) != self.n_biject_args:
+            raise ValueError(f"{len(biject_args)=} does not match {self.n_biject_args=}")
 
         def transformed_fun(*args: RVLike) -> tuple[InfixRV[Transformed[O, Bijector]], InfixRV]:
             args = tuple(makerv(a) for a in args)
@@ -164,7 +155,7 @@ class Transform:
             if not x.op.random:
                 raise ValueError(f"Cannot transform non-random op {x.op}")
 
-            transformed_op = Transformed(x.op, bijector, n_biject_args)
+            transformed_op = Transformed(x.op, bijector, self.n_biject_args)
             y = InfixRV(transformed_op, *biject_args, *x.parents)
             x = self.inverse(y, *biject_args)
             return y, x
@@ -256,8 +247,132 @@ def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *bijec
 
 
 ########################################################################################
+# Composing transforms
+########################################################################################
+
+
+def compose_transforms(transforms: Sequence[Transform], log_det_direction: str = "forward") -> Transform:
+    """
+    Composes a sequence of Transform objects into a single Transform.
+
+    The resulting Transform applies ``y = Tn(...T2(T1(x))...)``.yield
+
+    If the individual transforms have arguments, these are in linear order. E.g. if you have ``T1(x,a)`` and ``T2(y,b)`` then ``compose_transforms([T1,T2])(x,a,b)`` applies ``z = T2(T1(x,a),b)``.
+
+    Args:
+        transforms: Sequence of `Transform` objects
+        log_det_direction: Should the new ``log_det_jac`` function loop through the transforms in forward or inverse order?
+
+    Returns:
+        Composite `Transform` object.
+    """
+
+    import builtins
+
+    total_biject_args = builtins.sum(t.n_biject_args for t in transforms)
+
+    def check_args(*args):
+        if len(args) != total_biject_args:
+            raise TypeError(f"Expected {total_biject_args} args, got {len(args)}")
+
+    def composed_forward(x, *args):
+        check_args(*args)
+
+        current_x = x
+        arg_idx = 0
+        for t in transforms:
+            n = t.n_biject_args
+            t_args = args[arg_idx : arg_idx + n]
+            current_x = t.forward(current_x, *t_args)
+            arg_idx += n
+        return current_x
+
+    def composed_inverse(y, *args):
+        check_args(*args)
+
+        current_y = y
+        arg_idx = total_biject_args
+        for t in reversed(transforms):
+            n = t.n_biject_args
+            t_args = args[arg_idx - n : arg_idx]
+            current_y = t.inverse(current_y, *t_args)
+            arg_idx -= n
+        return current_y
+
+    def _log_det_forward(x, y, *args):
+        """Iterates Forward (T1 -> Tn). Relies on x."""
+        check_args(*args)
+
+        log_det_sum = constant(0.0)
+        current_x = x
+        arg_idx = 0
+        for t in transforms:
+            n = t.n_biject_args
+            t_args = args[arg_idx : arg_idx + n]
+            next_x = t.forward(current_x, *t_args)
+            log_det_sum += t.log_det_jac(current_x, next_x, *t_args)
+            current_x = next_x
+            arg_idx += n
+
+        return log_det_sum
+
+    def _log_det_inverse(x, y, *args):
+        """Iterates Backward (Tn -> T1). Relies on y."""
+        check_args(*args)
+
+        log_det_sum = constant(0.0)
+        current_y = y
+        arg_idx = total_biject_args
+        for t in reversed(transforms):
+            n = t.n_biject_args
+            t_args = args[arg_idx - n : arg_idx]
+            previous_x = t.inverse(current_y, *t_args)
+            log_det_sum += t.log_det_jac(previous_x, current_y, *t_args)
+            current_y = previous_x
+            arg_idx -= n
+        return log_det_sum
+
+    if log_det_direction == "forward":
+        composed_log_det_jac = _log_det_forward
+    elif log_det_direction == "inverse":
+        composed_log_det_jac = _log_det_inverse
+    else:
+        raise ValueError("log_det_direction must be 'forward' or 'inverse'")
+
+    return Transform(composed_forward, composed_inverse, composed_log_det_jac, total_biject_args)
+
+
+########################################################################################
 # Library of specific transforms
 ########################################################################################
+
+
+def _cholesky_log_det_jac(X, Y):
+    # X is original matrix
+    # Y is cholesky factor
+    k = Y.shape[0]
+    powers = constant(range(k, 0, -1))
+    return -k * log(2) - matmul(powers, log(diag(Y)))
+
+
+def _exp_diagonal(X: RVLike):
+    X = makerv(X)
+    x = diag(X)
+    with override(broadcasting="simple"):
+        return X + diag_matrix(exp(x) - x)
+
+
+def _log_diagonal(X: RVLike):
+    X = makerv(X)
+    x = diag(X)
+    with override(broadcasting="simple"):
+        return X + diag_matrix(log(x) - x)
+
+
+def _exp_diagonal_log_det_jac(X: RVLike, Y: RVLike):
+    X = makerv(X)
+    x = diag(X)
+    return sum(x, axis=0)
 
 
 class tforms:
@@ -310,17 +425,11 @@ class tforms:
         lambda x, a, b: base.logit((x - a) / (a - b)),
         lambda y, a, b: a + (b - a) * base.inv_logit(y),
         lambda x, y, a, b: base.log(x - a) + base.log(b - x) - base.log(b - a),  # should use softplus
+        n_biject_args=2,
     )
     """
     A `Transform` instance that applies the scaled logit ``y = logit((y-a)/(a-b)``. Commonly used to transform from [a,b] to reals.
     """
-
-    def _cholesky_log_det_jac(X, Y):
-        # X is original matrix
-        # Y is cholesky factor
-        k = Y.shape[0]
-        powers = constant(range(k, 0, -1))
-        return -k * log(2) - matmul(powers, log(diag(Y)))
 
     cholesky = Transform(
         lambda X: cholesky(X),
@@ -339,6 +448,21 @@ class tforms:
     extract_tril = fill_tril.reverse
     """
     A `Transform` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
+    """
+
+    exp_diagonal = Transform(_exp_diagonal, _log_diagonal, _exp_diagonal_log_det_jac)
+    """
+    A `Transform` instance that exponentiates the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+    """
+
+    log_diagonal = exp_diagonal.reverse
+    """
+    A `Transform` instance that takes the logarithm of the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+    """
+
+    unconstrain_spd = compose_transforms([cholesky, log_diagonal, extract_tril])
+    """
+    A `Transform` instance that transforms a symmetric positive definite into the space of unconstrained reals. Accomplished by (1) taking a Cholesky decomposition (2) taking the logarithm of the diagonal (3) extracting the lower-triangular entries.
     """
 
     def __init__(self):

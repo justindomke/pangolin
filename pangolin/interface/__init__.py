@@ -57,7 +57,7 @@ Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
 Control flow                 :func:`vmap` :func:`composite` :func:`autoregressive` :func:`autoregress`
 Indexing                     :func:`index` (or ``rv.[...]``)
-Transformed densities        `Transform` `tforms`
+Transformed densities        `Transform` `tforms` `compose_transforms`
 ============================ ======
 
 Auto-casting
@@ -100,7 +100,7 @@ from .vmapping import vmap
 from .compositing import composite
 from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
 from .indexing import index
-from .transforming import Transform, tforms
+from .transforming import Transform, tforms, compose_transforms
 from .util import fill_tril, extract_tril
 from pangolin.ir import print_upstream
 
@@ -202,6 +202,7 @@ __all__ = [
     "override",
     "Transform",
     "tforms",
+    "compose_transforms",
 ]
 
 # from . import base

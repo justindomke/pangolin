@@ -5,6 +5,7 @@ from .composite_tests import CompositeTests
 from .autoregressive_tests import AutoregressiveTests
 from .vmap_tests import VmapTests
 from .complex_tests import ComplexTests
+from .transformation_tests import TransformationTests
 from .base import MixinBase
 from typing import Callable
 
@@ -17,6 +18,7 @@ class InferenceTests(
     AutoregressiveTests,
     VmapTests,
     ComplexTests,
+    TransformationTests,
 ):
     """
     Module is abstract, to use should define a subclass with ``_sample_flat`` and with a class name starting with "Test"
