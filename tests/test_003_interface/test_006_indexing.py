@@ -175,13 +175,13 @@ def test_scalar_indexing_no_broadcasting():
     with override(broadcasting="off"):
         for y in vector_index(x, 3, 4, 5), x.s[3, 4, 5]:
             assert y.shape == ()
-            assert y.op == ir.VectorIndex()
+            assert y.op == ir.Index()
             assert y.parents[0] == x
             assert y.parent_ops == expected_parent_ops
 
         for y in [vector_index(data, 3, 4, 5)]:
             assert y.shape == ()
-            assert y.op == ir.VectorIndex()
+            assert y.op == ir.Index()
             assert y.parent_ops == expected_parent_ops
 
         a = constant(3)
@@ -189,7 +189,7 @@ def test_scalar_indexing_no_broadcasting():
         c = constant(5)
         for y in vector_index(x, a, b, c), x.s[a, b, c]:
             assert y.shape == ()
-            assert y.op == ir.VectorIndex()
+            assert y.op == ir.Index()
             assert y.parents == (x, a, b, c)
             assert y.parent_ops == expected_parent_ops
 
@@ -221,13 +221,13 @@ def test_scalar_indexing_simple_broadcasting():
     with override(broadcasting="simple"):
         y = vector_index(x, 1, 2, 3)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parents[0] == x
         assert y.parent_ops == expected_parent_ops
 
         y = vector_index(data, 1, 2, 3)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parent_ops == expected_parent_ops
 
         a = constant(1)
@@ -235,7 +235,7 @@ def test_scalar_indexing_simple_broadcasting():
         c = constant(3)
         y = vector_index(x, a, b, c)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parents == (x, a, b, c)
         assert y.parent_ops == expected_parent_ops
 
@@ -250,27 +250,27 @@ def test_scalar_indexing_simple_broadcasting():
         C = constant([3, 4])
         y = vector_index(x, A, B, C)
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, 0), 2)
         assert y.parents == (x, A, B, C)
 
         y = vector_index(x, [1, 2], [2, 3], [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, 0), 2)
         assert y.parent_ops == (Constant(data), Constant([1, 2]), Constant([2, 3]), Constant([3, 4]))
 
         y = vector_index(x, [1, 2], 2, [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, None, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, None, 0), 2)
         assert y.parents[0] == x
         assert y.parent_ops == (x.op, Constant([1, 2]), Constant(2), Constant([3, 4]))
 
         y = vector_index(data, [1, 2], 2, [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, None, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, None, 0), 2)
         assert y.parent_ops == (Constant(data), Constant([1, 2]), Constant(2), Constant([3, 4]))
 
         y = vector_index(data, [[1, 2, 0], [1, 0, 1]], 0, 1)
-        assert y.op == ir.VMap(ir.VMap(ir.VectorIndex(), (None, 0, None, None), 3), (None, 0, None, None), 2)
+        assert y.op == ir.VMap(ir.VMap(ir.Index(), (None, 0, None, None), 3), (None, 0, None, None), 2)
         assert y.shape == (2, 3)
 
         try:
@@ -280,12 +280,12 @@ def test_scalar_indexing_simple_broadcasting():
             pass
 
         y = vector_index(x, slice(0, 2, 1), slice(0, 2, 1), slice(0, 2, 1))
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, 0), 2)
         assert y.shape == (2,)
         assert y.parent_ops[1] == y.parent_ops[2] == y.parent_ops[3] == ir.Constant([0, 1])
 
         y = vector_index(x, slice(0, 2, 1), slice(0, 2, 1), 1)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, None), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, None), 2)
         assert y.parent_ops[1] == y.parent_ops[2] == ir.Constant([0, 1])
         assert y.parent_ops[3] == ir.Constant(1)
 
@@ -299,13 +299,13 @@ def test_scalar_indexing_numpy_broadcasting():
     with override(broadcasting="numpy"):
         y = vector_index(x, 1, 2, 3)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parents[0] == x
         assert y.parent_ops == expected_parent_ops
 
         y = vector_index(data, 1, 2, 3)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parent_ops == expected_parent_ops
 
         a = constant(1)
@@ -313,7 +313,7 @@ def test_scalar_indexing_numpy_broadcasting():
         c = constant(3)
         y = vector_index(x, a, b, c)
         assert y.shape == ()
-        assert y.op == ir.VectorIndex()
+        assert y.op == ir.Index()
         assert y.parents == (x, a, b, c)
         assert y.parent_ops == expected_parent_ops
 
@@ -328,31 +328,31 @@ def test_scalar_indexing_numpy_broadcasting():
         C = constant([3, 4])
         y = vector_index(x, A, B, C)
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, 0), 2)
         assert y.parents == (x, A, B, C)
 
         y = vector_index(x, [1, 2], [2, 3], [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, 0, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, 0, 0), 2)
         assert y.parent_ops == (Constant(data), Constant([1, 2]), Constant([2, 3]), Constant([3, 4]))
 
         y = vector_index(x, [1, 2], 2, [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, None, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, None, 0), 2)
         assert y.parents[0] == x
         assert y.parent_ops == (x.op, Constant([1, 2]), Constant(2), Constant([3, 4]))
 
         y = vector_index(data, [1, 2], 2, [3, 4])
         assert y.shape == (2,)
-        assert y.op == ir.VMap(ir.VectorIndex(), (None, 0, None, 0), 2)
+        assert y.op == ir.VMap(ir.Index(), (None, 0, None, 0), 2)
         assert y.parent_ops == (Constant(data), Constant([1, 2]), Constant(2), Constant([3, 4]))
 
         y = vector_index(data, [[1, 2, 0], [1, 0, 1]], 0, 1)
-        assert y.op == ir.VMap(ir.VMap(ir.VectorIndex(), (None, 0, None, None), 3), (None, 0, None, None), 2)
+        assert y.op == ir.VMap(ir.VMap(ir.Index(), (None, 0, None, None), 3), (None, 0, None, None), 2)
         assert y.shape == (2, 3)
 
         y = vector_index(data, [[1, 2, 0], [1, 0, 1]], 0, [0, 1, 0])
-        assert y.op == ir.VMap(ir.VMap(ir.VectorIndex(), (None, 0, None, 0), 3), (None, 0, None, None), 2)
+        assert y.op == ir.VMap(ir.VMap(ir.Index(), (None, 0, None, 0), 3), (None, 0, None, None), 2)
 
 
 # def test_2d_single_full_slice():

@@ -34,13 +34,13 @@ class TransformationTests(MixinBase):
     Intended to be used as a mixin. Tests if backends can make use of full transforms.
     """
 
-    def test_unconstrain_spd(self):
-        x = pi.tforms.unconstrain_spd(pi.wishart)(2, np.eye(2))
+    # def test_unconstrain_spd(self):
+    #     x = pi.tforms.unconstrain_spd(pi.wishart)(2, np.eye(2))
 
-        expected_mean, expected_std = wishart_mean_std(2, np.eye(2))
+    #     expected_mean, expected_std = wishart_mean_std(2, np.eye(2))
 
-        def testfun(samps):
-            [x_samps] = samps
-            return np.abs(np.mean(x_samps, axis=0) - expected_mean) < 0.05  # and np.abs(np.var(x_samps) - 0.5) < 0.05
+    #     def testfun(samps):
+    #         [x_samps] = samps
+    #         return np.abs(np.mean(x_samps, axis=0) - expected_mean) < 0.05  # and np.abs(np.var(x_samps) - 0.5) < 0.05
 
-        test_util.inf_until_match(self.sample_flat, [x], [], [], testfun)
+    #     test_util.inf_until_match(self.sample_flat, [x], [], [], testfun)

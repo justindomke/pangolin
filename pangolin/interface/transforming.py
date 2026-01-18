@@ -94,7 +94,7 @@ class Transform:
     Create a random variable distributed like ``x*4.4`` for ``x ~ normal(3.3, 3.3)``
 
     >>> myfun = lambda a: normal(a,a)
-    >>> scale = Transform(lambda x, b: x*b, lambda y, b: y/b, lambda x, y, b: log(b))
+    >>> scale = Transform(lambda x, b: x*b, lambda y, b: y/b, lambda x, y, b: log(b), 1)
     >>> x = myfun(3.3)
     >>> print(x)
     normal(3.3, 3.3)

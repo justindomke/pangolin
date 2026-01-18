@@ -22,7 +22,7 @@ def fill_tril(params: RVLike):
     ------ | ---------
     (3,)   | a = [1.1 2.2 3.3]
     (2, 2) | b = [[0 0] [1 2]]
-    (2, 2) | c = simple_index(a,b)
+    (2, 2) | c = index(a,b)
     (2, 2) | d = [[1. 0.] [1. 1.]]
     (2, 2) | e = vmap(vmap(mul, [0, 0], 2), [0, 0], 2)(c,d)
     """
@@ -67,7 +67,7 @@ def extract_tril(L: RVLike):
     (2, 2) | a = [[1.1 0. ] [2.2 3.3]]
     (3,)   | b = [0 1 1]
     (3,)   | c = [0 0 1]
-    (3,)   | d = vmap(vector_index, [None, 0, 0], 3)(a,b,c)
+    (3,)   | d = vmap(index, [None, 0, 0], 3)(a,b,c)
     """
 
     import numpy as np

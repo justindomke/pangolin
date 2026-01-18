@@ -7,7 +7,7 @@ from __future__ import annotations
 from jax._src.core import pp_aval
 from . import InfixRV
 from pangolin.ir import Op, VMap, Constant, print_upstream, Shape
-from pangolin.ir import SimpleIndex
+from pangolin.ir import Index
 from pangolin import dag, ir, util
 from collections.abc import Callable
 from .base import makerv, create_rv, RVLike, constant, exp, log, config, Broadcasting, get_shape
@@ -124,7 +124,7 @@ def index(var: InfixRV, *indices: _IdxType):
     (2, 3) | a = [[3 0 2] [4 4 4]]
     (2,)   | b = [0 1]
     (2,)   | c = [2 2]
-    (2, 2) | d = simple_index(a,b,c)
+    (2, 2) | d = index(a,b,c)
     >>> C = index(A, 0, ...)
     >>> print_upstream(C)
     shape  | statement
@@ -132,7 +132,7 @@ def index(var: InfixRV, *indices: _IdxType):
     (2, 3) | a = [[3 0 2] [4 4 4]]
     ()     | b = 0
     (3,)   | c = [0 1 2]
-    (3,)   | d = simple_index(a,b,c)
+    (3,)   | d = index(a,b,c)
     """
 
     indices = eliminate_ellipses(var.ndim, indices)
@@ -142,10 +142,10 @@ def index(var: InfixRV, *indices: _IdxType):
         raise ValueError(f"RV has {var.ndim} dims but was given {len(indices)} indices")
 
     rv_indices = convert_indices(var.shape, *indices)
-    return InfixRV(SimpleIndex(), var, *rv_indices)
+    return InfixRV(Index(), var, *rv_indices)
 
 
-def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.VectorIndex | ir.VMap:
+def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.Index | ir.VMap:
     """ """
 
     array_shape = None
@@ -160,11 +160,11 @@ def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir
                 raise ValueError(f"Can't broadcast non-matching shapes {shape} and {array_shape}")
 
     if array_shape is None:
-        return ir.VectorIndex()
+        return ir.Index()
 
     in_axes = (None,) + tuple(0 if shape == array_shape else None for shape in index_shapes)
 
-    new_op = ir.VectorIndex()
+    new_op = ir.Index()
     for size in reversed(array_shape):
         new_op = VMap(new_op, in_axes, size)
 
@@ -173,14 +173,14 @@ def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir
     return new_op
 
 
-def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.VectorIndex | ir.VMap:
+def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.Index | ir.VMap:
     # will raise ValueError if not broadcastable
     array_shape = np.broadcast_shapes(*index_shapes)
 
     if array_shape is None:
-        return ir.VectorIndex()
+        return ir.Index()
 
-    new_op = ir.VectorIndex()
+    new_op = ir.Index()
     for n, size in enumerate(reversed(array_shape)):
         in_axes = []
         for index_shape in index_shapes:
@@ -198,24 +198,30 @@ def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.
 
 
 # TODO: should merge this with functionality from base? (Especially when add new numpy functionality)
-def vector_index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.VectorIndex | ir.VMap]:
+def vector_index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index | ir.VMap]:
     var_shape = get_shape(var)
     var_ndim = len(var_shape)
 
     indices = eliminate_ellipses(var_ndim, indices)
     rv_indices = convert_indices(var_shape, *indices)
 
+    # TODO: should check that shapes are broadcastable (or non-broadcastable)
+
     if config.broadcasting == Broadcasting.OFF:
-        op = ir.VectorIndex()
+        op = ir.Index()
+        if any(rv_index.shape != () for rv_index in rv_indices):
+            raise ValueError("If broadcasting is off, non-scalar indices are forbidden")
         return create_rv(op, var, *rv_indices)
     elif config.broadcasting == Broadcasting.SIMPLE:
         var_shape = get_shape(var)
         index_shapes = [get_shape(idx) for idx in rv_indices]
+        base.broadcast_shapes_simple(*index_shapes)  # raises ValueError if invalid
         vmapped_op = vmap_scalar_index_simple(var_shape, *index_shapes)
         return create_rv(vmapped_op, var, *rv_indices)
     elif config.broadcasting == Broadcasting.NUMPY:
         var_shape = get_shape(var)
         index_shapes = [get_shape(idx) for idx in rv_indices]
+        np.broadcast_shapes(*index_shapes)  # raises ValueError if invalid
         vmapped_op = vmap_scalar_index_numpy(var_shape, *index_shapes)
         return create_rv(vmapped_op, var, *rv_indices)
     else:

@@ -58,7 +58,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Diag: jnp.diag,
     ir.DiagMatrix: jnp.diag,
     ir.Softmax: jnn.softmax,
-    ir.SimpleIndex: ir.index_orthogonal_no_slices,
+    ir.Index: ir.index_orthogonal_no_slices,
 }
 
 ################################################################################

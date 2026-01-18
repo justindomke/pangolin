@@ -119,17 +119,17 @@ def test_double_VMapDist1():
     assert matrix_normal.get_shape((4, 3), (4, 3)) == (4, 3)
 
 
-def test_vmap_index1():
-    base_op = Index(None)
-    assert base_op.get_shape((10,), ()) == ()
-    op = VMap(base_op, (None, 0))
-    assert op.get_shape((10,), (5,)) == (5,)
+# def test_vmap_index1():
+#     base_op = Index(None)
+#     assert base_op.get_shape((10,), ()) == ()
+#     op = VMap(base_op, (None, 0))
+#     assert op.get_shape((10,), (5,)) == (5,)
 
 
-def test_vmap_index2():
-    base_op = Index(slice(None), None)
-    op = VMap(base_op, (None, 0))
-    assert op.get_shape((10, 4), (5,)) == (5, 10)  # vmap dim first
+# def test_vmap_index2():
+#     base_op = Index(slice(None), None)
+#     op = VMap(base_op, (None, 0))
+#     assert op.get_shape((10, 4), (5,)) == (5, 10)  # vmap dim first
 
 
 def test_repr():

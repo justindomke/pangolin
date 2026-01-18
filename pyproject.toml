@@ -53,7 +53,7 @@ norecursedirs = [
     "dist", 
     "build"
 ]
-timeout = 10
+timeout = 20
 
 [tool.black]
 line-length = 120

@@ -345,7 +345,7 @@ class InfixRV[O: Op](ir.RV[O]):
         >>> A = constant([9,8,7,6,5,4])
         >>> B = A[2]
         >>> B.op
-        SimpleIndex()
+        Index()
         >>> B.parents[0] == A
         True
         >>> B.parents[1]
@@ -354,7 +354,7 @@ class InfixRV[O: Op](ir.RV[O]):
         >>> # indexing with a slice
         >>> B = A[1::2]
         >>> B.op
-        SimpleIndex()
+        Index()
         >>> B.parents[0] == A
         True
         >>> B.parents[1]
@@ -364,7 +364,7 @@ class InfixRV[O: Op](ir.RV[O]):
         >>> A = constant([[3,4,5],[6,7,8]])
         >>> B = A[[1,0],::2]
         >>> B.op
-        SimpleIndex()
+        Index()
         >>> B.parents[0] == A
         True
         >>> B.parents[1]
@@ -589,6 +589,20 @@ def _scalar_op_doc(OpClass):
     return __doc__
 
 
+def broadcast_shapes_simple(*shapes: ir.Shape) -> None | ir.Shape:
+    new_shape = None
+    for shape in shapes:
+        if shape == ():
+            continue
+
+        if new_shape is None:
+            new_shape = shape
+        else:
+            if shape != new_shape:
+                raise ValueError(f"Can't broadcast non-matching shapes {shape} and {new_shape}")
+    return new_shape
+
+
 def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This only accepts a very limited amount of broadcasting: All parents shapes must
@@ -623,30 +637,16 @@ def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
 
     # TODO: Always return VMap
 
-    array_shape = None
-    for shape in parent_shapes:
-        if shape == ():
-            continue
-
-        if array_shape is None:
-            array_shape = shape
-        else:
-            if shape != array_shape:
-                raise ValueError(f"Can't broadcast non-matching shapes {shape} and {array_shape}")
+    array_shape = broadcast_shapes_simple(*parent_shapes)
 
     if array_shape is None:
         return op
 
     in_axes = tuple(0 if shape == array_shape else None for shape in parent_shapes)
 
-    # print(f"{parent_shapes=}")
-    # print(f"{array_shape=}")
-
     new_op = op
     for size in reversed(array_shape):
         new_op = VMap(new_op, in_axes, size)
-
-    # print(f"{new_op=}")
 
     assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
 
