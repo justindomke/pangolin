@@ -1081,3 +1081,4 @@ def wishart(nu: RVLike, S: RVLike) -> InfixRV[ir.Wishart]:
     """
     # TODO: Support regular / inverse / cholesky wishart
     return create_rv(ir.Wishart(), nu, S)
+

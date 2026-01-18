@@ -53,9 +53,9 @@ class TransformationTests(MixinBase):
 
         test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [x, y], testfun)
 
-    def test_logit_beta(self):
-        x = pi.logit(pi.beta(2, 2))
-        y = pi.tforms.logit(pi.beta)(2, 2)
+    def test_logit_uniform(self):
+        x = pi.logit(pi.uniform(0, 1))
+        y = pi.tforms.logit(pi.uniform)(0, 1)
 
         def testfun(samps):
             [x_samps, y_samps] = samps
@@ -79,6 +79,22 @@ class TransformationTests(MixinBase):
 
             return (
                 np.abs(np.mean(y_samps) - np.mean(x_samps)) < 0.05 and np.abs(np.std(y_samps) - np.std(x_samps)) < 0.05
+            )
+
+        test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [x, y], testfun)
+
+    def test_wishart_cholesky(self):
+        x = pi.cholesky(pi.wishart(2, np.eye(2)))
+        y = pi.tforms.cholesky(pi.wishart)(2, np.eye(2))
+
+        def testfun(samps):
+            [x_samps, y_samps] = samps
+            x_samps = np.asarray(x_samps, copy=True)
+            y_samps = np.asarray(y_samps, copy=True)
+
+            return (
+                np.max(np.mean(y_samps, axis=0) - np.mean(x_samps, axis=0)) < 0.05
+                and np.max(np.std(y_samps, axis=0) - np.std(x_samps, axis=0)) < 0.05
             )
 
         test_util.ancestor_sample_until_match(self.ancestor_sample_flat, [x, y], testfun)

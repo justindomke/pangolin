@@ -17,13 +17,17 @@ from .base import (
     cholesky,
     matmul,
     diag,
+    config,
+    override,
 )
+from .indexing import vector_index
 from typing import Sequence
 from typing import Any, Self
 from jaxtyping import PyTree
 from .compositing import make_composite, generated_nodes, Composite
 from .vmapping import AbstractOp
 from . import base
+from .util import fill_tril, extract_tril
 
 """
 x = dist(p1, p2)
@@ -251,6 +255,11 @@ def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *bijec
     return bijector
 
 
+########################################################################################
+# Library of specific transforms
+########################################################################################
+
+
 class tforms:
     """
     A namespace containing a bunch of pre-baked `Transform` instances for common transforms of distributions.
@@ -279,20 +288,13 @@ class tforms:
     >>> y = tforms.scaled_logit(uniform, 3.5, 5.5)(3.0, 5.0)
     """
 
-    # f(x) = exp(x)
-    # df/dx = exp(x) = y
-    # log df/dx = log(y)
+    # f(x) = exp(x)  <==>  df/dx = exp(x) = y  <==>  log df/dx = log(y)
     exp = Transform(exp, log, lambda x, y: log(y))
     """
     A `Transform` instance that applies the exp bijector ``y = exp(x)``. Commonly used to transform from reals to positive reals.
     """
 
-    # f(x) = log(x)
-    # df/dx = 1/x
-    # log df/dx = log(1/x) = -log(x) = -y
-    # log = Transform(log, globals()['exp'], lambda x, y: -log(x))
-
-    log = exp.reverse
+    log_transform = exp.reverse
 
     logit = Transform(base.logit, base.inv_logit, lambda x, y: -log(x) - log(1 - x))
     """
@@ -304,7 +306,7 @@ class tforms:
     A `Transform` instance that applies the inverse logit.
     """
 
-    scaled_logit = Transform(
+    scaled_logit_transform = Transform(
         lambda x, a, b: base.logit((x - a) / (a - b)),
         lambda y, a, b: a + (b - a) * base.inv_logit(y),
         lambda x, y, a, b: base.log(x - a) + base.log(b - x) - base.log(b - a),  # should use softplus
@@ -325,6 +327,19 @@ class tforms:
         lambda Y: base.matmul(Y, base.transpose(Y)),
         _cholesky_log_det_jac,
     )
+    """
+    A `Transform` instance that applies a Cholesky decomposition. Commonly used to transform from symmetric positive definite matrices into triangular matrices. 
+    """
+
+    fill_tril = Transform(fill_tril, extract_tril, lambda x, y: constant(0.0))
+    """
+    A `Transform` instance that fills a lower-triangular matrix from a vector. Used to transform from real vectors to lower-triangular matrices.
+    """
+
+    extract_tril = fill_tril.reverse
+    """
+    A `Transform` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
+    """
 
     def __init__(self):
         raise TypeError("Use tforms as a static namespace, do not instantiate.")
