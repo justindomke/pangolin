@@ -954,9 +954,16 @@ def transpose(a: RVLike) -> InfixRV[ir.Transpose]:
 
 def diag(a: RVLike) -> InfixRV[ir.Diag]:
     """
-    Get the diagonal of a matrix. Input must be a 2-D square array. Does not construct diagonal matrices.
+    Get the diagonal of a matrix. Input must be a 2-D square array. Does not construct diagonal matrices. (Use `diag_matrix`)
     """
     return create_rv(ir.Diag(), a)
+
+
+def diag_matrix(a: RVLike) -> InfixRV[ir.DiagMatrix]:
+    """
+    Get the diagonal of a matrix. Input must be a 1-D array. Does not extract diagonals. (Use `diag`)
+    """
+    return create_rv(ir.DiagMatrix(), a)
 
 
 def inv(a: RVLike) -> InfixRV[ir.Inv]:
@@ -1081,4 +1088,3 @@ def wishart(nu: RVLike, S: RVLike) -> InfixRV[ir.Wishart]:
     """
     # TODO: Support regular / inverse / cholesky wishart
     return create_rv(ir.Wishart(), nu, S)
-

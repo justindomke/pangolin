@@ -64,6 +64,7 @@ testdata = [
     (Transpose, np.transpose, ["rectangular-matrix"]),
     (Identity, lambda a: a, ["real"]),
     (Diag, np.diag, ["matrix"]),
+    (DiagMatrix, np.diag, ["vector"]),
 ]
 
 

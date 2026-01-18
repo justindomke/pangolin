@@ -24,7 +24,7 @@ Arithmetic                   :class:`Add` :class:`Sub` :class:`Mul` :class:`Div`
 Trigonometry                 :class:`Arccos` :class:`Arccosh` :class:`Arcsin` :class:`Arcsinh` :class:`Arctan` :class:`Arctanh` :class:`Cos` :class:`Cosh` :class:`Sin` :class:`Sinh` :class:`Tan` :class:`Tanh`
 Other scalar functions       :class:`Pow` :class:`Abs` :class:`Exp` :class:`InvLogit` :class:`Log` :class:`Loggamma` :class:`Logit` :class:`Step`
 Linear algebra               `Matmul` `Transpose` `Inv` `Cholesky`
-Other multivariate functions :class:`Sum` :class:`Softmax` `Diag`
+Other multivariate functions :class:`Sum` :class:`Softmax` `Diag` `DiagMatrix`
 Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognormal` :class:`Cauchy` :class:`Bernoulli` :class:`BernoulliLogit` :class:`Beta` :class:`Binomial` :class:`Categorical` :class:`Uniform` :class:`BetaBinomial` :class:`Exponential` :class:`Gamma` :class:`Poisson` :class:`StudentT`
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
 Control flow                 :class:`VMap` :class:`Composite` :class:`Autoregressive`
@@ -753,6 +753,27 @@ class Diag(Op):
         if p_shape[0] != p_shape[1]:
             raise ValueError("diag only for square arrays")
         return (p_shape[0],)
+
+
+class DiagMatrix(Op):
+    """
+    Extract the diagaonal of a square matrix. (Use DiagMatrix to construct.)
+    """
+
+    _random = False
+
+    def _get_shape(self, p_shape: Shape) -> Shape:
+        """
+        Args:
+            p_shape: A 1D shape
+
+        Returns
+            tuple with two elements both equal to p_shape[0]
+        """
+
+        if len(p_shape) != 1:
+            raise ValueError("DiagMatrix only applies to 1d arrays")
+        return (p_shape[0], p_shape[0])
 
 
 ################################################################################

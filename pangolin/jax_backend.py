@@ -56,6 +56,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Cholesky: jnp.linalg.cholesky,
     ir.Transpose: jnp.transpose,
     ir.Diag: jnp.diag,
+    ir.DiagMatrix: jnp.diag,
     ir.Softmax: jnn.softmax,
     ir.SimpleIndex: ir.index_orthogonal_no_slices,
 }
