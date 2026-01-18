@@ -23,11 +23,12 @@ Op                           sampling vmapped sampling log probs vmapped log pro
 ``Wishart``                  ✔        ❌               ✔         ✔
 ``MultiNormal``              ✔        ❌               ✔         ✔
 ``BetaBinomial``             ❌       ❌               ❌        ❌
+``Multinomial``              ❌       ❌               ❌        ❌
 ============================ ======== ================ ========= =================
 
 Everything else is fully supported.
 
-For ``BetaBinomial`` this is due to torch lacking a beta-binomial distribution. For the others, this is due to some basic ~~bugs~~ limitations in PyTorch. Namely, in PyTorch, this works fine:
+For ``Multinomial`` and ``BetaBinomial``, this is due to torch lacking these distributions. For the others, this is due to a basic ~~bug~~ limitations in PyTorch. Namely, in PyTorch, this works fine:
 
 ``torch.vmap(lambda dummy: torch.distributions.Normal(0,1).sample(), randomness='different')(torch.zeros(2))``
 
@@ -35,7 +36,7 @@ And this *should* work fine:
 
 ``torch.vmap(lambda dummy: torch.distributions.Exponential(2.0).rsample(), randomness='different')(torch.zeros(2))``
 
-But the latter raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.`` (Said issue is `here <https://github.com/pytorch/functorch/issues/996>`_ .) Bizarrely, ``Gamma`` does not have this issue, so this backend just creates a ``Gamma`` when an ``Exponential`` is needed.
+But the latter raises the error ``RuntimeError: vmap: Cannot ask for different inplace randomness on an unbatched tensor. This will appear like same randomness. If this is necessary for your usage, please file an issue with functorch.`` (Said issue is `here <https://github.com/pytorch/functorch/issues/996>`_ .) Curiously, ``Gamma`` does not have this issue, even though ``Exponential`` does and ``Gamma`` is a generalization of ``Exponential``. So this backend just creates a ``Gamma`` when an ``Exponential`` is needed.
 
 """
 
