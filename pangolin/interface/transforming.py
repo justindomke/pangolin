@@ -294,7 +294,7 @@ class tforms:
     A `Transform` instance that applies the exp bijector ``y = exp(x)``. Commonly used to transform from reals to positive reals.
     """
 
-    log_transform = exp.reverse
+    log = exp.reverse
 
     logit = Transform(base.logit, base.inv_logit, lambda x, y: -log(x) - log(1 - x))
     """
@@ -306,7 +306,7 @@ class tforms:
     A `Transform` instance that applies the inverse logit.
     """
 
-    scaled_logit_transform = Transform(
+    scaled_logit = Transform(
         lambda x, a, b: base.logit((x - a) / (a - b)),
         lambda y, a, b: a + (b - a) * base.inv_logit(y),
         lambda x, y, a, b: base.log(x - a) + base.log(b - x) - base.log(b - a),  # should use softplus
