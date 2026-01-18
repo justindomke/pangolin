@@ -49,7 +49,7 @@ testdata = [
     (Cauchy, scipy.stats.cauchy, ["real", "positive"]),
     (Bernoulli, scipy.stats.bernoulli, [(0, 1)]),
     (BernoulliLogit, lambda a: scipy.stats.bernoulli(1 / (1 + np.exp(-a))), ["real"]),
-    (Beta, scipy.stats.beta, ["positive", "positive"]),
+    (Beta, scipy.stats.beta, [{0.1, 0.5, 1.5, 5.0}, {0.1, 0.5, 1.5, 5.0}]),
     (Binomial, scipy.stats.binom, [{1, 2, 5, 10}, (0, 1)]),
     (
         Categorical,

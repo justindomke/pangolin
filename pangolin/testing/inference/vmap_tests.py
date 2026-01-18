@@ -66,8 +66,8 @@ class VmapTests(MixinBase):
         test_util.inf_until_match(self.sample_flat, [y], [], [], testfun)  # type:ignore
 
     def test_double_vmap(self):
-        locs = np.array([[1, 2, 3], [4, 5, 6]])
-        scales = np.array([[7, 8, 9], [10, 11, 12]])
+        locs = np.array([[7, 8, 9], [10, 11, 12]])
+        scales = np.array([[1, 2, 3], [4, 5, 6]])
         y = pi.vmap(pi.vmap(pi.normal))(locs, scales)
 
         def testfun(samps):
