@@ -55,7 +55,7 @@ Linear algebra               :func:`matmul` (or infix ``@``) `transpose` (or ``r
 Other multivariate functions :func:`sum` :func:`softmax` `diag` `diag_matrix` `fill_tril` `extract_tril`
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
-Control flow                 :func:`vmap` :func:`composite` :func:`autoregressive` :func:`autoregress`
+Control flow                 :func:`vmap` `broadcast` :func:`composite` :func:`autoregressive` :func:`autoregress`
 Indexing                     :func:`index` (or ``rv.[...]``)
 Transformed densities        `Transform` `tforms` `compose_transforms`
 ============================ ======
@@ -127,6 +127,7 @@ __all__ = [
     "InfixRV",
     "constant",
     "vmap",
+    "broadcast",
     "composite",
     "Autoregressable",
     "Autoregressed",

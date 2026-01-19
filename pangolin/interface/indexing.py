@@ -111,8 +111,18 @@ def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[InfixRV, ..
 
 
 # TODO: var should be RVLike
-def index(var: InfixRV, *indices: _IdxType):
-    """Index a RV.
+def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
+    """
+    Index a RV. Using fully-orthogonal indexing.
+
+    Note that this function is (intentionally) much simpler than indexing in NumPy or JAX or PyTorch in that it performs *fully orthogonal indexing* and that *slices are treated exactly the same as 1D arrays*.
+
+    Args:
+        var: The RV to be indexed
+        indices: The indices into the RV. Unless there is an ellipsis, the number of indices must match the number of dimensions of ``var``.
+
+    Returns:
+        Random variable with shape equal to the shapes of all indices, concatenated.
 
     Examples
     --------
@@ -133,7 +143,19 @@ def index(var: InfixRV, *indices: _IdxType):
     ()     | b = 0
     (3,)   | c = [0 1 2]
     (3,)   | d = index(a,b,c)
+
+    Technically, it's legal (although pointless) to index a 0-D array
+
+    >>> A = constant(12.0)
+    >>> B = index(A)
+    >>> print_upstream(B)
+    shape | statement
+    ----- | ---------
+    ()    | a = 12.
+    ()    | b = index(a)
     """
+
+    var = makerv(var)
 
     indices = eliminate_ellipses(var.ndim, indices)
 
@@ -204,8 +226,6 @@ def vector_index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index | ir.VMap]
 
     indices = eliminate_ellipses(var_ndim, indices)
     rv_indices = convert_indices(var_shape, *indices)
-
-    # TODO: should check that shapes are broadcastable (or non-broadcastable)
 
     if config.broadcasting == Broadcasting.OFF:
         op = ir.Index()

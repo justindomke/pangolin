@@ -1,24 +1,22 @@
-import collections
-
-from . import InfixRV
 from pangolin.ir import Op, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RVLike, constant, exp, log
+from .base import makerv, create_rv, RVLike, constant, exp, log, InfixRV
 from typing import Sequence, Type
 import jax.tree_util
 from pangolin.ir import split_shape
 
-from typing import Protocol, TypeVar, Any
+from typing import Protocol, TypeVar, Any, TYPE_CHECKING
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
 from typing import Protocol
 from jaxtyping import PyTree
 
-Shape = ir.Shape
 
 FlatCallable = Callable[..., list[InfixRV]]  # don't know how to enforce that inputs are RV
+
+Shape = ir.Shape
 
 
 # class FlatCallable(Protocol):

@@ -19,6 +19,8 @@ from enum import Enum
 from contextlib import contextmanager
 import makefun
 import types
+import functools
+import warnings
 
 RVLike: typing.TypeAlias = Union[ArrayLike, "InfixRV"]
 
@@ -603,6 +605,11 @@ def broadcast_shapes_simple(*shapes: ir.Shape) -> None | ir.Shape:
     return new_shape
 
 
+def broadcast_shapes_numpy(*shapes: ir.Shape) -> None | ir.Shape:
+    new_shape = np.broadcast_shapes(*shapes)
+    return new_shape
+
+
 def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
     """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
     This only accepts a very limited amount of broadcasting: All parents shapes must
@@ -717,6 +724,142 @@ def vmap_scalars_numpy[O: Op](op: O, *parent_shapes: ir.Shape) -> O | ir.VMap:
 
 
 ########################################################################################
+# Broadcasting
+########################################################################################
+
+
+def validate_scalar_args(*args, **kwargs):
+    for a in args:
+        if a.shape != ():
+            raise ValueError(f"Non-scalar argument: {a}")
+    for name in kwargs:
+        if kwargs[name].shape != ():
+            raise ValueError(f"Non-scalar argument: {name}={kwargs[name]}")
+
+
+def bind_args(fun, *args, **kwargs):
+    """
+    Flattens positional and keyword arguments into positional only. The function must not have keyword-only arguments.
+    """
+    sig = inspect.signature(fun)
+    bound = sig.bind(*args, **kwargs)
+    bound.apply_defaults()
+    return bound.args
+
+
+def broadcast(scalar_fun):
+    """
+    Args:
+        scalar_fun: Function accepting and returning all-scalar arguments. Can have keyword arguments, but cannot have keyword-only arguments.
+
+    Returns:
+        "broadcast" version of ``scalar_fun`` that accepts and returns array-shaped random variables according to the current broadcasting rules.
+
+
+    Examples
+    --------
+    Take a simple function with scalar input and output
+
+    >>> fun = lambda a: InfixRV(ir.Exponential(), a)
+
+    If you just have a scalar input, this function works fine in all three broadcasting modes
+
+    >>> with override(broadcasting='off'):
+    ...     broadcast(fun)(3)
+    InfixRV(Exponential(), InfixRV(Constant(3)))
+    >>> with override(broadcasting='simple'):
+    ...      broadcast(fun)(3)
+    InfixRV(Exponential(), InfixRV(Constant(3)))
+    >>> with override(broadcasting='numpy'):
+    ...      broadcast(fun)(3)
+    InfixRV(Exponential(), InfixRV(Constant(3)))
+
+    If you have a vector input, this only works with simple or numpy broadcasting
+
+    >>> with override(broadcasting='off'):
+    ...     broadcast(fun)([3,4])
+    Traceback (most recent call last):
+    ...
+    ValueError: Non-scalar argument: [3 4]
+    >>> with override(broadcasting='simple'):
+    ...     broadcast(fun)([3,4])
+    InfixRV(VMap(Exponential(), [0], 2), InfixRV(Constant([3,4])))
+    >>> with override(broadcasting='numpy'):
+    ...     broadcast(fun)([3,4])
+    InfixRV(VMap(Exponential(), [0], 2), InfixRV(Constant([3,4])))
+
+    Now take this function with one vector and one matrix argument.
+
+    >>> fun = lambda a, b: InfixRV(ir.Normal(), a, b)
+    >>> mean = [1,2,3]
+    >>> scale = [[1,2,3],[4,5,6]]
+
+    This will only work with numpy-style broadcasting
+
+    >>> with override(broadcasting='off'):
+    ...     broadcast(fun)(mean, scale)
+    Traceback (most recent call last):
+    ...
+    ValueError: Non-scalar argument: [1 2 3]
+    >>> with override(broadcasting='simple'):
+    ...     broadcast(fun)(mean, scale)
+    Traceback (most recent call last):
+    ...
+    ValueError: Can't broadcast non-matching shapes (2, 3) and (3,)
+    >>> with override(broadcasting='numpy'):
+    ...     z = broadcast(fun)(mean, scale)
+    >>> print(z)
+    vmap(vmap(normal, [0, 0], 3), [None, 0], 2)([1 2 3], [[1 2 3] [4 5 6]])
+    """
+
+    from .vmapping import vmap
+
+    @functools.wraps(scalar_fun)
+    def handler(*args, **kwargs):
+        args = bind_args(scalar_fun, *args, **kwargs)
+
+        args = tuple(makerv(a) for a in args)
+        arg_shapes = [a.shape for a in args]
+
+        if config.broadcasting == Broadcasting.OFF:
+            validate_scalar_args(*args)
+            return scalar_fun(*args)
+        elif config.broadcasting == Broadcasting.SIMPLE:
+            array_shape = broadcast_shapes_simple(*arg_shapes)
+
+            if array_shape is None:
+                return scalar_fun(*args)
+
+            in_axes = tuple(0 if shape == array_shape else None for shape in arg_shapes)
+            new_fun = lambda args: scalar_fun(*args)  # always takes a single tuple
+            for size in reversed(array_shape):
+                new_fun = vmap(new_fun, in_axes=in_axes, axis_size=size)
+            return new_fun(args)
+        elif config.broadcasting == Broadcasting.NUMPY:
+            array_shape = np.broadcast_shapes(*arg_shapes)
+
+            if array_shape is None:
+                return scalar_fun(*args)
+
+            new_fun = lambda args: scalar_fun(*args)  # always takes a single tuple
+            for n, size in enumerate(reversed(array_shape)):
+                in_axes = []
+                for arg_shape in arg_shapes:
+                    if len(arg_shape) < n + 1:
+                        my_axis = None
+                    else:
+                        my_axis = 0
+                    in_axes.append(my_axis)
+
+                new_fun = vmap(new_fun, tuple(in_axes), size)
+            return new_fun(args)
+        else:
+            raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
+
+    return handler
+
+
+########################################################################################
 # Generate interface for scalar functions
 ########################################################################################
 
@@ -760,24 +903,24 @@ def _scalar_op_signature(fun: ScalarInterfaceFun):
     return new_sig
 
 
-def _scalar_handler(op):
-    def handler(*args, **kwargs):
-        if config.broadcasting == Broadcasting.OFF:
-            return create_rv(op, *args, *[kwargs[a] for a in kwargs])
-        elif config.broadcasting == Broadcasting.SIMPLE:
-            positional_args = args + tuple(kwargs[a] for a in kwargs)
-            parent_shapes = [get_shape(arg) for arg in positional_args]
-            vmapped_op = vmap_scalars_simple(op, *parent_shapes)
-            return create_rv(vmapped_op, *positional_args)
-        elif config.broadcasting == Broadcasting.NUMPY:
-            positional_args = args + tuple(kwargs[a] for a in kwargs)
-            parent_shapes = [get_shape(arg) for arg in positional_args]
-            vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
-            return create_rv(vmapped_op, *positional_args)
-        else:
-            raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
+# def _scalar_handler(op):
+#     def handler(*args, **kwargs):
+#         if config.broadcasting == Broadcasting.OFF:
+#             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
+#         elif config.broadcasting == Broadcasting.SIMPLE:
+#             positional_args = args + tuple(kwargs[a] for a in kwargs)
+#             parent_shapes = [get_shape(arg) for arg in positional_args]
+#             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
+#             return create_rv(vmapped_op, *positional_args)
+#         elif config.broadcasting == Broadcasting.NUMPY:
+#             positional_args = args + tuple(kwargs[a] for a in kwargs)
+#             parent_shapes = [get_shape(arg) for arg in positional_args]
+#             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
+#             return create_rv(vmapped_op, *positional_args)
+#         else:
+#             raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
 
-    return handler
+#     return handler
 
 
 def scalar_op(fun: ScalarInterfaceFun):
@@ -789,9 +932,14 @@ def scalar_op(fun: ScalarInterfaceFun):
 
     # assert fun.__name__ == util.camel_case_to_snake_case(OpClass.__name__)
 
+    def handler(*args, **kwargs):
+        positional_args = tuple(makerv(a) for a in args) + tuple(makerv(kwargs[a]) for a in kwargs)
+        return InfixRV(op, *positional_args)
+
     wrapper = makefun.create_function(
         _scalar_op_signature(fun),
-        _scalar_handler(op),
+        # _scalar_handler(op),
+        handler,
         func_name=fun.__name__,
         qualname=fun.__qualname__,
         module_name=fun.__module__,
