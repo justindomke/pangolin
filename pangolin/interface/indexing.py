@@ -110,7 +110,6 @@ def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[InfixRV, ..
     return tuple(convert_index(size, index) for size, index in zip(shape, indices, strict=True))
 
 
-# TODO: var should be RVLike
 def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
     """
     Index a RV. Using fully-orthogonal indexing.

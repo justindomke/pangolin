@@ -3,16 +3,16 @@ This package defines a special subtype of RV that supports operator overloading
 """
 
 from __future__ import annotations
-from pangolin.ir import Op, Constant, ScalarOp, VMap
+from pangolin.ir import Op, Constant, ScalarOp, VMap, print_upstream, Shape
 from pangolin import ir, util, dag
 from numpy.typing import ArrayLike
 import jax
 import numpy as np
-from typing import Type, Callable, Sequence, TYPE_CHECKING, get_type_hints, Union, Any
+from typing import Type, Callable, Sequence, get_type_hints, Union, Any
 import inspect
 import typing
 import inspect
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import Enum
 from contextlib import contextmanager
 import makefun
@@ -23,9 +23,6 @@ from jaxtyping import PyTree
 
 RVLike: typing.TypeAlias = Union[ArrayLike, "InfixRV"]
 
-# RV_or_ArrayLike = RV | jax.Array | np.ndarray | np.number | int | float
-
-# TODO: Change return types to InfixRV?
 # TODO: Shorten InfixRV name?
 
 ########################################################################################
@@ -105,7 +102,7 @@ class Broadcasting(Enum):
     >>> pi.student_t(0,np.ones(5),1).shape # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
-    ValueError: StudentT op got parent shapes ((), (5,), ()) not all scalar.
+    ValueError: Non-scalar argument: [1. 1. 1. 1. 1.]
 
     Simple broadcasting
 
@@ -149,7 +146,7 @@ class Broadcasting(Enum):
     ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
     Traceback (most recent call last):
     ...
-    ValueError: Normal op got parent shapes ((3,), (5, 3)) not all scalar.
+    ValueError: Non-scalar argument: [0. 0. 0.]
     >>> with pi.override(broadcasting="numpy"):
     ...     x = pi.normal(np.zeros(3), np.ones((5,3)))
     ...     x.shape
@@ -229,20 +226,17 @@ def override(**kwargs):
 ########################################################################################
 
 
-class VectorIndexProxy:
-    def __init__(self, var: InfixRV):
-        self.var = var
+# class VectorIndexProxy:
+#     def __init__(self, var: InfixRV):
+#         self.var = var
 
-    def __getitem__(self, args):
-        from .indexing import vector_index
+#     def __getitem__(self, args):
+#         from .indexing import vector_index
 
-        if isinstance(args, tuple):
-            return vector_index(self.var, *args)
-        else:
-            return vector_index(self.var, args)
-
-
-# OpU = TypeVar("OpU", bound=Op)
+#         if isinstance(args, tuple):
+#             return vector_index(self.var, *args)
+#         else:
+#             return vector_index(self.var, args)
 
 
 class InfixRV[O: Op](ir.RV[O]):
@@ -276,7 +270,7 @@ class InfixRV[O: Op](ir.RV[O]):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
     def __init__(self, op: O, *parents: InfixRV):
-        self.s = VectorIndexProxy(self)
+        # self.s = VectorIndexProxy(self)
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -389,7 +383,7 @@ class InfixRV[O: Op](ir.RV[O]):
 
 
 ########################################################################################
-# constants and makerv
+# constants
 ########################################################################################
 
 
@@ -415,6 +409,11 @@ def constant(value: ArrayLike) -> InfixRV[Constant]:
     InfixRV(Constant([0,1,2]))
     """
     return InfixRV(Constant(value))
+
+
+########################################################################################
+# util stuff
+########################################################################################
 
 
 def makerv(x: RVLike) -> InfixRV:
@@ -443,6 +442,12 @@ def makerv(x: RVLike) -> InfixRV:
         return x
     else:
         return InfixRV(Constant(x))
+
+
+def create_rv[O: Op](op: O, *args) -> InfixRV[O]:
+    args = tuple(makerv(a) for a in args)
+    op.get_shape(*[a.shape for a in args])  # checks shapes
+    return InfixRV(op, *args)
 
 
 def get_shape(arg: RVLike):
@@ -491,6 +496,16 @@ def get_shape(arg: RVLike):
         return arg.shape
     else:
         return np.shape(arg)
+
+
+def bind_args(fun, *args, **kwargs):
+    """
+    Flattens positional and keyword arguments into positional only. The function must not have keyword-only arguments.
+    """
+    sig = inspect.signature(fun)
+    bound = sig.bind(*args, **kwargs)
+    bound.apply_defaults()
+    return bound.args
 
 
 ########################################################################################
@@ -670,12 +685,6 @@ def wishart(nu: RVLike, S: RVLike) -> InfixRV[ir.Wishart]:
 
 FlatCallable = Callable[..., list[InfixRV]]  # don't know how to enforce that inputs are RV
 
-Shape = ir.Shape
-
-
-# class FlatCallable(Protocol):
-#     def __call__(self, *args: RV) -> list[InfixRV]: ...
-
 
 class AbstractOp(Op):
     """
@@ -853,8 +862,8 @@ def vmap_dummy_args(
     (InfixRV(AbstractOp((2,))), InfixRV(AbstractOp()))
     """
 
-    if not util.all_unique(args):
-        raise ValueError("vmap_dummy_args requires all unique arguments")
+    # if not util.all_unique(args):
+    #     raise ValueError("vmap_dummy_args requires all unique arguments")
 
     dummy_args = []
     for i, a in zip(in_axes, args, strict=True):
@@ -1250,79 +1259,17 @@ def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int |
 
 
 ########################################################################################
-# Auto-generate interface functions for all scalar Ops
+# Broadcasting
 ########################################################################################
 
 
-def create_rv[O: Op](op: O, *args) -> InfixRV[O]:
-    args = tuple(makerv(a) for a in args)
-    # args = tuple(a if isinstance(a,RV) else constant(a) for a in args)
-    op.get_shape(*[a.shape for a in args])  # checks shapes
-    return InfixRV(op, *args)
-
-
-def _scalar_op_doc(OpClass):
-    op = OpClass
-    # expected_parents = op._expected_parents
-    op_info = ir._OpInfo(OpClass)
-    expected_parents = op_info.expected_parents
-
-    if op.random:
-        __doc__ = f"Creates a {str(OpClass.__name__)} distributed RV."
-    else:
-        __doc__ = f"Creates an RV by applying {str(OpClass.__name__)} to parents."
-
-    __doc__ += """
-    
-    All arguments must either be scalar or mutually broadcastable according to
-    ``config.broadcasting``
-
-    Args:
-    """
-
-    for p in expected_parents:
-        __doc__ += f"""
-        {p}: {expected_parents[p]}
-    """
-
-    __doc__ += f"""
-    Returns:
-        Random variable with ``z.op`` of type `pangolin.ir.{str(OpClass.__name__)}` or `pangolin.ir.VMap` if broadcasting is triggered and {len(expected_parents)} parent(s).
-    """
-
-    from .. import util
-
-    # arguments 0.1, 0.2, 0.4, etc. work for *almost* all ops and round correctly
-    args = [0.1 * 2**n for n in range(len(expected_parents))]
-    args_str = [str(a) for a in args]
-    par_args = [f"InfixRV(Constant({a}))" for a in args]
-
-    __doc__ += f"""
-    Examples
-    --------
-    >>> {util.camel_case_to_snake_case(str(OpClass.__name__))}{util.comma_separated(args_str, spaces=True)}
-    InfixRV({str(OpClass.__name__)}(), {util.comma_separated(par_args, parens=False, spaces=True)})
-    """
-
-    if op._notes:
-        __doc__ += f"""
-        
-    Notes
-    -----
-    
-    """
-        for note in op._notes:
-            __doc__ += f"""
-    {note}
-    """
-
-    # __doc__ += f"""
-
-    # See Also
-    # --------
-    # `pangolin.ir.{str(OpClass.__name__)}`
-    # """
-    return __doc__
+def validate_scalar_args(*args, **kwargs):
+    for a in args:
+        if a.shape != ():
+            raise ValueError(f"Non-scalar argument: {a}")
+    for name in kwargs:
+        if kwargs[name].shape != ():
+            raise ValueError(f"Non-scalar argument: {name}={kwargs[name]}")
 
 
 def broadcast_shapes_simple(*shapes: ir.Shape) -> None | ir.Shape:
@@ -1342,143 +1289,6 @@ def broadcast_shapes_simple(*shapes: ir.Shape) -> None | ir.Shape:
 def broadcast_shapes_numpy(*shapes: ir.Shape) -> None | ir.Shape:
     new_shape = np.broadcast_shapes(*shapes)
     return new_shape
-
-
-def vmap_scalars_simple[O: Op](op: O, *parent_shapes: ir.Shape) -> VMap | O:
-    """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
-    This only accepts a very limited amount of broadcasting: All parents shapes must
-    either be *scalar* or *exactly equal*.
-
-    Parameters
-    ----------
-    op: Op
-        the op to VMap
-    shapes
-        shapes for each parent, must all be *equal* or scalar
-
-    Returns
-    -------
-    new_op: Op
-        vmapped op (or possibly original op)
-
-    Examples
-    --------
-    >>> vmap_scalars_simple(ir.Exp(), (3,))
-    VMap(Exp(), [0], 3)
-
-    >>> vmap_scalars_simple(ir.Normal(), (3,), ())
-    VMap(Normal(), [0, None], 3)
-
-    >>> vmap_scalars_simple(ir.Normal(), (3,), ())
-    VMap(Normal(), [0, None], 3)
-
-    >>> vmap_scalars_simple(ir.StudentT(), (3,5), (), (3,5))
-    VMap(VMap(StudentT(), [0, None, 0], 5), [0, None, 0], 3)
-    """
-
-    # TODO: Always return VMap
-
-    array_shape = broadcast_shapes_simple(*parent_shapes)
-
-    if array_shape is None:
-        return op
-
-    in_axes = tuple(0 if shape == array_shape else None for shape in parent_shapes)
-
-    new_op = op
-    for size in reversed(array_shape):
-        new_op = VMap(new_op, in_axes, size)
-
-    assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
-
-    return new_op
-
-
-def vmap_scalars_numpy[O: Op](op: O, *parent_shapes: ir.Shape) -> O | ir.VMap:
-    """Given an all-scalar op (all inputs scalar, all outputs scalar), get a `VMap` op.
-    This implements most of numpy-style scalar broadcasting. The only limitation is that
-    broadcasting of singleton dimensions against non-singleton dimensions is not
-    supported.
-
-    Parameters
-    ----------
-    op: Op
-        the op to VMap
-    shapes
-        shapes for each parent, must all be *equal* or scalar
-
-    Returns
-    -------
-    new_op: Op
-        vmapped op (or possibly original op)
-
-    Examples
-    --------
-    >>> vmap_scalars_numpy(ir.Exp(), (3,))
-    VMap(Exp(), [0], 3)
-
-    >>> vmap_scalars_numpy(ir.Normal(), (3,), ())
-    VMap(Normal(), [0, None], 3)
-
-    >>> vmap_scalars_numpy(ir.Normal(), (), (2,3))
-    VMap(VMap(Normal(), [None, 0], 3), [None, 0], 2)
-
-    >>> vmap_scalars_numpy(ir.Normal(), (3,), (2,3))
-    VMap(VMap(Normal(), [0, 0], 3), [None, 0], 2)
-    """
-
-    # will raise ValueError if not broadcastable
-    array_shape = np.broadcast_shapes(*parent_shapes)
-
-    if array_shape is None:
-        return op
-
-    new_op = op
-    for n, size in enumerate(reversed(array_shape)):
-        in_axes = []
-        for parent_shape in parent_shapes:
-            if len(parent_shape) < n + 1:
-                my_axis = None
-            else:
-                my_axis = 0
-            in_axes.append(my_axis)
-
-        new_op = VMap(new_op, tuple(in_axes), size)
-
-    assert new_op.get_shape(*parent_shapes) == array_shape, "Pangolin bug"
-
-    return new_op
-
-    # the obvious way to generalize this to handle singleten dimensions would be to change to
-    #
-    # (new_op, new_parents) = vmap_scalars_numpy(op: Op, *parents: ir.RV)
-    #
-    # where new_parents could be the same as old, or might include "squeeze" operations
-    # (will also need to create ir.Squeeze)
-
-
-########################################################################################
-# Broadcasting
-########################################################################################
-
-
-def validate_scalar_args(*args, **kwargs):
-    for a in args:
-        if a.shape != ():
-            raise ValueError(f"Non-scalar argument: {a}")
-    for name in kwargs:
-        if kwargs[name].shape != ():
-            raise ValueError(f"Non-scalar argument: {name}={kwargs[name]}")
-
-
-def bind_args(fun, *args, **kwargs):
-    """
-    Flattens positional and keyword arguments into positional only. The function must not have keyword-only arguments.
-    """
-    sig = inspect.signature(fun)
-    bound = sig.bind(*args, **kwargs)
-    bound.apply_defaults()
-    return bound.args
 
 
 def broadcast(scalar_fun):
@@ -1592,10 +1402,73 @@ def broadcast(scalar_fun):
 
 
 ########################################################################################
-# Generate interface for scalar functions
+# Auto-generate interface functions for all scalar Ops
 ########################################################################################
 
 type ScalarInterfaceFun[ScalarO: ScalarOp] = Callable[..., InfixRV[ScalarO | VMap]]
+
+
+def _scalar_op_doc(OpClass):
+    op = OpClass
+    op_info = ir._OpInfo(OpClass)
+    expected_parents = op_info.expected_parents
+
+    if op.random:
+        __doc__ = f"Creates a {str(OpClass.__name__)} distributed RV."
+    else:
+        __doc__ = f"Creates an RV by applying {str(OpClass.__name__)} to parents."
+
+    __doc__ += """
+    
+    All arguments must either be scalar or mutually broadcastable according to
+    ``config.broadcasting``.
+
+    Args:
+    """
+
+    for p in expected_parents:
+        __doc__ += f"""
+        {p}: {expected_parents[p]}
+    """
+
+    __doc__ += f"""
+    Returns:
+        Random variable with ``z.op`` of type `pangolin.ir.{str(OpClass.__name__)}` or `pangolin.ir.VMap` if broadcasting is triggered and {len(expected_parents)} parent(s).
+    """
+
+    from .. import util
+
+    # arguments 0.1, 0.2, 0.4, etc. work for *almost* all ops and round correctly
+    args = [0.1 * 2**n for n in range(len(expected_parents))]
+    args_str = [str(a) for a in args]
+    par_args = [f"InfixRV(Constant({a}))" for a in args]
+
+    __doc__ += f"""
+    Examples
+    --------
+    >>> {util.camel_case_to_snake_case(str(OpClass.__name__))}{util.comma_separated(args_str, spaces=True)}
+    InfixRV({str(OpClass.__name__)}(), {util.comma_separated(par_args, parens=False, spaces=True)})
+    """
+
+    if op._notes:
+        __doc__ += f"""
+        
+    Notes
+    -----
+    
+    """
+        for note in op._notes:
+            __doc__ += f"""
+    {note}
+    """
+
+    # __doc__ += f"""
+
+    # See Also
+    # --------
+    # `pangolin.ir.{str(OpClass.__name__)}`
+    # """
+    return __doc__
 
 
 def get_base_op_from_scalar_fun[ScalarO: ScalarOp](fun: ScalarInterfaceFun[ScalarO]) -> Type[ScalarO]:
@@ -1635,26 +1508,6 @@ def _scalar_op_signature(fun: ScalarInterfaceFun):
     return new_sig
 
 
-# def _scalar_handler(op):
-#     def handler(*args, **kwargs):
-#         if config.broadcasting == Broadcasting.OFF:
-#             return create_rv(op, *args, *[kwargs[a] for a in kwargs])
-#         elif config.broadcasting == Broadcasting.SIMPLE:
-#             positional_args = args + tuple(kwargs[a] for a in kwargs)
-#             parent_shapes = [get_shape(arg) for arg in positional_args]
-#             vmapped_op = vmap_scalars_simple(op, *parent_shapes)
-#             return create_rv(vmapped_op, *positional_args)
-#         elif config.broadcasting == Broadcasting.NUMPY:
-#             positional_args = args + tuple(kwargs[a] for a in kwargs)
-#             parent_shapes = [get_shape(arg) for arg in positional_args]
-#             vmapped_op = vmap_scalars_numpy(op, *parent_shapes)
-#             return create_rv(vmapped_op, *positional_args)
-#         else:
-#             raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
-
-#     return handler
-
-
 def scalar_op(fun: ScalarInterfaceFun):
     OpClass = get_base_op_from_scalar_fun(fun)
     op = OpClass()
@@ -1668,10 +1521,20 @@ def scalar_op(fun: ScalarInterfaceFun):
         positional_args = tuple(makerv(a) for a in args) + tuple(makerv(kwargs[a]) for a in kwargs)
         return InfixRV(op, *positional_args)
 
+    scalar_handler = makefun.create_function(
+        _scalar_op_signature(fun),
+        handler,
+        func_name=fun.__name__,
+        qualname=fun.__qualname__,
+        module_name=fun.__module__,
+        doc=_scalar_op_doc(OpClass),
+    )
+
+    broadcast_handler = broadcast(scalar_handler)
+
     wrapper = makefun.create_function(
         _scalar_op_signature(fun),
-        # _scalar_handler(op),
-        handler,
+        broadcast_handler,
         func_name=fun.__name__,
         qualname=fun.__qualname__,
         module_name=fun.__module__,

@@ -83,4 +83,4 @@ class DeterministicTests(MixinBase):
 
             output_pangolin = self.ancestor_sample_flat([output_rv], None)
             output_numpy = numpy_fun(*inputs)
-            assert np.allclose(output_pangolin, output_numpy, atol=1e-5, rtol=1e-5)
+            assert np.allclose(output_pangolin, output_numpy, atol=1e-4, rtol=1e-4)

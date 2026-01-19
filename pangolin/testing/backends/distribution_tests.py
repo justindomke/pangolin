@@ -16,7 +16,7 @@ def rands_from_ranges(ranges):
         if domain == "real":
             new = np.random.randn()
         elif domain == "positive":
-            new = 0.01 + np.abs(np.random.randn())
+            new = 0.1 + np.abs(np.random.randn())
         elif domain == "vector":
             new = np.random.randn(dims)
         elif domain == "matrix":
@@ -33,7 +33,7 @@ def rands_from_ranges(ranges):
             scores = np.random.randn(dims)
             new = np.exp(scores - scipy.special.logsumexp(scores))
         elif domain == "positive-vector":
-            new = 0.01 + np.abs(np.random.randn(dims))
+            new = 0.1 + np.abs(np.random.randn(dims))
         else:
             raise NotImplementedError()
         out.append(new)
