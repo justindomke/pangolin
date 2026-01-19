@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 # from pangolin.simple_interface.base import make_infix_rv
 
-from pangolin.interface.vmapping import (
+from pangolin.interface.base import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,

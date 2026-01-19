@@ -1,6 +1,6 @@
 from pangolin.ir import Composite, Shape, Op
 from pangolin.interface import InfixRV, makerv, normal, create_rv
-from .vmapping import generated_nodes, AbstractOp
+from .base import generated_nodes, AbstractOp
 from pangolin import util
 import jax.tree_util
 from typing import Callable

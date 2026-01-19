@@ -27,7 +27,7 @@ from typing import Sequence
 from typing import Any, Self
 from jaxtyping import PyTree
 from .compositing import make_composite, generated_nodes, Composite
-from .vmapping import AbstractOp
+from .base import AbstractOp
 from . import base
 from .util import fill_tril, extract_tril
 

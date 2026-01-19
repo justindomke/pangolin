@@ -1,4 +1,4 @@
-from pangolin.interface.vmapping import vmap_subgraph, AbstractOp
+from pangolin.interface.base import vmap_subgraph, AbstractOp
 from pangolin import ir
 from pangolin.ir import RV, Constant
 from pangolin.interface import InfixRV, makerv

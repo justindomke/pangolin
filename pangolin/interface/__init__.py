@@ -96,7 +96,6 @@ from .base import RVLike
 
 # from . import vmap
 # from . import vmap
-from .vmapping import vmap
 from .compositing import composite
 from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
 from .indexing import index
@@ -191,7 +190,6 @@ __all__ = [
     "fill_tril",
     "extract_tril",
     "base",
-    "vmapping",
     "compositing",
     "autoregressing",
     "indexing",

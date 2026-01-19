@@ -11,7 +11,7 @@ from pangolin.interface import (
     exponential,
 )
 from pangolin.interface.compositing import composite_flat, make_composite
-from .vmapping import generated_nodes, AbstractOp, get_dummy_args
+from .base import generated_nodes, AbstractOp, get_dummy_args
 from pangolin import util
 import jax.tree_util
 from pangolin.interface.base import RVLike

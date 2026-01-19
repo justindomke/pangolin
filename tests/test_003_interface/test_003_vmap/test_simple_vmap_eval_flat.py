@@ -2,7 +2,7 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.vmapping import (
+from pangolin.interface.base import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
