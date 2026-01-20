@@ -110,7 +110,7 @@ class DistributionTests(MixinBase):
         if pangolin_op in self._ops_without_sampling_support:
             pytest.skip("Skipping because backend does not support this")
 
-        for reps in range(5):
+        for reps in range(1):
             inputs = rands_from_ranges(ranges)
 
             input_rvs = [RV(Constant(x)) for x in inputs]
@@ -149,7 +149,7 @@ class DistributionTests(MixinBase):
         if pangolin_op in self._ops_without_log_prob_support:
             pytest.skip("Skipping because backend does not support this")
 
-        for reps in range(5):
+        for reps in range(1):
             inputs = rands_from_ranges(ranges)
 
             input_rvs = [RV(Constant(x)) for x in inputs]

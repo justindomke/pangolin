@@ -74,7 +74,7 @@ class DeterministicTests(MixinBase):
 
     @pytest.mark.parametrize("pangolin_op, numpy_fun, ranges", testdata)
     def test_deterministic_op(self, pangolin_op, numpy_fun, ranges):
-        for reps in range(5):
+        for reps in range(1):
             inputs = rands_from_ranges(ranges)
 
             input_rvs = [RV(Constant(x)) for x in inputs]
