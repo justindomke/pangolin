@@ -1,10 +1,5 @@
 # Before 0.0.1
 
-* Bring sanity to indexing
-
-  * Outer indexing by default
-  * Offer vectorized indexing `A.v[x,y,z]` obey scalar broadcasting
-
 * Offer optional OCD array indexing mode
 
 * Add super().__init__ to all Op
@@ -15,13 +10,8 @@
 
 * Use __slots__ on RV / Op
 
-* Figure out what to do about vectorized indexing.
-  * Maybe allow special slices? Maybe do something else?
-
 * Special Slice type that's a subtype of Constant
   * Possibly other Constant types?
-
-* Make VMap generic so you can have VMap[VMap] etc.
 
 * Maybe give in_axes arguments for VMap type hints
 

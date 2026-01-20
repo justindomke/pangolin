@@ -5,20 +5,24 @@ Interface for fully-orthogonal indexing.
 from __future__ import annotations
 
 from jax._src.core import pp_aval
-from . import InfixRV
 from pangolin.ir import Op, VMap, Constant, print_upstream, Shape
 from pangolin.ir import Index
 from pangolin import dag, ir, util
 from collections.abc import Callable
-from .base import makerv, create_rv, RVLike, constant, exp, log, config, Broadcasting, get_shape
+from .base import makerv, create_rv, constant, exp, log, config, Broadcasting, get_shape
 from . import base
-from typing import cast
+from typing import cast, TYPE_CHECKING
 import numpy as np
 from jax import numpy as jnp
 import types
 
 
+from .base import InfixRV, RVLike
+
 _IdxType = RVLike | slice | types.EllipsisType
+
+
+# if TYPE_CHECKING: # needed?
 
 
 def eliminate_ellipses(ndim: int, idx: tuple[_IdxType, ...]) -> tuple[slice | RVLike, ...]:
@@ -112,9 +116,11 @@ def convert_indices(shape: Shape, *indices: RVLike | slice) -> tuple[InfixRV, ..
 
 def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
     """
-    Index a RV. Using fully-orthogonal indexing.
+    Index a RV Using fully-orthogonal indexing.
 
     Note that this function is (intentionally) much simpler than indexing in NumPy or JAX or PyTorch in that it performs *fully orthogonal indexing* and that *slices are treated exactly the same as 1D arrays*.
+
+    (Similar to ``oindex`` in `NEP 21 <https://numpy.org/neps/nep-0021-advanced-indexing.html>`_ .)
 
     Args:
         var: The RV to be indexed
@@ -158,7 +164,6 @@ def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
 
     indices = eliminate_ellipses(var.ndim, indices)
 
-    # TODO: Allow ellipses
     if len(var.shape) != len(indices):
         raise ValueError(f"RV has {var.ndim} dims but was given {len(indices)} indices")
 
@@ -166,82 +171,94 @@ def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
     return InfixRV(Index(), var, *rv_indices)
 
 
-def vmap_scalar_index_simple(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.Index | ir.VMap:
-    """ """
+def vindex(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index] | InfixRV[ir.VMap[ir.Index]]:
+    """
+    Index a RV Using "fully-vectorized" indexing.
 
-    array_shape = None
-    for shape in index_shapes:
-        if shape == ():
-            continue
+    This function treats ``var`` as a scalar function of the indices and then applys the normal scalar broadcasting rules (as configured by `config`). Note that this behavior is (intentionally) much simpler than indexing in NumPy or JAX or PyTorch in that it performs *fully orthogonal indexing* and that *slices are treated exactly the same as 1D arrays*.
 
-        if array_shape is None:
-            array_shape = shape
+    (Named in honor of ``vindex`` in `NEP 21 <https://numpy.org/neps/nep-0021-advanced-indexing.html>`_ .)
+
+    Args:
+        var: The RV to be indexed
+        indices: The indices into the RV. Unless there is an ellipsis, the number of indices must match the number of dimensions of ``var``.
+
+    Returns:
+        Random variable with shape equal to the shapes of all indices, concatenated.
+
+
+    Examples
+    --------
+    Index a 2D array with two matching 2D arrays
+
+    >>> A = constant([[0.,0,0],[1,1,1],[2,2,2]])
+    >>> B = constant([[0,1,2],[2,1,0]])
+    >>> C = constant([[2,1,1],[0,0,0]])
+    >>> D = vindex(A, B, C)
+    >>> print_upstream(D)
+    shape  | statement
+    ------ | ---------
+    (3, 3) | a = [[0. 0. 0.] [1. 1. 1.] [2. 2. 2.]]
+    (2, 3) | b = [[0 1 2] [2 1 0]]
+    (2, 3) | c = [[2 1 1] [0 0 0]]
+    (2, 3) | d = vmap(vmap(index, [None, 0, 0], 3), [None, 0, 0], 2)(a,b,c)
+
+    With a square matrix, you can use slices to extract the diagonal
+
+    >>> A = constant([[1,2,3],[4,5,6],[7,8,9]])
+    >>> B = vindex(A,slice(None),slice(None))
+    >>> print_upstream(B)
+    shape  | statement
+    ------ | ---------
+    (3, 3) | a = [[1 2 3] [4 5 6] [7 8 9]]
+    (3,)   | b = [0 1 2]
+    (3,)   | c = [0 1 2]
+    (3,)   | d = vmap(index, [None, 0, 0], 3)(a,b,c)
+
+    You can also get the anti-diagonal
+
+    >>> C = vindex(A,slice(None),slice(None,None,-1))
+    >>> print_upstream(C)
+    shape  | statement
+    ------ | ---------
+    (3, 3) | a = [[1 2 3] [4 5 6] [7 8 9]]
+    (3,)   | b = [0 1 2]
+    (3,)   | c = [2 1 0]
+    (3,)   | d = vmap(index, [None, 0, 0], 3)(a,b,c)
+    """
+
+    var = makerv(var)
+
+    indices = eliminate_ellipses(var.ndim, indices)
+
+    if len(var.shape) != len(indices):
+        raise ValueError(f"RV has {var.ndim} dims but was given {len(indices)} indices")
+
+    rv_indices = convert_indices(var.shape, *indices)
+
+    @base.broadcast
+    def scalar_index(*indices: InfixRV):
+        if any(rv_idx.shape != () for rv_idx in indices):
+            raise ValueError("non-scalar index")
+        if len(indices) != var.ndim:
+            raise TypeError(f"Got {len(indices)} for RV with {var.ndim} dims")
+
+        return InfixRV(Index(), var, *indices)
+
+    out = scalar_index(*rv_indices)
+    return out
+
+
+class VectorIndexProxy:
+    """
+    Fascilitates using ``rv.vindex[a,b,c]`` notation.
+    """
+
+    def __init__(self, var: InfixRV):
+        self.var = var
+
+    def __getitem__(self, args):
+        if isinstance(args, tuple):
+            return vindex(self.var, *args)
         else:
-            if shape != array_shape:
-                raise ValueError(f"Can't broadcast non-matching shapes {shape} and {array_shape}")
-
-    if array_shape is None:
-        return ir.Index()
-
-    in_axes = (None,) + tuple(0 if shape == array_shape else None for shape in index_shapes)
-
-    new_op = ir.Index()
-    for size in reversed(array_shape):
-        new_op = VMap(new_op, in_axes, size)
-
-    assert new_op.get_shape(var_shape, *index_shapes) == array_shape, "Pangolin bug"
-
-    return new_op
-
-
-def vmap_scalar_index_numpy(var_shape: ir.Shape, *index_shapes: ir.Shape) -> ir.Index | ir.VMap:
-    # will raise ValueError if not broadcastable
-    array_shape = np.broadcast_shapes(*index_shapes)
-
-    if array_shape is None:
-        return ir.Index()
-
-    new_op = ir.Index()
-    for n, size in enumerate(reversed(array_shape)):
-        in_axes = []
-        for index_shape in index_shapes:
-            if len(index_shape) < n + 1:
-                my_axis = None
-            else:
-                my_axis = 0
-            in_axes.append(my_axis)
-
-        new_op = VMap(new_op, (None,) + tuple(in_axes), size)
-
-    assert new_op.get_shape(var_shape, *index_shapes) == array_shape, "Pangolin bug"
-
-    return new_op
-
-
-# TODO: should merge this with functionality from base? (Especially when add new numpy functionality)
-def vector_index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index | ir.VMap]:
-    var_shape = get_shape(var)
-    var_ndim = len(var_shape)
-
-    indices = eliminate_ellipses(var_ndim, indices)
-    rv_indices = convert_indices(var_shape, *indices)
-
-    if config.broadcasting == Broadcasting.OFF:
-        op = ir.Index()
-        if any(rv_index.shape != () for rv_index in rv_indices):
-            raise ValueError("If broadcasting is off, non-scalar indices are forbidden")
-        return create_rv(op, var, *rv_indices)
-    elif config.broadcasting == Broadcasting.SIMPLE:
-        var_shape = get_shape(var)
-        index_shapes = [get_shape(idx) for idx in rv_indices]
-        base.broadcast_shapes_simple(*index_shapes)  # raises ValueError if invalid
-        vmapped_op = vmap_scalar_index_simple(var_shape, *index_shapes)
-        return create_rv(vmapped_op, var, *rv_indices)
-    elif config.broadcasting == Broadcasting.NUMPY:
-        var_shape = get_shape(var)
-        index_shapes = [get_shape(idx) for idx in rv_indices]
-        np.broadcast_shapes(*index_shapes)  # raises ValueError if invalid
-        vmapped_op = vmap_scalar_index_numpy(var_shape, *index_shapes)
-        return create_rv(vmapped_op, var, *rv_indices)
-    else:
-        raise Exception(f"Unknown scalar broadcasting model: {config.broadcasting}")
+            return vindex(self.var, args)

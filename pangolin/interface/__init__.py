@@ -56,7 +56,7 @@ Other multivariate functions :func:`sum` :func:`softmax` `diag` `diag_matrix` `f
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
 Control flow                 :func:`vmap` `broadcast` :func:`composite` :func:`autoregressive` :func:`autoregress`
-Indexing                     :func:`index` (or ``rv.[...]``)
+Indexing                     :func:`index` (or ``rv.[...]``) `vindex`
 Transformed densities        `Transform` `tforms` `compose_transforms`
 ============================ ======
 
@@ -98,7 +98,7 @@ from .base import RVLike
 # from . import vmap
 from .compositing import composite
 from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
-from .indexing import index
+from .indexing import index, vindex
 from .transforming import Transform, tforms, compose_transforms
 from .util import fill_tril, extract_tril
 from pangolin.ir import print_upstream
@@ -133,6 +133,7 @@ __all__ = [
     "autoregressive",
     "autoregress",
     "index",
+    "vindex",
     "normal",
     "normal_prec",
     "lognormal",

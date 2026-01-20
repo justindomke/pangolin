@@ -22,7 +22,8 @@ from .base import (
     override,
     sum,
 )
-from .indexing import vector_index
+
+from .indexing import vindex
 from typing import Sequence
 from typing import Any, Self
 from jaxtyping import PyTree

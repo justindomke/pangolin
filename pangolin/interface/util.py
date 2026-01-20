@@ -1,5 +1,7 @@
 from .base import RVLike, override, makerv, constant
-from .indexing import vector_index
+
+# from .indexing import vector_index
+from .indexing import vindex
 from pangolin.ir import print_upstream
 
 
@@ -77,6 +79,6 @@ def extract_tril(L: RVLike):
     M = N * (N + 1) // 2
     rows, cols = np.tril_indices(N)
     with override(broadcasting="simple"):
-        l = vector_index(L, rows, cols)
+        l = vindex(L, rows, cols)
         assert l.shape == (M,)
         return l

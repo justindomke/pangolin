@@ -226,19 +226,6 @@ def override(**kwargs):
 ########################################################################################
 
 
-# class VectorIndexProxy:
-#     def __init__(self, var: InfixRV):
-#         self.var = var
-
-#     def __getitem__(self, args):
-#         from .indexing import vector_index
-
-#         if isinstance(args, tuple):
-#             return vector_index(self.var, *args)
-#         else:
-#             return vector_index(self.var, args)
-
-
 class InfixRV[O: Op](ir.RV[O]):
     """An Infix RV is exactly like a standard `pangolin.ir.RV` except it supports infix
     operations.
@@ -270,7 +257,7 @@ class InfixRV[O: Op](ir.RV[O]):
     __array_priority__ = 1000  # so x @ y works when x numpy.ndarray and y RV
 
     def __init__(self, op: O, *parents: InfixRV):
-        # self.s = VectorIndexProxy(self)
+        # self.vindex = VectorIndexProxy(self)
         super().__init__(op, *parents)
 
     def __neg__(self):
@@ -380,6 +367,30 @@ class InfixRV[O: Op](ir.RV[O]):
         Just a shortcut for ``tuple(p.op for p in self.parents)``. Intended mostly for testing.
         """
         return tuple(p.op for p in self.parents)
+
+    @property
+    def vindex(self):
+        """
+        Do vectorized indexing. That is, treat the RV as a scalar function from (scalar) indices to (scalar) output. Then, broadcast the indices according to standard broadcasting rules.
+
+        Technically ``rv.vindex`` returns a proxy object that can be indexed, so that ``rv.vindex[a,b,c]`` is equivalent to ``vindex(rv, a, b, c)``. Slices are converted to corresponding 1D arrays. Unless an ellipsis is given, the number of arguments must exactly match the number of dimensions of the array.
+
+        Examples
+        --------
+        >>> A = constant([[0,1,2],[3,4,5]])
+        >>> B = A.vindex[[2,2,2,0,0,0],[0,1,2,0,1,2]]
+        >>> print_upstream(B)
+        shape  | statement
+        ------ | ---------
+        (2, 3) | a = [[0 1 2] [3 4 5]]
+        (6,)   | b = [2 2 ... 0 0]
+        (6,)   | c = [0 1 ... 1 2]
+        (6,)   | d = vmap(index, [None, 0, 0], 6)(a,b,c)
+        """
+
+        from .indexing import VectorIndexProxy
+
+        return VectorIndexProxy(self)
 
 
 ########################################################################################
