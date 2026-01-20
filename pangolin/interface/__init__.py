@@ -32,10 +32,10 @@ This produces the following internal representation.
     ----- | ---------
     ()    | a = 0
     ()    | b = 1
-    ()    | c ~ normal(a,b)
+    ()    | c ~ normal(a, b)
     (3,)  | d = [2 3 4]
     (3,)  | e ~ vmap(exponential, [0], 3)(d)
-    (3,)  | f ~ vmap(normal, [None, 0], 3)(c,e)
+    (3,)  | f ~ vmap(normal, [None, 0], 3)(c, e)
 
 Reference card
 --------------

@@ -2007,7 +2007,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     ()    | a = 0.5
     ()    | b ~ bernoulli(a)
     ()    | c = 2
-    ()    | d ~ normal(b,c)
+    ()    | d ~ normal(b, c)
     (3,)  | e = [75 50 99]
     >>> print_upstream({'dog':[u], 'kitty':(v,)}) # any pytree is OK
     shape | statement
@@ -2015,7 +2015,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     ()    | a = 0.5
     ()    | b ~ bernoulli(a)
     ()    | c = 2
-    ()    | d ~ normal(b,c)
+    ()    | d ~ normal(b, c)
     (3,)  | e = [75 50 99]
     >>> print_upstream(dog=u, kitty=v)
     shape | statement
@@ -2023,7 +2023,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     ()    | a = 0.5
     ()    | b ~ bernoulli(a)
     ()    | c = 2
-    ()    | dog ~ normal(b,c)
+    ()    | dog ~ normal(b, c)
     (3,)  | kitty = [75 50 99]
     >>> print_upstream(r=r, s=s, t=t, u=u, v=v) # control all names
     shape | statement
@@ -2031,7 +2031,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     ()    | r = 0.5
     ()    | s ~ bernoulli(r)
     ()    | t = 2
-    ()    | u ~ normal(s,t)
+    ()    | u ~ normal(s, t)
     (3,)  | v = [75 50 99]
     """
 
@@ -2070,7 +2070,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
 
         par_ids = [node_to_id[p] for p in node.parents]
 
-        par_id_str = util.comma_separated(par_ids, parens=False)
+        par_id_str = util.comma_separated(par_ids, parens=False, spaces=True)
         # par_id_str = par_id_str + " " * (par_str_len - len(par_id_str))
 
         shape_str = str(node.shape)

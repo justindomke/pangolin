@@ -179,7 +179,7 @@ def field1(axis_size: int, fun):
     ------ | ---------
     (2, 3) | a = [[1.1 2.2 3.3] [4.4 5.5 6.6]]
     (2,)   | b = [7.7 8.8]
-    (2, 3) | c = vmap(vmap(mul, [0, None], 3), [0, 0], 2)(a,b)
+    (2, 3) | c = vmap(vmap(mul, [0, None], 3), [0, 0], 2)(a, b)
 
     For technical reasons, returning an array without further processing will cause an error
 

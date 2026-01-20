@@ -139,7 +139,7 @@ def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
     (2, 3) | a = [[3 0 2] [4 4 4]]
     (2,)   | b = [0 1]
     (2,)   | c = [2 2]
-    (2, 2) | d = index(a,b,c)
+    (2, 2) | d = index(a, b, c)
     >>> C = index(A, 0, ...)
     >>> print_upstream(C)
     shape  | statement
@@ -147,7 +147,7 @@ def index(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index]:
     (2, 3) | a = [[3 0 2] [4 4 4]]
     ()     | b = 0
     (3,)   | c = [0 1 2]
-    (3,)   | d = index(a,b,c)
+    (3,)   | d = index(a, b, c)
 
     Technically, it's legal (although pointless) to index a 0-D array
 
@@ -201,7 +201,7 @@ def vindex(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index] | InfixRV[ir.VM
     (3, 3) | a = [[0. 0. 0.] [1. 1. 1.] [2. 2. 2.]]
     (2, 3) | b = [[0 1 2] [2 1 0]]
     (2, 3) | c = [[2 1 1] [0 0 0]]
-    (2, 3) | d = vmap(vmap(index, [None, 0, 0], 3), [None, 0, 0], 2)(a,b,c)
+    (2, 3) | d = vmap(vmap(index, [None, 0, 0], 3), [None, 0, 0], 2)(a, b, c)
 
     With a square matrix, you can use slices to extract the diagonal
 
@@ -213,7 +213,7 @@ def vindex(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index] | InfixRV[ir.VM
     (3, 3) | a = [[1 2 3] [4 5 6] [7 8 9]]
     (3,)   | b = [0 1 2]
     (3,)   | c = [0 1 2]
-    (3,)   | d = vmap(index, [None, 0, 0], 3)(a,b,c)
+    (3,)   | d = vmap(index, [None, 0, 0], 3)(a, b, c)
 
     You can also get the anti-diagonal
 
@@ -224,7 +224,7 @@ def vindex(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index] | InfixRV[ir.VM
     (3, 3) | a = [[1 2 3] [4 5 6] [7 8 9]]
     (3,)   | b = [0 1 2]
     (3,)   | c = [2 1 0]
-    (3,)   | d = vmap(index, [None, 0, 0], 3)(a,b,c)
+    (3,)   | d = vmap(index, [None, 0, 0], 3)(a, b, c)
     """
 
     var = makerv(var)

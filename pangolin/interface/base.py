@@ -385,7 +385,7 @@ class InfixRV[O: Op](ir.RV[O]):
         (2, 3) | a = [[0 1 2] [3 4 5]]
         (6,)   | b = [2 2 ... 0 0]
         (6,)   | c = [0 1 ... 1 2]
-        (6,)   | d = vmap(index, [None, 0, 0], 6)(a,b,c)
+        (6,)   | d = vmap(index, [None, 0, 0], 6)(a, b, c)
         """
 
         from .indexing import VectorIndexProxy
@@ -793,16 +793,16 @@ def vmap_subgraph(
     ----- | ---------
     ()    | a = abstract_op
     ()    | b = abstract_op
-    ()    | c = add(a,b)
-    ()    | d = mul(a,c)
+    ()    | c = add(a, b)
+    ()    | d = mul(a, c)
     >>> [d] = vmap_subgraph([a_dummy, b_dummy], [c_dummy, d_dummy], [d_dummy], [a, b], [0, 0], 3)
     >>> print_upstream(d)
     shape | statement
     ----- | ---------
     (3,)  | a = [0 1 2]
     (3,)  | b = [4 5 6]
-    (3,)  | c = vmap(add, [0, 0], 3)(a,b)
-    (3,)  | d = vmap(mul, [0, 0], 3)(a,c)
+    (3,)  | c = vmap(add, [0, 0], 3)(a, b)
+    (3,)  | d = vmap(mul, [0, 0], 3)(a, c)
     """
     # TODO: Should we allow axis_size=None here?
 
@@ -1182,17 +1182,17 @@ def vmap[*Args](
     ----- | ---------
     (3,)  | a = [1 2 3]
     ()    | b = 7
-    (3,)  | c = vmap(mul, [0, None], 3)(a,b)
+    (3,)  | c = vmap(mul, [0, None], 3)(a, b)
     ()    | d = 8
-    (3,)  | e = vmap(add, [0, None], 3)(c,d)
+    (3,)  | e = vmap(add, [0, None], 3)(c, d)
     >>> print_upstream(out2)
     shape | statement
     ----- | ---------
     (3,)  | a = [1 2 3]
     ()    | b = 7
-    (3,)  | c = vmap(mul, [0, None], 3)(a,b)
+    (3,)  | c = vmap(mul, [0, None], 3)(a, b)
     ()    | d = 8
-    (3,)  | e = vmap(add, [0, None], 3)(c,d)
+    (3,)  | e = vmap(add, [0, None], 3)(c, d)
 
     See Also
     --------
