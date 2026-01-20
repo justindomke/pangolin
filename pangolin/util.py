@@ -39,6 +39,10 @@ def comma_separated(
     'a,b,c'
     >>> comma_separated(['a', 'b', 'c'], lambda s: s + "0", parens=False)
     'a0,b0,c0'
+    >>> comma_separated(['a', 'b', 'c'], spaces=True)
+    '(a, b, c)'
+    >>> comma_separated(['a', 'b', 'c'], lambda s: s + "0", spaces=True)
+    '(a0, b0, c0)'
     """
     ret = ""
     if parens:
@@ -209,9 +213,7 @@ class WriteOnceDefaultDict(dict):
 
     def __setitem__(self, key, value):
         if key in self:
-            raise ValueError(
-                f"Cannot overwrite existing key {key} in WriteOnceDefaultDict"
-            )
+            raise ValueError(f"Cannot overwrite existing key {key} in WriteOnceDefaultDict")
         super().__setitem__(key, value)
 
     def __getitem__(self, key):
@@ -366,9 +368,7 @@ def map_inside_tree(f: Callable, tree: PyTree):
         return rez
 
 
-def assert_all_leaves_instance_of(
-    tree: PyTree, type: type, is_leaf: Callable | None = None
-):
+def assert_all_leaves_instance_of(tree: PyTree, type: type, is_leaf: Callable | None = None):
     for node in jax.tree_util.tree_flatten(tree, is_leaf)[0]:
         assert isinstance(node, type)
 
@@ -503,9 +503,7 @@ def tree_map_recurse_at_leaf(
     )
 
 
-def tree_map_recurse_at_leaf_with_none_as_leaf(
-    f: Callable, tree: PyTree, *remaining_trees: PyTree
-):
+def tree_map_recurse_at_leaf_with_none_as_leaf(f: Callable, tree: PyTree, *remaining_trees: PyTree):
     """
     Examples
     --------
@@ -519,9 +517,7 @@ def tree_map_recurse_at_leaf_with_none_as_leaf(
     >>> tree_map_recurse_at_leaf_with_none_as_leaf(lambda a,b: a, pytree1, pytree2)
     {'cat': 3, 'dog': 3}
     """
-    return tree_map_recurse_at_leaf(
-        f, tree, *remaining_trees, is_leaf=_is_leaf_with_none
-    )
+    return tree_map_recurse_at_leaf(f, tree, *remaining_trees, is_leaf=_is_leaf_with_none)
 
 
 def flatten_fun(f: Callable, *args: Any, is_leaf: Callable[[Any], bool] | None = None):
@@ -580,9 +576,7 @@ def dual_flatten(pytree1: PyTree, pytree2: PyTree) -> PyTree:
     >>> dual_flatten(pytree1, pytree2)
     ([None, 3, 3], ['dog', 'cat', None])
     """
-    new_tree1 = tree_map_recurse_at_leaf_with_none_as_leaf(
-        lambda a, b: a, pytree1, pytree2
-    )
+    new_tree1 = tree_map_recurse_at_leaf_with_none_as_leaf(lambda a, b: a, pytree1, pytree2)
     _check_tree_consistency(new_tree1, pytree2)
 
     flat_tree1, tree1_treedef = tree_flatten_with_none_as_leaf(new_tree1)
@@ -624,14 +618,12 @@ def assimilate_vals(vars: PyTree, vals: PyTree) -> PyTree[jnp.ndarray]:
     flat_vars, vars_treedef = jax.tree_util.tree_flatten(vars)
     flat_vals, vals_treedef = jax.tree_util.tree_flatten(new_vals)
     assert vars_treedef == vals_treedef, (
-        f"vars and vals must have same structure (after conversion to arrays). ({vars_treedef} vs "
-        f"{vals_treedef}"
+        f"vars and vals must have same structure (after conversion to arrays). ({vars_treedef} vs " f"{vals_treedef}"
     )
     for var, val in zip(flat_vars, flat_vals):
         if var.shape != val.shape:
             raise ValueError(
-                f"given var {var} with shape {var.shape} does not match given val"
-                f" {val} with shape {val.shape}."
+                f"given var {var} with shape {var.shape} does not match given val" f" {val} with shape {val.shape}."
             )
     return new_vals
 
@@ -773,16 +765,10 @@ def tree_allclose(a: PyTree, b: PyTree, **kwargs: Any) -> bool:
     struct_a = jax.tree_util.tree_structure(a)
     struct_b = jax.tree_util.tree_structure(b)
     if struct_a != struct_b:
-        raise ValueError(
-            "PyTree structures do not match.\n"
-            f" a structure: {struct_a}\n"
-            f" b structure: {struct_b}"
-        )
+        raise ValueError("PyTree structures do not match.\n" f" a structure: {struct_a}\n" f" b structure: {struct_b}")
 
     # 2. Map np.allclose over the leaves to get a PyTree of booleans.
-    leaves_are_close = jax.tree_util.tree_map(
-        lambda x, y: np.allclose(x, y, **kwargs), a, b
-    )
+    leaves_are_close = jax.tree_util.tree_map(lambda x, y: np.allclose(x, y, **kwargs), a, b)
 
     # 3. Flatten the boolean PyTree and check if all values are True.
     return all(jax.tree_util.tree_leaves(leaves_are_close))
