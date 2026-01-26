@@ -168,85 +168,21 @@ import jax.tree_util
 from pangolin import interface as pi
 
 
-# class Index(InfixRV):
-#    def __init__(self, size):
-#        self.size = size
-
-
-class Axis(ir.Constant):
+class Axis(ir.Op):
     """
     A scalar value but "special"
     """
 
+    _random = False
+    _get_shape = lambda *args: ()
+
     def __init__(self, size: int):
         self.size = size
-        super().__init__(size)
+        super().__init__()
 
 
 def axis(size):
     return InfixRV(Axis(size))
-
-
-class Slot(InfixRV):
-    """
-    What a Slot does:
-    - Initially, it throws an error if you try to do basically anything with it except __setitem__
-
-    Examples
-    --------
-    >>> x = Slot()
-    >>> x.shape
-    Traceback (most recent call last):
-        ...
-    RuntimeError: Locked! You must assign a value before accessing 'shape'
-    >>> value = pi.constant([5,6,7])
-    >>> i = axis(10)
-    >>> x[i] = value
-    >>> x.shape
-    (10, 3)
-    >>> x_i = x[i]
-    """
-
-    def __init__(self):
-        # We use object.__setattr__ to avoid triggering recursion if we had a __setattr__ override
-        object.__setattr__(self, "_initialized", False)
-        # Note: We do not call super().__init__() here because you likely
-        # want to defer that until initialize(), depending on your logic.
-
-    def __setitem__(self, idx: InfixRV[Axis], value: InfixRV):
-
-        # 1. Do your setup logic here
-        object.__setattr__(self, "idx", idx)
-        object.__setattr__(self, "value", value)
-
-        # 2. Flip the switch
-        object.__setattr__(self, "_initialized", True)
-
-    def __getattribute__(self, item):
-        # 1. Retrieve the flag safely
-        # We handle '_initialized' explicitly to prevent recursion
-        if item == "_initialized":
-            return object.__getattribute__(self, item)
-
-        # 2. Check if initialized
-        if not object.__getattribute__(self, "_initialized"):
-            # Allow __setitem__ explicitly (in case someone calls obj.__setitem__ directly)
-            # Allow __class__ and __repr__ so debuggers/print() don't crash immediately
-            if item in ("__setitem__", "__class__", "__repr__"):
-                return object.__getattribute__(self, item)
-
-            raise RuntimeError(f"Locked! You must assign a value before accessing '{item}'")
-
-        return super().__getattribute__(item)
-
-    @property
-    def shape(self):
-        axis_size = self.idx.op.size
-        return (axis_size,) + self.value.shape
-
-    @property
-    def ndim(self):
-
 
 
 def get_positional_count(func: Callable) -> int:
@@ -415,6 +351,116 @@ def extract_from_rvs(dummy_indices: Sequence[InfixRV], output: PyTree[InfixRV]):
     return indexed_rvs, indexed_dims, replay
 
 
+def index_if_necessary(base, *indices):
+    if all(idx.op == ir.Constant(range(size)) for size, idx in zip(base.shape, indices)):
+        return base
+    else:
+        return InfixRV(ir.Index(), base, *indices)
+
+
+def popout_axis(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
+    """
+    - rv is some rv that's been indexed with some number of axes
+    - we want to "recover" one of those axes, i.e. remove that axis from the indexing statement
+    - and we want to know where to find it
+    """
+
+    where = 0
+    base = rv.parents[0]
+    indices = rv.parents[1:]
+    for n, idx in enumerate(indices):
+        if idx is ax:
+            new_idx = pi.constant(range(ax.op.size))
+            new_indices = indices[:n] + (new_idx,) + indices[n + 1 :]
+            return index_if_necessary(base, *new_indices), where
+        else:
+            where += idx.ndim
+    raise ValueError(f"axis rv {ax} not found in Index rv {rv}")
+
+
+# def extract_from_rvs_single_index(dummy_index: InfixRV[Axis], output: PyTree[InfixRV]):
+#     n_before_index = dummy_index._n
+
+#     def is_abstract(rv: InfixRV) -> bool:
+#         return rv._n >= n_before_index
+
+#     def not_abstract(var: InfixRV):
+#         return not is_abstract(var)
+
+#     output_rvs, output_treedef = jax.tree_util.tree_flatten(output)
+
+#     all_rvs = dag.upstream_nodes(output_rvs, node_block=not_abstract)
+
+#     indexed_rvs = []
+#     indexed_dims = []
+#     for rv in all_rvs:
+#         if isinstance(rv.op, ir.Index):
+#             rv_base = rv.parents[0]
+#             rv_indices = rv.parents[1:]
+#             if dummy_index in rv_indices:
+
+#                 where_dummy = rv_indices.index(dummy_index)
+
+#                 has_other_dummy_indices = any(isinstance(idx.op, Axis) and idx is not dummy_index for idx in rv_indices)
+
+#                 if has_other_dummy_indices:
+#                     new_rv_indices = [slice(None) if idx is dummy_index else idx for idx in rv_indices]
+#                     new_indexed_rv = rv_base[*new_rv_indices]
+#                     indexed_rvs.append(new_indexed_rv)
+#                     indexed_dims.append(where_dummy)  # NOTE: THIS IS NOT RIGHT IN GENERAL! NEED TO LOOK AT SHAPES!
+#                 else:
+#                     indexed_rvs.append(rv.parents[0])
+#                     indexed_dims.append(where_dummy)
+
+#     def replay(*indexed_rvs_replayed):
+#         rv_to_replayed = {}
+
+#         n = 0
+#         for rv in all_rvs:
+#             if isinstance(rv.op, ir.Index):
+#                 where_dummies = find_indices(rv.parents[1:], dummy_indices)
+
+#                 if any(i is not None for i in where_dummies):
+#                     rv_to_replayed[rv] = indexed_rvs_replayed[n]
+#                     n += 1
+#                     continue
+
+#             replayed_rv = InfixRV(rv.op, *[rv_to_replayed[p] for p in rv.parents])
+#             rv_to_replayed[rv] = replayed_rv
+
+#         results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
+
+#         return jax.tree_util.tree_unflatten(output_treedef, results_flat)
+
+#     return indexed_rvs, indexed_dims, replay
+
+
+def vmap_axis(output: Sequence[InfixRV], ax_rv: InfixRV[Axis]):
+    arrays, dims, replay = extract_from_rvs([ax_rv], output)
+
+    axis_size = ax_rv.op.size
+
+    for array, d in zip(arrays, dims, strict=True):
+        [dim] = d
+        if array.shape[dim] != axis_size:
+            raise ValueError(f"Axis size {axis_size} does not match dim {dim} of shape {array.shape}")
+
+    in_axes = tuple(dim[0] for dim in dims)
+
+    warnings.warn(f"{in_axes=}")
+    warnings.warn(f"{axis_size=}")
+    warnings.warn(f"{arrays=}")
+
+    if len(arrays) == 1:
+        new_fun = vmap(replay, in_axes[0], axis_size)
+    else:
+        new_fun = vmap(replay, in_axes, axis_size)
+
+    return new_fun(*arrays)
+
+    # need to re-index all the starting arrays with remaining indices!
+
+
 def vfor(fun, size: None | Sequence[int] = None):
     """
     Examples
@@ -489,3 +535,64 @@ def vfor(fun, size: None | Sequence[int] = None):
         else:
             new_fun = vmap(new_fun, in_axes, axis_size)
     return new_fun(*arrays)
+
+
+# class Slot(InfixRV):
+#     """
+#     What a Slot does:
+#     - Initially, it throws an error if you try to do basically anything with it except __setitem__
+
+#     Examples
+#     --------
+#     >>> x = Slot()
+#     >>> x.shape
+#     Traceback (most recent call last):
+#         ...
+#     RuntimeError: Locked! You must assign a value before accessing 'shape'
+#     >>> value = pi.constant([5,6,7])
+#     >>> i = axis(10)
+#     >>> x[i] = value
+#     >>> x.shape
+#     (10, 3)
+#     >>> x_i = x[i]
+#     """
+
+#     def __init__(self):
+#         # We use object.__setattr__ to avoid triggering recursion if we had a __setattr__ override
+#         object.__setattr__(self, "_initialized", False)
+#         # Note: We do not call super().__init__() here because you likely
+#         # want to defer that until initialize(), depending on your logic.
+
+#     def __setitem__(self, idx: InfixRV[Axis], value: InfixRV):
+
+#         # 1. Do your setup logic here
+#         object.__setattr__(self, "idx", idx)
+#         object.__setattr__(self, "value", value)
+
+#         # 2. Flip the switch
+#         object.__setattr__(self, "_initialized", True)
+
+#     def __getattribute__(self, item):
+#         # 1. Retrieve the flag safely
+#         # We handle '_initialized' explicitly to prevent recursion
+#         if item == "_initialized":
+#             return object.__getattribute__(self, item)
+
+#         # 2. Check if initialized
+#         if not object.__getattribute__(self, "_initialized"):
+#             # Allow __setitem__ explicitly (in case someone calls obj.__setitem__ directly)
+#             # Allow __class__ and __repr__ so debuggers/print() don't crash immediately
+#             if item in ("__setitem__", "__class__", "__repr__"):
+#                 return object.__getattribute__(self, item)
+
+#             raise RuntimeError(f"Locked! You must assign a value before accessing '{item}'")
+
+#         return super().__getattribute__(item)
+
+#     @property
+#     def shape(self):
+#         axis_size = self.idx.op.size
+#         return (axis_size,) + self.value.shape
+
+#     # @property
+#     # def ndim(self):
