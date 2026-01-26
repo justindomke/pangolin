@@ -1,64 +1,160 @@
 """
-The idea of this (sub)-module is to support a notation like this
+The idea of this (sub)-module is to support a notation like this:
 
-i = Index(5)
-j = Index(10)
-x = Field()
-x[i, j] = a[i] * b[i,j] * c[j]
+X = Slot()
+with Index() as i:
+    with Index() as j:
+        X[i,j,:] = A[i,:] * B[j,:]
 
-i = Index(5)
-j = Index(10)
-x = Field()
-x[i, j, :] = a[i, :] * b[i,j] * c[j, :]
+or
 
-x = field(
-    (5,10),
-    lambda i, j : a[i] * b[i,j] * c[j]
-)
-x = field(
-    (5,10),
-    lambda i, j : a[i, :] * b[i,j] * c[j, :]
+X = vfor(lambda i,j:
+    A[i,:] * B[j,:]
 )
 
-Or, to combine with autoregressive
+Instead of the mysterious:
 
-i = Index(5)
-j = Index(10)
-x = Field()
-x[start,j] = a[j]
-x[i,j] = x[i-1,j] + b[i,j]
+X = A[:,None,:] * B[None,:,:]
 
-x = field(
-    (5, 10),
-    rule = lambda i, j, x: x[i-1,j] + B[i,j]
-    init = lambda i, j: a[j]
-)
+Or this insanity:
 
-Strongly considering to change name to auto
+X = vmap(vmap(lambda ai, bj: ai * bj, [0, None]), [None, 0])
 
-z = auto.vmap @ lambda i, j: x[i] + y[j]
+We'd also like to support scans like this
 
-z = auto.scan(lambda i,j: x[i] + y[j]) @ lambda i, j, z: x[i] + y[j] + z[i-1,j]
+X = Slot()
+with Index() as i:
+    X[i, _, :] = A[i, :]
+    with Index() as j:
+        X[i, j,:] = X[i, j.prev,:] + A[i, j, :]
 
-Could have some notation for declaring sizes
+So how to do this? The tricky part is that we could have multiple assignments inside of a single block, e.g.
 
-I think we need to forbid complex things like
-    def fun(i, j):
-        a = x[i,j,:]
-        return a[i]
+X = Slot()
+Y = Slot()
+with Index() as i:
+    tmp1 = expensive_fun(A[i], B[i])
+    tmp2 = dist(tmp1, C[i])
+    X[i] = tmp2 * 2
+    Y[i] = other_dist(X[1], tmp2)
 
-- What we need is an extract_inputs(fun, num_dims) function
-    - First, create dummy scalars for each input dim.
-    - Then, run the function on those dummy scalars
-    - Then do a graph search from the outputs and find the original inputs and which dimensions are getting indexed with each dummy scalar.
-    - Make sure that the dummy scalars are only referenced at the "top" of the graph
-    - After that, it's all pretty easy?
+In this case it is absolutely necessary that the same tmp2 object is shared between X[i] and Y[i], otherwise results will not be correct.
+
+It would appear that the only way to achieve that is to vmap X and Y together, in a single call. This means that the vmap can't come when the Slot is assigned, but somehow must when the Index context manager exits. But that is tricky! Because what if you do this?
+
+X = Slot()
+Y = Slot()
+Z = Slot()
+with Index as i:
+    X[i] = ...
+    with Index() as j:
+        Y[i,j] = X[i] + A[j]
+    Z[i] = X[i] + ...
+
+Perhaps the rule is: Once *all* the Index context managers have exited for a given variable, THEN you can vmap it?
+
+OK... But what about this?
+
+X = Slot()
+with Index as i:
+    Z = Slot()
+    with Index() as j:
+        Z[j] = B[i] * A[j]
+
+STAGE 1: Slots only take one Index. Only one Index can ever be created at a time.
+
+X = Slot()
+Y = Slot()
+with Index() as i:
+    X[i] = dist(A[i], B[i])
+    Y[i] = X[i] * X[i]
+
+This seems fine.
+
+- When the context manager is entered, it records the current RV._n
+- Everything inside the context manager is totally "normal"
+- When a Slot is assigned, it just remembers the value assigned to it. It also places itself on the Index's list of assigned slots.
+- When the context manager for an Index exists, everything inside is vmapped.
+- The Index itself is a scalar abstract Op.
+- If further operations see an abstract Op upstream this triggers an error (e.g. if someone references a "temp" variable created inside the context manager)
+
+Don't see any way for this to go wrong.
+
+But what if you do this?
+
+X = Slot()
+with Index() as i:
+    X[i] = dist(A, B)
 
 
-Question: Should this also support vindex?
-- I think the answer is: That question doesn't make sense
-- We require all indices to either be scalars (i,j) or full slices
-- So no actual indexing takes place. It just "looks" like indexing.
+
+STAGE 2: Same, but you're allowed to create a Slot inside another context manager.
+
+X = Slot()
+Y = Slot()
+with Index() as i:
+    X[i] = dist(A[i], B[i])
+    Z = Slot()
+    with Index() as j:
+        Z[j] = fun(X[i], C[j])
+    Y[i] = Z
+
+I think this is also fine?
+
+- When the context manager for j exits, Z will be traced over j and all references to j in Z will be replaced with vmap. But Z will retain references to i.
+- When the context manager for i exits, X and Y and Z will all be traced over i. All references to i in X and Y will be replaced with vmap, meaning these are now "fully legal".
+- When the context manager for i exits, nothing happens for Z. It retains a refernce to i upstream, meaning that if you try to do inference w.r.t. Z, it won't be properly defined.
+
+STAGE 3: Full slot life
+
+X = Slot()
+Y = Slot()
+with Index() as i:
+    X[i] = dist(A[i], B[i])
+    with Index() as j:
+        Y[i,j] = fun(X[i], C[j])
+
+Now, Y[i,j] = blah just means that Y is a Slot that has two upward references. When the context manager for j exits, the first one is traced out. When the context manager for i exits, the second is traced out.
+
+OK.. but what if you do this?
+
+
+X = Slot()
+Y = Slot()
+with Index() as i:
+    X[i] = dist1(A[i], B[i])
+    with Index() as j:
+        Y[i,j] = dist2(X[i], C)
+
+Now we'd like Y[i,:] to be i.i.d. But Y has no upward reference to j.
+
+
+...
+
+STAGE 1:
+
+I thiiiiink everything can just work like this? First, let's create a "fully functional core" without any magical syntax for "assigning". I think we just need three ingredients:
+
+1) Axis: A special Op (basically an int)
+ - You can index RVs with an InfixRV[Axis]. Nothing special needs to happen.
+ - Trying to use an Axis Op in a backend should always trigger an error
+
+2) vmap_axis(rv_list, ax)
+ - take a sequence of rvs that have ancestors that index some Axis
+ - return a new sequence of rvs with new ancestors that don't index that Axis
+
+Example:
+
+x = constant([1.1, 2.2, 3.3])
+y = constant([4.4, 5.5])
+i = InfixRV(Axis(3))
+j = InfixRV(Axis(2))
+xi = x[i]
+yj = y[j]
+zij = xi * yj
+uij = normal(zij, yj)
+zi, ui = vmap_axis([zij, uij], j)
+z, u = vmap_axis([zi, ui], i)
 """
 
 from .base import InfixRV, AbstractOp, generated_nodes, constant, vmap_subgraph, vmap, print_upstream
@@ -69,6 +165,88 @@ import inspect
 from pangolin import dag, util
 from jaxtyping import PyTree
 import jax.tree_util
+from pangolin import interface as pi
+
+
+# class Index(InfixRV):
+#    def __init__(self, size):
+#        self.size = size
+
+
+class Axis(ir.Constant):
+    """
+    A scalar value but "special"
+    """
+
+    def __init__(self, size: int):
+        self.size = size
+        super().__init__(size)
+
+
+def axis(size):
+    return InfixRV(Axis(size))
+
+
+class Slot(InfixRV):
+    """
+    What a Slot does:
+    - Initially, it throws an error if you try to do basically anything with it except __setitem__
+
+    Examples
+    --------
+    >>> x = Slot()
+    >>> x.shape
+    Traceback (most recent call last):
+        ...
+    RuntimeError: Locked! You must assign a value before accessing 'shape'
+    >>> value = pi.constant([5,6,7])
+    >>> i = axis(10)
+    >>> x[i] = value
+    >>> x.shape
+    (10, 3)
+    >>> x_i = x[i]
+    """
+
+    def __init__(self):
+        # We use object.__setattr__ to avoid triggering recursion if we had a __setattr__ override
+        object.__setattr__(self, "_initialized", False)
+        # Note: We do not call super().__init__() here because you likely
+        # want to defer that until initialize(), depending on your logic.
+
+    def __setitem__(self, idx: InfixRV[Axis], value: InfixRV):
+
+        # 1. Do your setup logic here
+        object.__setattr__(self, "idx", idx)
+        object.__setattr__(self, "value", value)
+
+        # 2. Flip the switch
+        object.__setattr__(self, "_initialized", True)
+
+    def __getattribute__(self, item):
+        # 1. Retrieve the flag safely
+        # We handle '_initialized' explicitly to prevent recursion
+        if item == "_initialized":
+            return object.__getattribute__(self, item)
+
+        # 2. Check if initialized
+        if not object.__getattribute__(self, "_initialized"):
+            # Allow __setitem__ explicitly (in case someone calls obj.__setitem__ directly)
+            # Allow __class__ and __repr__ so debuggers/print() don't crash immediately
+            if item in ("__setitem__", "__class__", "__repr__"):
+                return object.__getattribute__(self, item)
+
+            raise RuntimeError(f"Locked! You must assign a value before accessing '{item}'")
+
+        return super().__getattribute__(item)
+
+    @property
+    def shape(self):
+        axis_size = self.idx.op.size
+        return (axis_size,) + self.value.shape
+
+    @property
+    def ndim(self):
+
 
 
 def get_positional_count(func: Callable) -> int:
