@@ -168,6 +168,10 @@ import jax.tree_util
 from pangolin import interface as pi
 
 
+# TODO
+# - determine abstractness not by ._n for the Axis RV but by ._n when the Axis RV context manager starts
+
+
 class Axis(ir.Op):
     """
     A scalar value but "special"
@@ -180,9 +184,29 @@ class Axis(ir.Op):
         self.size = size
         super().__init__()
 
+    # def __repr__(self):
+    #     return f"Axis(size={self.size})"
+
+
+class ContextRV(InfixRV):
+    def __init__(self, op):
+        super().__init__(op)
+
+    def __enter__(self):
+        self.__dict__["enter_n"] = InfixRV._n  # get around frozen
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):  # get around frozen
+        self.__dict__["exit_n"] = InfixRV._n
+        pass
+
 
 def axis(size):
     return InfixRV(Axis(size))
+
+
+def caxis(size):
+    return ContextRV(Axis(size))
 
 
 def get_positional_count(func: Callable) -> int:
@@ -370,6 +394,9 @@ def popout_axis(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
     indices = rv.parents[1:]
     for n, idx in enumerate(indices):
         if idx is ax:
+            if base.shape[n] != ax.op.size:
+                raise ValueError(f"Axis size {ax.op.size} does not match dim {n} of shape {base.shape}")
+
             new_idx = pi.constant(range(ax.op.size))
             new_indices = indices[:n] + (new_idx,) + indices[n + 1 :]
             return index_if_necessary(base, *new_indices), where
@@ -378,78 +405,98 @@ def popout_axis(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
     raise ValueError(f"axis rv {ax} not found in Index rv {rv}")
 
 
-# def extract_from_rvs_single_index(dummy_index: InfixRV[Axis], output: PyTree[InfixRV]):
-#     n_before_index = dummy_index._n
+def extract_from_rvs_single_axis(dummy_index: InfixRV[Axis], output: PyTree[InfixRV]):
+    n_before_index = dummy_index._n
 
-#     def is_abstract(rv: InfixRV) -> bool:
-#         return rv._n >= n_before_index
+    def is_abstract(rv: InfixRV) -> bool:
+        return rv._n >= n_before_index
 
-#     def not_abstract(var: InfixRV):
-#         return not is_abstract(var)
+    def not_abstract(var: InfixRV):
+        return not is_abstract(var)
 
-#     output_rvs, output_treedef = jax.tree_util.tree_flatten(output)
+    output_rvs, output_treedef = jax.tree_util.tree_flatten(output)
 
-#     all_rvs = dag.upstream_nodes(output_rvs, node_block=not_abstract)
+    all_rvs = dag.upstream_nodes(output_rvs, node_block=not_abstract)
 
-#     indexed_rvs = []
-#     indexed_dims = []
-#     for rv in all_rvs:
-#         if isinstance(rv.op, ir.Index):
-#             rv_base = rv.parents[0]
-#             rv_indices = rv.parents[1:]
-#             if dummy_index in rv_indices:
+    indexed_rvs = []
+    indexed_dims = []
+    touched_rvs = set()
+    for rv in all_rvs:
+        if any(p in touched_rvs for p in rv.parents):
+            touched_rvs.add(rv)
 
-#                 where_dummy = rv_indices.index(dummy_index)
+        if isinstance(rv.op, ir.Index):
+            # rv_base = rv.parents[0]
+            rv_indices = rv.parents[1:]
+            if dummy_index in rv_indices:
+                new_rv, where = popout_axis(rv, dummy_index)
+                indexed_rvs.append(new_rv)
+                indexed_dims.append(where)
+                touched_rvs.add(rv)
 
-#                 has_other_dummy_indices = any(isinstance(idx.op, Axis) and idx is not dummy_index for idx in rv_indices)
+    def replay(*indexed_rvs_replayed):
+        rv_to_replayed = {}
 
-#                 if has_other_dummy_indices:
-#                     new_rv_indices = [slice(None) if idx is dummy_index else idx for idx in rv_indices]
-#                     new_indexed_rv = rv_base[*new_rv_indices]
-#                     indexed_rvs.append(new_indexed_rv)
-#                     indexed_dims.append(where_dummy)  # NOTE: THIS IS NOT RIGHT IN GENERAL! NEED TO LOOK AT SHAPES!
-#                 else:
-#                     indexed_rvs.append(rv.parents[0])
-#                     indexed_dims.append(where_dummy)
+        n = 0
+        for rv in all_rvs:
+            if rv not in touched_rvs:
+                rv_to_replayed[rv] = rv
+                continue
 
-#     def replay(*indexed_rvs_replayed):
-#         rv_to_replayed = {}
+            if isinstance(rv.op, ir.Index):
+                if dummy_index in rv.parents[1:]:
+                    rv_to_replayed[rv] = indexed_rvs_replayed[n]
+                    n += 1
+                    continue
 
-#         n = 0
-#         for rv in all_rvs:
-#             if isinstance(rv.op, ir.Index):
-#                 where_dummies = find_indices(rv.parents[1:], dummy_indices)
+            # new_parents = [rv_to_replayed[p] for p in rv.parents]
+            new_parents = []
+            for p in rv.parents:
+                if p in rv_to_replayed:
+                    new_parents.append(rv_to_replayed[p])
+                else:
+                    new_parents.append(p)
 
-#                 if any(i is not None for i in where_dummies):
-#                     rv_to_replayed[rv] = indexed_rvs_replayed[n]
-#                     n += 1
-#                     continue
+            replayed_rv = InfixRV(rv.op, *new_parents)
+            rv_to_replayed[rv] = replayed_rv
 
-#             replayed_rv = InfixRV(rv.op, *[rv_to_replayed[p] for p in rv.parents])
-#             rv_to_replayed[rv] = replayed_rv
+        results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
+        return jax.tree_util.tree_unflatten(output_treedef, results_flat)
 
-#         results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
-
-#         return jax.tree_util.tree_unflatten(output_treedef, results_flat)
-
-#     return indexed_rvs, indexed_dims, replay
+    return indexed_rvs, indexed_dims, replay
 
 
-def vmap_axis(output: Sequence[InfixRV], ax_rv: InfixRV[Axis]):
-    arrays, dims, replay = extract_from_rvs([ax_rv], output)
+def vmap_axis(output: Sequence[InfixRV], ax: InfixRV[Axis]):
+    """
+    Examples
+    --------
 
-    axis_size = ax_rv.op.size
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> y = constant([4.4, 5.5])
+    >>> i = axis(3)
+    >>> j = axis(2)
+    >>> zij = x[i] * y[j]
+    >>> [zi] = vmap_axis([zij], j)
+    >>> [z] = vmap_axis([zi], i)
+    >>> print(z.op)
+    vmap(vmap(mul, [None, 0], 2), [0, None], 3)
+    >>> z.parents == (x, y)
+    True
+    """
 
-    for array, d in zip(arrays, dims, strict=True):
-        [dim] = d
+    # >>> zi, ui = vmap_axis([zij, uij], j)
+    # >>> z, u = vmap_axis([zi, ui], i)
+    # >>> print_upstream(z=z, u=u)
+
+    arrays, dims, replay = extract_from_rvs_single_axis(ax, output)
+
+    axis_size = ax.op.size
+
+    for array, dim in zip(arrays, dims, strict=True):
         if array.shape[dim] != axis_size:
             raise ValueError(f"Axis size {axis_size} does not match dim {dim} of shape {array.shape}")
 
-    in_axes = tuple(dim[0] for dim in dims)
-
-    warnings.warn(f"{in_axes=}")
-    warnings.warn(f"{axis_size=}")
-    warnings.warn(f"{arrays=}")
+    in_axes = tuple(dims)
 
     if len(arrays) == 1:
         new_fun = vmap(replay, in_axes[0], axis_size)
@@ -457,8 +504,6 @@ def vmap_axis(output: Sequence[InfixRV], ax_rv: InfixRV[Axis]):
         new_fun = vmap(replay, in_axes, axis_size)
 
     return new_fun(*arrays)
-
-    # need to re-index all the starting arrays with remaining indices!
 
 
 def vfor(fun, size: None | Sequence[int] = None):

@@ -121,7 +121,7 @@ class Op(ABC):
 
     def __setattr__(self, key, value):
         if self._frozen:
-            raise TypeError("CondDists are immutable after init.")
+            raise TypeError("Ops are immutable after init.")
         else:
             self.__dict__[key] = value
 
