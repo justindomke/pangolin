@@ -9,6 +9,8 @@ from pangolin.interface.fields import (
     vmap_axis,
     popout_axis,
     caxis,
+    vmap_context_axis,
+    Slot,
 )
 from pangolin import interface as pi
 from pangolin import ir
@@ -396,7 +398,7 @@ def test_outer_product_recursive():
     assert z.parents == (x, y)
 
 
-def test_context_manager():
+def test_context_manager1():
     x = pi.constant([1, 2, 3])
     y = pi.constant([4, 5])
     with caxis(3) as i:
@@ -405,10 +407,87 @@ def test_context_manager():
             yj = y[j]
             zij = xi * yj
 
-        [zi] = vmap_axis([zij], j)
+        [zi] = vmap_context_axis([zij], j)
         assert zi.op == ir.VMap(ir.Mul(), [None, 0], 2)
         assert zi.parents == (xi, y)
 
-    [z] = vmap_axis([zi], i)
+    [z] = vmap_context_axis([zi], i)
     assert z.op == ir.VMap(ir.VMap(ir.Mul(), [None, 0], 2), [0, None], 3)
     assert z.parents == (x, y)
+
+
+def test_context_manager2():
+    x = pi.constant([[1, 2, 3], [4, 5, 6]])
+    y = pi.constant([7, 8])
+    with caxis(3) as i:
+        with caxis(2) as j:
+            xji = x[j, i]
+            yj = y[j]
+            zij = xji * yj
+
+        [zi] = vmap_context_axis([zij], j)
+        assert zi.op == ir.VMap(ir.Mul(), [0, 0], 2)
+        assert zi.parents[0].op == ir.Index()
+        assert zi.parents[0].parents[0] == x
+        assert zi.parents[0].parents[1].op == ir.Constant([0, 1])
+        assert zi.parents[0].parents[2] == i
+
+    [z] = vmap_context_axis([zi], i)
+    assert z.op == ir.VMap(ir.VMap(ir.Mul(), [0, 0], 2), [1, None], 3)
+    assert z.parents == (x, y)
+
+
+def test_context_manager_identity():
+    x = pi.constant([1, 2, 3])
+    y = pi.constant([7, 8])
+    with caxis(3) as i:
+        with caxis(2) as j:
+            xi = x[i]
+            yj = y[j]
+            tmp = pi.normal(xi, yj)
+            zij = pi.InfixRV(ir.Identity(), tmp)
+            uij = pi.InfixRV(ir.Identity(), tmp)
+
+        [zi, ui] = vmap_context_axis([zij, uij], j)
+        assert zi.op == ir.VMap(ir.Identity(), [0], 2)
+        # assert zi.parents[0].op == ir.Index()
+        # assert zi.parents[0].parents[0] == x
+        # assert zi.parents[0].parents[1].op == ir.Constant([0, 1])
+        # assert zi.parents[0].parents[2] == i
+
+    # [z] = vmap_context_axis([zi], i)
+    # assert z.op == ir.VMap(ir.VMap(ir.Mul(), [0, 0], 2), [1, None], 3)
+    # assert z.parents == (x, y)
+
+
+def test_assign_slot1():
+    x = Slot()
+    with caxis(3) as i:
+        x[i] = 5
+
+
+def test_assign_slot2():
+    x = Slot()
+    with caxis(3) as i:
+        with caxis(5) as j:
+            x[i, j] = 5
+
+
+def test_assign_slot3():
+    with caxis(3) as i:
+        x = Slot()
+        with caxis(5) as j:
+            x[j] = 5
+
+
+def test_assign_slot4():
+    x = Slot()
+    with caxis(3) as i:
+        x[i, :, :] = pi.constant([[1, 2, 3], [4, 5, 6]])
+
+
+def test_assign_slot5():
+    x = Slot()
+    with caxis(3) as i:
+        with caxis(5) as j:
+            x[i, j, :, :] = pi.constant([[1, 2, 3], [4, 5, 6]])

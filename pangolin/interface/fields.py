@@ -188,17 +188,53 @@ class Axis(ir.Op):
     #     return f"Axis(size={self.size})"
 
 
-class ContextRV(InfixRV):
+class ContextRV[O: ir.Op](InfixRV[O]):
+    active_axes = []
+
     def __init__(self, op):
         super().__init__(op)
 
     def __enter__(self):
+        if hasattr(self, "enter_n"):
+            raise ValueError("ContextRV cannot be entered twice")
+
+        ContextRV.active_axes.append(self)
+
         self.__dict__["enter_n"] = InfixRV._n  # get around frozen
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # get around frozen
+        if hasattr(self, "exit_n"):
+            raise ValueError("ContextRV cannot be exited twice")
+
+        if not ContextRV.active_axes:
+            raise Exception(f"Exiting with no active axes. (Pangolin bug.)")
+
+        if ContextRV.active_axes[-1] is not self:
+            raise Exception(
+                f"Context Exit Order Violation: {self} is not the most recent active context. (Pangolin bug.)"
+            )
+
+        # Remove from the end
+        ContextRV.active_axes.pop()
+
         self.__dict__["exit_n"] = InfixRV._n
-        pass
+
+    def var_in_n_range(self, rv: InfixRV):
+        if not hasattr(self, "enter_n"):
+            raise ValueError("ContextRV was not entered")
+        if not hasattr(self, "exit_n"):
+            raise ValueError("ContextRV was not exited")
+
+        enter_n = self.__dict__["enter_n"]
+        exit_n = self.__dict__["exit_n"]
+
+        if rv._n < enter_n:
+            return False
+        elif rv._n < exit_n:
+            return True
+        else:
+            raise ValueError(f"rv created after ContextRV exit ({enter_n, exit_n}) vs {rv._n}")
 
 
 def axis(size):
@@ -580,6 +616,188 @@ def vfor(fun, size: None | Sequence[int] = None):
         else:
             new_fun = vmap(new_fun, in_axes, axis_size)
     return new_fun(*arrays)
+
+
+def extract_from_rvs_single_context_axis(dummy_index: ContextRV[Axis], output: PyTree[InfixRV]):
+
+    # don't visit nodes created before context manager enter
+    # throw error if see nodes created after context manager exit
+    def node_block(var: InfixRV):
+        return not dummy_index.var_in_n_range(var)
+
+    output_rvs, output_treedef = jax.tree_util.tree_flatten(output)
+
+    all_rvs = dag.upstream_nodes(output_rvs, node_block=node_block)
+
+    indexed_rvs = []
+    indexed_dims = []
+    touched_rvs = set()
+    for rv in all_rvs:
+        if any(p in touched_rvs for p in rv.parents):
+            touched_rvs.add(rv)
+
+        if isinstance(rv.op, ir.Index):
+            # rv_base = rv.parents[0]
+            rv_indices = rv.parents[1:]
+            if dummy_index in rv_indices:
+                new_rv, where = popout_axis(rv, dummy_index)
+                indexed_rvs.append(new_rv)
+                indexed_dims.append(where)
+                touched_rvs.add(rv)
+
+    def replay(*indexed_rvs_replayed):
+        rv_to_replayed = {}
+
+        n = 0
+        for rv in all_rvs:
+            if rv not in touched_rvs:
+                rv_to_replayed[rv] = rv
+                continue
+
+            if isinstance(rv.op, ir.Index):
+                if dummy_index in rv.parents[1:]:
+                    rv_to_replayed[rv] = indexed_rvs_replayed[n]
+                    n += 1
+                    continue
+
+            # new_parents = [rv_to_replayed[p] for p in rv.parents]
+            new_parents = []
+            for p in rv.parents:
+                if p in rv_to_replayed:
+                    new_parents.append(rv_to_replayed[p])
+                else:
+                    new_parents.append(p)
+
+            replayed_rv = InfixRV(rv.op, *new_parents)
+            rv_to_replayed[rv] = replayed_rv
+
+        results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
+        return jax.tree_util.tree_unflatten(output_treedef, results_flat)
+
+    return indexed_rvs, indexed_dims, replay
+
+
+def vmap_context_axis(output: Sequence[InfixRV], ax: ContextRV[Axis]):
+    """
+    Examples
+    --------
+
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> y = constant([4.4, 5.5])
+    >>> with caxis(3) as i:
+    ...     with caxis(2) as j:
+    ...         zij = x[i] * y[j]
+    ...     [zi] = vmap_context_axis([zij], j)
+    >>> [z] = vmap_context_axis([zi], i)
+    >>> print(z.op)
+    vmap(vmap(mul, [None, 0], 2), [0, None], 3)
+    >>> z.parents == (x, y)
+    True
+    """
+
+    arrays, dims, replay = extract_from_rvs_single_context_axis(ax, output)
+
+    axis_size = ax.op.size
+
+    for array, dim in zip(arrays, dims, strict=True):
+        if array.shape[dim] != axis_size:
+            raise ValueError(f"Axis size {axis_size} does not match dim {dim} of shape {array.shape}")
+
+    in_axes = tuple(dims)
+
+    if len(arrays) == 1:
+        new_fun = vmap(replay, in_axes[0], axis_size)
+    else:
+        new_fun = vmap(replay, in_axes, axis_size)
+
+    return new_fun(*arrays)
+
+
+class Slot(InfixRV):
+    """
+    The job of a Slot is as follows:
+
+    - When created, record all active Axis context managers
+
+    - Initially, throw an error if the user tries to do anything except __setitem__
+
+    - If the user DOES do __setitem__, then make sure that:
+      1. The indices are all context managers activated since Slot __init__ (in same order) plus full slices
+      2. Record self onto slot_list for all context manager indices
+      3. Store the value
+
+    - At this point, continue throwing an error if the user tries to do anything with the Slot. The only legal thing is to do __getitem__ with exactly the same sequence.
+
+    - When one of the context managers exits, all the slots should be (together) vmapped over that axis, and the axis removed from all of them. This changes
+
+    - Once ALL the context mangers have exited, finally you can do __init__ and act like a real InfixRV
+
+    Danger: What happens if you do this?
+
+    x = Slot()
+    y = Slot()
+    with Axis(3) as i:
+        x[i] = normal(0,1)
+        y[i] = x[i]
+
+    Or how about this
+
+    x = Slot()
+    y = Slot()
+    with Axis(3) as i:
+        a = normal(0,1)
+        x[i] = a
+        y[i] = a
+
+    I think the only reliable answer is that before vmapping an axis, you always create a
+    """
+
+    def __init__(self):
+        self.assigned = False
+        self.active_axes_when_created = [ax for ax in ContextRV.active_axes]  # copy!
+        # do NOT call super().__init__()
+
+    def expected_axes(self):
+        if not util.starts_with(ContextRV.active_axes, self.active_axes_when_created):
+            raise ValueError(
+                f"Active axes {ContextRV.active_axes} does not start active axes when slot created: {self.active_axes_when_created}"
+            )
+        return ContextRV.active_axes[len(self.active_axes_when_created) :]
+
+    def expected_key(self, value):
+        return self.expected_axes() + [slice(None)] * value.ndim
+
+    def __setitem__(self, key, value: pi.RVLike):
+        value = pi.makerv(value)
+
+        if not isinstance(key, tuple):
+            key = [key]
+        else:
+            key = list(key)
+
+        if self.assigned:
+            raise ValueError("Can't assign to a Slot twice")
+
+        if key != self.expected_key(value):
+            raise ValueError(f"key {key} does not match expected {self.expected_key(value)}")
+
+        self.axes = self.expected_axes
+        self.value = value
+        self.assigned = True
+
+    def __getitem__(self, key):
+        if not self.assigned:
+            raise ValueError("Can't read from non-assigned Slot")
+
+        if not isinstance(key, tuple):
+            key = [key]
+        else:
+            key = list(key)
+
+        if key != self.expected_key(self.value):
+            raise ValueError(f"key {key} does not match expected {self.expected_key(self.value)}")
+
+        return self.value
 
 
 # class Slot(InfixRV):
