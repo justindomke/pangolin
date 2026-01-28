@@ -10,9 +10,11 @@ import jax.tree_util
 from pangolin import interface as pi
 
 
-class Axis(ir.Op):
+class AxisOp(ir.Op):
     """
-    A scalar value but "special"
+    A scalar value but "special".
+
+    An AxisOp should *never* appear in a final model. Backends should treat the presence of an AxisOp in a model passed for sampling as an error.
     """
 
     _random = False
@@ -23,18 +25,29 @@ class Axis(ir.Op):
         super().__init__()
 
 
-class AxisRV(InfixRV[Axis]):
+class Axis(InfixRV[AxisOp]):
+    """
+    A special RV that always contains an AxisOp and that can act as a context manager.
+
+    Args:
+        op: The axis be be based on
+
+    """
+
     active_axes = []
 
-    def __init__(self, op: Axis):
+    def __init__(self, size: int, auto_update: bool = True):
         self.assigned_slots: list[Slot] = []
-        super().__init__(op)
+        axis_op = AxisOp(size)
+        self.range = pi.constant(range(size))
+        self.auto_update = auto_update
+        super().__init__(axis_op)
 
     def __enter__(self):
         if hasattr(self, "enter_n"):
             raise ValueError("AxisRV cannot be entered twice")
 
-        AxisRV.active_axes.append(self)
+        Axis.active_axes.append(self)
 
         self.__dict__["enter_n"] = InfixRV._n  # get around frozen
         return self
@@ -43,19 +56,21 @@ class AxisRV(InfixRV[Axis]):
         if hasattr(self, "exit_n"):
             raise ValueError("AxisRV cannot be exited twice")
 
-        if not AxisRV.active_axes:
+        if not Axis.active_axes:
             raise Exception(f"Exiting with no active axes. (Pangolin bug.)")
 
-        if AxisRV.active_axes[-1] is not self:
+        if Axis.active_axes[-1] is not self:
             raise Exception(
                 f"Context Exit Order Violation: {self} is not the most recent active context. (Pangolin bug.)"
             )
 
         # Remove from the end
-        AxisRV.active_axes.pop()
+        Axis.active_axes.pop()
 
         self.__dict__["exit_n"] = InfixRV._n
 
+        if self.auto_update:
+            update_slots(self.assigned_slots, self)
 
     def var_in_n_range(self, rv: InfixRV):
         if not hasattr(self, "enter_n"):
@@ -73,14 +88,13 @@ class AxisRV(InfixRV[Axis]):
         else:
             raise ValueError(f"rv created after ContextRV exit ({enter_n, exit_n}) vs {rv._n}")
 
-    @property
-    def range(self):
-        return pi.constant(range(self.op.size))
-
 
 def axis(size):
-    axis_op = Axis(size)
-    return AxisRV(axis_op)
+    return Axis(size, True)
+
+
+def axis_debug(size):
+    return Axis(size, False)
 
 
 def index_if_necessary(base, *indices):
@@ -90,7 +104,7 @@ def index_if_necessary(base, *indices):
         return InfixRV(ir.Index(), base, *indices)
 
 
-def popout(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
+def popout(rv: InfixRV[ir.Index], ax: InfixRV[AxisOp]):
     """
     - rv is some rv that's been indexed with some number of axes
     - we want to "recover" one of those axes, i.e. remove that axis from the indexing statement
@@ -113,7 +127,7 @@ def popout(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
     raise ValueError(f"axis rv {ax} not found in Index rv {rv}")
 
 
-def extract(output: PyTree[InfixRV], ax: AxisRV):
+def extract(output: PyTree[InfixRV], ax: Axis):
     """
     Given some RV or group of RVs, extract the information necessary to
 
@@ -165,7 +179,7 @@ def extract(output: PyTree[InfixRV], ax: AxisRV):
     return indexed_rvs, indexed_dims, replay
 
 
-def vmap_axis(output: Sequence[InfixRV], ax: AxisRV):
+def vmap_axis(output: Sequence[InfixRV], ax: Axis):
     """
     Examples
     --------
@@ -193,10 +207,6 @@ def vmap_axis(output: Sequence[InfixRV], ax: AxisRV):
 
     if len(arrays) == 0:
         warnings.warn("len(arrays)=0...")
-
-    # in_axes = dims
-    # new_fun = vmap(replay, in_axes, axis_size)
-    # return new_fun(arrays)
 
     in_axes = (dims, 0)
     new_fun = vmap(replay, in_axes, axis_size)
@@ -244,16 +254,17 @@ class Slot(InfixRV):
 
     def __init__(self):
         self.assigned = False
+        self.initialized = False
         self.axes: list[InfixRV] = []
-        self.active_axes_when_created = [ax for ax in AxisRV.active_axes]  # copy!
+        self.active_axes_when_created = [ax for ax in Axis.active_axes]  # copy!
         # do NOT call super().__init__()
 
     def expected_axes(self):
-        if not util.starts_with(AxisRV.active_axes, self.active_axes_when_created):
+        if not util.starts_with(Axis.active_axes, self.active_axes_when_created):
             raise ValueError(
-                f"Active axes {AxisRV.active_axes} does not start active axes when slot created: {self.active_axes_when_created}"
+                f"Active axes {Axis.active_axes} does not start active axes when slot created: {self.active_axes_when_created}"
             )
-        return AxisRV.active_axes[len(self.active_axes_when_created) :]
+        return Axis.active_axes[len(self.active_axes_when_created) :]
 
     def expected_key(self, value):
         return self.expected_axes() + [slice(None)] * value.ndim
@@ -277,10 +288,12 @@ class Slot(InfixRV):
 
         self.axes = self.expected_axes()
         self.value = InfixRV(ir.Identity(), value)
-        # self.value = value
         self.assigned = True
 
     def __getitem__(self, key):  # type: ignore
+        if self.initialized:
+            return super().__getitem__(key)
+
         if not self.assigned:
             raise ValueError("Can't read from non-assigned Slot")
 
@@ -297,7 +310,7 @@ class Slot(InfixRV):
         return self.value.parents[0]
 
 
-def update_slots(slots: list[Slot], ax: AxisRV):
+def update_slots(slots: list[Slot], ax: Axis):
     for slot in slots:
         assert slot.assigned
         assert ax in slot.axes
@@ -309,6 +322,7 @@ def update_slots(slots: list[Slot], ax: AxisRV):
         s.value = v
         s.axes = [a for a in s.axes if a is not ax]
         if s.axes == []:
+            s.initialized = True
             super(Slot, s).__init__(s.value.op, *s.value.parents)
 
 
