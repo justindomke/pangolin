@@ -157,6 +157,7 @@ zi, ui = vmap_axis([zij, uij], j)
 z, u = vmap_axis([zi, ui], i)
 """
 
+from jax._src.core import pp_toplevel_jaxpr
 from .base import InfixRV, AbstractOp, generated_nodes, constant, vmap_subgraph, vmap, print_upstream
 from pangolin import ir
 from typing import Sequence, Callable
@@ -166,10 +167,6 @@ from pangolin import dag, util
 from jaxtyping import PyTree
 import jax.tree_util
 from pangolin import interface as pi
-
-
-# TODO
-# - determine abstractness not by ._n for the Axis RV but by ._n when the Axis RV context manager starts
 
 
 class Axis(ir.Op):
@@ -184,14 +181,12 @@ class Axis(ir.Op):
         self.size = size
         super().__init__()
 
-    # def __repr__(self):
-    #     return f"Axis(size={self.size})"
 
-
-class ContextRV[O: ir.Op](InfixRV[O]):
+class ContextRV(InfixRV[Axis]):
     active_axes = []
 
     def __init__(self, op):
+        self.assigned_slots: list[Slot] = []
         super().__init__(op)
 
     def __enter__(self):
@@ -219,6 +214,12 @@ class ContextRV[O: ir.Op](InfixRV[O]):
         ContextRV.active_axes.pop()
 
         self.__dict__["exit_n"] = InfixRV._n
+
+        # # slot_values = [pi.InfixRV(ir.Identity(), s.value) for s in self.assigned_slots]
+        # # need to do something about identity here
+        # slot_values = [s.value for s in self.assigned_slots]
+        # print(f"{slot_values=}")
+        # new_slot_values = vmap_context_axis(slot_values, self)
 
     def var_in_n_range(self, rv: InfixRV):
         if not hasattr(self, "enter_n"):
@@ -618,7 +619,7 @@ def vfor(fun, size: None | Sequence[int] = None):
     return new_fun(*arrays)
 
 
-def extract_from_rvs_single_context_axis(dummy_index: ContextRV[Axis], output: PyTree[InfixRV]):
+def extract_from_rvs_single_context_axis(dummy_index: ContextRV, output: PyTree[InfixRV]):
 
     # don't visit nodes created before context manager enter
     # throw error if see nodes created after context manager exit
@@ -629,12 +630,14 @@ def extract_from_rvs_single_context_axis(dummy_index: ContextRV[Axis], output: P
 
     all_rvs = dag.upstream_nodes(output_rvs, node_block=node_block)
 
+    print(f"{all_rvs=}")
+
     indexed_rvs = []
     indexed_dims = []
-    touched_rvs = set()
+    # touched_rvs = set()
     for rv in all_rvs:
-        if any(p in touched_rvs for p in rv.parents):
-            touched_rvs.add(rv)
+        # if any(p in touched_rvs for p in rv.parents):
+        #    touched_rvs.add(rv)
 
         if isinstance(rv.op, ir.Index):
             # rv_base = rv.parents[0]
@@ -643,16 +646,16 @@ def extract_from_rvs_single_context_axis(dummy_index: ContextRV[Axis], output: P
                 new_rv, where = popout_axis(rv, dummy_index)
                 indexed_rvs.append(new_rv)
                 indexed_dims.append(where)
-                touched_rvs.add(rv)
+                # touched_rvs.add(rv)
 
     def replay(*indexed_rvs_replayed):
         rv_to_replayed = {}
 
         n = 0
         for rv in all_rvs:
-            if rv not in touched_rvs:
-                rv_to_replayed[rv] = rv
-                continue
+            # if rv not in touched_rvs:
+            #    rv_to_replayed[rv] = rv
+            #    continue
 
             if isinstance(rv.op, ir.Index):
                 if dummy_index in rv.parents[1:]:
@@ -677,7 +680,7 @@ def extract_from_rvs_single_context_axis(dummy_index: ContextRV[Axis], output: P
     return indexed_rvs, indexed_dims, replay
 
 
-def vmap_context_axis(output: Sequence[InfixRV], ax: ContextRV[Axis]):
+def vmap_context_axis(output: Sequence[InfixRV], ax: ContextRV):
     """
     Examples
     --------
@@ -704,6 +707,9 @@ def vmap_context_axis(output: Sequence[InfixRV], ax: ContextRV[Axis]):
             raise ValueError(f"Axis size {axis_size} does not match dim {dim} of shape {array.shape}")
 
     in_axes = tuple(dims)
+
+    if len(arrays) == 0:
+        warnings.warn("len(arrays)=0...")
 
     if len(arrays) == 1:
         new_fun = vmap(replay, in_axes[0], axis_size)
@@ -754,6 +760,7 @@ class Slot(InfixRV):
 
     def __init__(self):
         self.assigned = False
+        self.axes: list[InfixRV] = []
         self.active_axes_when_created = [ax for ax in ContextRV.active_axes]  # copy!
         # do NOT call super().__init__()
 
@@ -768,6 +775,9 @@ class Slot(InfixRV):
         return self.expected_axes() + [slice(None)] * value.ndim
 
     def __setitem__(self, key, value: pi.RVLike):
+        if self.assigned:
+            raise ValueError("Can't assign to a Slot twice")
+
         value = pi.makerv(value)
 
         if not isinstance(key, tuple):
@@ -775,17 +785,18 @@ class Slot(InfixRV):
         else:
             key = list(key)
 
-        if self.assigned:
-            raise ValueError("Can't assign to a Slot twice")
-
         if key != self.expected_key(value):
             raise ValueError(f"key {key} does not match expected {self.expected_key(value)}")
 
-        self.axes = self.expected_axes
-        self.value = value
+        for ax in self.expected_axes():
+            ax.assigned_slots.append(self)
+
+        self.axes = self.expected_axes()
+        self.value = InfixRV(ir.Identity(), value)
+        # self.value = value
         self.assigned = True
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # type: ignore
         if not self.assigned:
             raise ValueError("Can't read from non-assigned Slot")
 
@@ -797,7 +808,24 @@ class Slot(InfixRV):
         if key != self.expected_key(self.value):
             raise ValueError(f"key {key} does not match expected {self.expected_key(self.value)}")
 
-        return self.value
+        # TODO: We return a reference to the OG value, not the assigned value
+        # is that what we want?
+        return self.value.parents[0]
+
+
+def update_slots(slots: list[Slot], ax: ContextRV):
+    for slot in slots:
+        assert slot.assigned
+        assert ax in slot.axes
+
+    old_values: list[InfixRV] = [s.value for s in slots]
+    new_values = vmap_context_axis(old_values, ax)
+
+    for s, v in zip(slots, new_values, strict=True):
+        s.value = v
+        s.axes = [a for a in s.axes if a is not ax]
+        if s.axes == []:
+            super(Slot, s).__init__(s.value.op, *s.value.parents)
 
 
 # class Slot(InfixRV):
