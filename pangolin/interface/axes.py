@@ -163,12 +163,12 @@ def extract(output: PyTree[InfixRV], ax: Axis):
                     n += 1
                     continue
 
-            if isinstance(rv.op, ir.Identity):
-                assert len(rv.parents) == 1
-                [p] = rv.parents
-                if p in rv_to_replayed:
-                    rv_to_replayed[rv] = rv_to_replayed[p]
-                    continue
+            # if isinstance(rv.op, ir.Identity):
+            #     assert len(rv.parents) == 1
+            #     [p] = rv.parents
+            #     if p in rv_to_replayed:
+            #         rv_to_replayed[rv] = rv_to_replayed[p]
+            #         continue
 
             new_parents = []
             for p in rv.parents:

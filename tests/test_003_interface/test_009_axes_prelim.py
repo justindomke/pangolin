@@ -271,13 +271,13 @@ def test_update_slots_const_outside():
 
     update_slots([x], i)
 
-    # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
-    # assert x.parents == (c,)
-
     assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Constant(3), [None], 3)  # None!
-    assert x.parents == ()
+    assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
+    assert x.parents == (c,)
+
+    # assert x.shape == (3,)
+    # assert x.op == ir.VMap(ir.Constant(3), [None], 3)  # None!
+    # assert x.parents == ()
 
 
 def test_update_slots_const_inside():
@@ -288,14 +288,14 @@ def test_update_slots_const_inside():
 
     update_slots([x], i)
 
-    # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
-    # assert x.parents[0] != c  # constant is "replayed"
-    # assert x.parent_ops == (ir.Constant(5),)
-
     assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Constant(5), [], 3)  # None!
-    assert x.parents == ()
+    assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
+    assert x.parents[0] != c  # constant is "replayed"
+    assert x.parent_ops == (ir.Constant(5),)
+
+    # assert x.shape == (3,)
+    # assert x.op == ir.VMap(ir.Constant(5), [], 3)  # None!
+    # assert x.parents == ()
 
 
 def test_update_slots3():
@@ -307,14 +307,14 @@ def test_update_slots3():
 
     update_slots([x], i)
 
-    # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Identity(), [0], 3)
-    # assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
-    # assert x.parents[0].parents == (a, b)
-
     assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
-    assert x.parents == (a, b)
+    assert x.op == ir.VMap(ir.Identity(), [0], 3)
+    assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
+    assert x.parents[0].parents == (a, b)
+
+    # assert x.shape == (3,)
+    # assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
+    # assert x.parents == (a, b)
 
 
 def test_update_slots4():
@@ -324,14 +324,14 @@ def test_update_slots4():
 
     update_slots([x], i)
 
-    # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Identity(), [0], 3)
-    # assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
-    # assert x.parents[0].parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
-
     assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
-    assert x.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+    assert x.op == ir.VMap(ir.Identity(), [0], 3)
+    assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
+    assert x.parents[0].parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+
+    # assert x.shape == (3,)
+    # assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
+    # assert x.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
 
 
 def test_update_slots5():
