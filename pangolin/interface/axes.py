@@ -25,6 +25,21 @@ class AxisOp(ir.Op):
         super().__init__()
 
 
+class Reassigned(ir.Op):
+    """
+    An Op indicating an RV that has been reassigned to a Slot
+    """
+
+    _random = False
+
+    @property
+    def random(self):
+        raise ValueError("Can't get random for Reassigned Op")
+
+    def _get_shape(self, *parent_shapes):
+        raise ValueError("Can't get shape for Reassigned Op")
+
+
 class Axis(InfixRV[AxisOp]):
     """
     A special RV that always contains an AxisOp and that can act as a context manager.
@@ -294,7 +309,8 @@ class Slot(InfixRV):
             ax.assigned_slots.append(self)
 
         self.axes = self.expected_axes()
-        self.value = InfixRV(ir.Identity(), value)
+        # self.value = InfixRV(ir.Identity(), value)
+        self.value = value
         self.assigned = True
 
     def __getitem__(self, key):  # type: ignore
@@ -314,7 +330,9 @@ class Slot(InfixRV):
 
         # TODO: We return a reference to the OG value, not the assigned value
         # is that what we want?
-        return self.value.parents[0]
+        # return self.value.parents[0]
+        # return self.value
+        return super().__getitem__(key)
 
 
 def update_slots(slots: list[Slot], ax: Axis):

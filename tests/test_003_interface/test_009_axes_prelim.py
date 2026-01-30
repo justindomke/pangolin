@@ -271,13 +271,13 @@ def test_update_slots_const_outside():
 
     update_slots([x], i)
 
-    assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
-    assert x.parents == (c,)
-
     # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Constant(3), [None], 3)  # None!
-    # assert x.parents == ()
+    # assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
+    # assert x.parents == (c,)
+
+    assert x.shape == (3,)
+    assert x.op == ir.VMap(ir.Constant(3), [None], 3)  # None!
+    assert x.parents == ()
 
 
 def test_update_slots_const_inside():
