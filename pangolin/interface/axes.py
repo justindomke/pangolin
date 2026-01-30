@@ -246,7 +246,8 @@ class Slot(InfixRV):
     - If the user DOES do __setitem__, then make sure that:
       1. The indices are all context managers activated since Slot __init__ (in same order) plus full slices
       2. Record self onto slot_list for all context manager indices
-      3. Store the value
+      3. Create a local "copy" of value, pointing to value's parents
+      4. Invalidate the existing copy of value, leading to an error if re-used
 
     - At this point, continue throwing an error if the user tries to do anything with the Slot. The only legal thing is to do __getitem__ with exactly the same sequence.
 
@@ -310,7 +311,13 @@ class Slot(InfixRV):
 
         self.axes = self.expected_axes()
         # self.value = InfixRV(ir.Identity(), value)
-        self.value = value
+        # self.value = value
+
+        if not value._n >= self.axes[-1]._n:
+            raise ValueError("Cannot assign a value to a slot not created in innermost context manager")
+        self.value = InfixRV(value.op, *value.parents)
+        value.__dict__["op"] = Reassigned()  # invalidate existing value
+        value.__dict__["parents"] = []
         self.assigned = True
 
     def __getitem__(self, key):  # type: ignore
@@ -331,8 +338,8 @@ class Slot(InfixRV):
         # TODO: We return a reference to the OG value, not the assigned value
         # is that what we want?
         # return self.value.parents[0]
-        # return self.value
-        return super().__getitem__(key)
+        return self.value
+        # return super().__getitem__(key)
 
 
 def update_slots(slots: list[Slot], ax: Axis):

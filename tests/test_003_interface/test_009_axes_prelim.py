@@ -288,14 +288,14 @@ def test_update_slots_const_inside():
 
     update_slots([x], i)
 
-    assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
-    assert x.parents[0] != c  # constant is "replayed"
-    assert x.parent_ops == (ir.Constant(5),)
-
     # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Constant(5), [], 3)  # None!
-    # assert x.parents == ()
+    # assert x.op == ir.VMap(ir.Identity(), [None], 3)  # None!
+    # assert x.parents[0] != c  # constant is "replayed"
+    # assert x.parent_ops == (ir.Constant(5),)
+
+    assert x.shape == (3,)
+    assert x.op == ir.VMap(ir.Constant(5), [], 3)  # None!
+    assert x.parents == ()
 
 
 def test_update_slots3():
@@ -307,14 +307,14 @@ def test_update_slots3():
 
     update_slots([x], i)
 
-    assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Identity(), [0], 3)
-    assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
-    assert x.parents[0].parents == (a, b)
-
     # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
-    # assert x.parents == (a, b)
+    # assert x.op == ir.VMap(ir.Identity(), [0], 3)
+    # assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
+    # assert x.parents[0].parents == (a, b)
+
+    assert x.shape == (3,)
+    assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
+    assert x.parents == (a, b)
 
 
 def test_update_slots4():
@@ -324,14 +324,14 @@ def test_update_slots4():
 
     update_slots([x], i)
 
-    assert x.shape == (3,)
-    assert x.op == ir.VMap(ir.Identity(), [0], 3)
-    assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
-    assert x.parents[0].parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
-
     # assert x.shape == (3,)
-    # assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
-    # assert x.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+    # assert x.op == ir.VMap(ir.Identity(), [0], 3)
+    # assert x.parent_ops == (ir.VMap(ir.Normal(), [None, None], 3),)
+    # assert x.parents[0].parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+
+    assert x.shape == (3,)
+    assert x.op == ir.VMap(ir.Normal(), [None, None], 3)
+    assert x.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
 
 
 def test_update_slots5():
@@ -447,10 +447,15 @@ def test_update_slots_recursive_const_inside():
         assert not hasattr(x, "op")
     update_slots([x], i)
 
+    # assert hasattr(x, "op")
+    # assert x.shape == (2, 3)
+    # assert x.op == ir.VMap(ir.VMap(ir.Identity(), [None], 3), [None], 2)  # still None
+    # assert x.parent_ops[0] == ir.Constant(3)
+
     assert hasattr(x, "op")
     assert x.shape == (2, 3)
-    assert x.op == ir.VMap(ir.VMap(ir.Identity(), [None], 3), [None], 2)  # still None
-    assert x.parent_ops[0] == ir.Constant(3)
+    assert x.op == ir.VMap(ir.VMap(ir.Constant(3), [], 3), [], 2)  # still None
+    # assert x.parent_ops[0] == ir.Constant(3)
 
 
 def test_update_slots_recursive_const_middle():
@@ -506,15 +511,20 @@ def test_update_slots_recursive_normal_inside():
         assert not hasattr(x, "op")
     update_slots([x], i)
 
+    # assert hasattr(x, "op")
+    # assert x.shape == (2, 3)
+    # assert x.op == ir.VMap(ir.VMap(ir.Identity(), [0], 3), [0], 2)  # same as above
+
+    # [tmp] = x.parents
+    # assert tmp.op == ir.VMap(ir.VMap(ir.Normal(), [None, None], 3), [None, None], 2)  # same as above
+    # assert tmp.parents[0] != a  # "replayed"
+    # assert tmp.parents[1] != b  # "replayed"
+    # assert tmp.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+
     assert hasattr(x, "op")
     assert x.shape == (2, 3)
-    assert x.op == ir.VMap(ir.VMap(ir.Identity(), [0], 3), [0], 2)  # same as above
-
-    [tmp] = x.parents
-    assert tmp.op == ir.VMap(ir.VMap(ir.Normal(), [None, None], 3), [None, None], 2)  # same as above
-    assert tmp.parents[0] != a  # "replayed"
-    assert tmp.parents[1] != b  # "replayed"
-    assert tmp.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
+    assert x.op == ir.VMap(ir.VMap(ir.Normal(), [None, None], 3), [None, None], 2)  # same as above
+    assert x.parent_ops == (ir.Constant(1.1), ir.Constant(2.2))
 
 
 def test_update_slots_recursive_normal_mixed():
