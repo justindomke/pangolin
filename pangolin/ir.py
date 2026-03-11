@@ -27,7 +27,7 @@ Linear algebra               `Matmul` `Transpose` `Inv` `Cholesky`
 Other multivariate functions :class:`Sum` :class:`Softmax` `Diag` `DiagMatrix`
 Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognormal` :class:`Cauchy` :class:`Bernoulli` :class:`BernoulliLogit` :class:`Beta` :class:`Binomial` :class:`Categorical` :class:`Uniform` :class:`BetaBinomial` :class:`Exponential` :class:`Gamma` :class:`Poisson` :class:`StudentT`
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
-Control flow                 :class:`VMap` :class:`Composite` :class:`Autoregressive`
+Control flow                 :class:`VMap` :class:`Composite` :class:`Scan`
 Indexing                     `Index`
 ============================ ============
 
