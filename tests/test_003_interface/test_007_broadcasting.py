@@ -256,13 +256,13 @@ def test_autoregressive_broadcasting():
         start = jnp.zeros(2)
         scale = pi.constant(1.0)
 
-        z = pi.autoregressive(lambda last: pi.normal(last, scale), 100)(start)
+        z = pi.scan(lambda last: pi.normal(last, scale), 100)(start)
         assert z.shape == (100, 2)
 
-        z = pi.autoregressive(lambda last: pi.normal(last, scale), 100)([0.0, 0.5])
+        z = pi.scan(lambda last: pi.normal(last, scale), 100)([0.0, 0.5])
         assert z.shape == (100, 2)
 
-        z = pi.autoregressive(lambda last: pi.normal(last, 1.0), 100)(start)
+        z = pi.scan(lambda last: pi.normal(last, 1.0), 100)(start)
         assert z.shape == (100, 2)
 
 

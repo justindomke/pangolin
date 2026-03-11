@@ -1304,13 +1304,9 @@ class Composite[LastOp: Op](Op):
 # Autoregressive
 ################################################################################
 
-# TODO:
-# maybe remove convenient form for in_axes—make everything explicit
-# interface can simplify
 
-
-class Autoregressive[O: Op](Op):
-    """Represents an autoregressive distribution"""
+class Scan[O: Op](Op):
+    """Represents an scan op, essentially the same op repeated multiple times"""
 
     def __init__(
         self,
@@ -1322,12 +1318,16 @@ class Autoregressive[O: Op](Op):
         """
         Parameters
         ----------
-        base_cond_dist
-            what distribution to repeat on
+        base_op
+            what op to repeat
         num_constants
             number of constant arguments (default 0)
         length
-            the number of times to repeat (optional if there are )
+            the number of times to repeat
+        in_axes
+            which axis of each argument to scan over (or None if no axis)
+        where_self
+            which argument of `base_op` should the output be put back into (default zero)
         """
         self.base_op = base_op
         self.length = length
@@ -1343,17 +1343,6 @@ class Autoregressive[O: Op](Op):
         return self.base_op.random
 
     def _get_shape(self, start_shape: Shape, *other_shapes: Shape) -> Shape:
-        # const_shapes = other_shapes[: self.num_constants]
-        # other_shapes = other_shapes[self.num_constants :]
-
-        # if self.length is None and other_shapes == ():
-        #     raise ValueError("Can't create Autoregressive with length=None and no mapped arguments")
-        #
-        # if self.length is None:
-        #     my_length = other_shapes[0][0]
-        # else:
-        #     my_length = self.length
-
         base_input_shapes = []
 
         for n, (s, ax) in enumerate(zip(other_shapes, self.in_axes, strict=True)):
@@ -1363,22 +1352,14 @@ class Autoregressive[O: Op](Op):
                 assert isinstance(ax, int)
                 base_input_shapes.append(s[:ax] + s[ax + 1 :])
 
-        # insert self
-        # if n == self.where_self:
-        #    base_input_shapes.append(start_shape)
         base_input_shapes = base_input_shapes[: self.where_self] + [start_shape] + base_input_shapes[self.where_self :]
 
-        # for s in other_shapes:
-        #    assert s[0] == my_length
-        # base_other_shapes = tuple(s[1:] for s in other_shapes)
-
-        # base_input_shapes = (start_shape,) + const_shapes + base_other_shapes
         base_output_shape = self.base_op.get_shape(*base_input_shapes)
         output_shape = (self.length,) + base_output_shape
         return output_shape
 
     def __eq__(self, other):
-        if isinstance(other, Autoregressive):
+        if isinstance(other, Scan):
             return (
                 self.base_op == other.base_op
                 and self.length == other.length
@@ -1391,10 +1372,10 @@ class Autoregressive[O: Op](Op):
         return hash((self.base_op, self.length, self.in_axes, self.where_self))
 
     def __str__(self):
-        return f"autoregressive({self.base_op}, {self.length}, {self.in_axes}, {self.where_self})"
+        return f"scan({self.base_op}, {self.length}, {self.in_axes}, {self.where_self})"
 
     def __repr__(self):
-        return f"Autoregressive({repr(self.base_op)}, {self.length}, {self.in_axes}, {self.where_self})"
+        return f"Scan({repr(self.base_op)}, {self.length}, {self.in_axes}, {self.where_self})"
 
 
 ################################################################################

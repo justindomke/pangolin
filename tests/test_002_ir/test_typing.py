@@ -72,50 +72,50 @@ def test_composite_vmap():
 
 
 def test_autoregressive():
-    op = Autoregressive(Exp(), 5, in_axes=[], where_self=0)
-    assert_type(op, Autoregressive[Exp])
+    op = Scan(Exp(), 5, in_axes=[], where_self=0)
+    assert_type(op, Scan[Exp])
 
 
-def test_autoregressive_composite():
+def test_scan_composite():
     op1 = Composite(1, (Add(),), [[0, 0]])
 
-    op2 = Autoregressive(op1, 5, [])
-    assert_type(op2, Autoregressive[Composite[Add]])
+    op2 = Scan(op1, 5, [])
+    assert_type(op2, Scan[Composite[Add]])
 
     op3 = Composite(1, (Add(), Normal()), [[0, 0], [0, 1]])
     assert_type(op3, Composite[Normal])
 
-    op4 = Autoregressive(op3, 5, [])
-    assert_type(op4, Autoregressive[Composite[Normal]])
+    op4 = Scan(op3, 5, [])
+    assert_type(op4, Scan[Composite[Normal]])
 
     a = RV(Constant(1))
     b = RV(op2, a)
     c = RV(op4, a)
 
     assert_type(a, RV[Constant])
-    assert_type(b, RV[Autoregressive[Composite[Add]]])
-    assert_type(c, RV[Autoregressive[Composite[Normal]]])
+    assert_type(b, RV[Scan[Composite[Add]]])
+    assert_type(c, RV[Scan[Composite[Normal]]])
 
 
-def test_autoregressive_composite_vmap():
+def test_scan_composite_vmap():
     vmap_add = VMap(Add(), [0, 0], 3)
     vmap_normal = VMap(Normal(), [0, 0], 3)
 
     op1 = Composite(1, (vmap_add,), [[0, 0]])
-    op2 = Autoregressive(op1, 5, [])
+    op2 = Scan(op1, 5, [])
     op3 = Composite(1, (vmap_add, vmap_normal), [[0, 0], [0, 1]])
-    op4 = Autoregressive(op3, 5, [])
+    op4 = Scan(op3, 5, [])
 
-    assert_type(op2, Autoregressive[Composite[VMap[Add]]])
-    assert_type(op4, Autoregressive[Composite[VMap[Normal]]])
+    assert_type(op2, Scan[Composite[VMap[Add]]])
+    assert_type(op4, Scan[Composite[VMap[Normal]]])
 
     a = RV(Constant([1, 2, 3]))
     b = RV(op2, a)
     c = RV(op4, a)
 
     assert_type(a, RV[Constant])
-    assert_type(b, RV[Autoregressive[Composite[VMap[Add]]]])
-    assert_type(c, RV[Autoregressive[Composite[VMap[Normal]]]])
+    assert_type(b, RV[Scan[Composite[VMap[Add]]]])
+    assert_type(c, RV[Scan[Composite[VMap[Normal]]]])
 
 
 def test_vmap_vmap():

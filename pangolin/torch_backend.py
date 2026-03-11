@@ -407,12 +407,12 @@ def scan(
     return carry, ys
 
 
-def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents) -> tuple[tuple[torch.Tensor, ...], Callable]:
+def handle_scan_inputs(op: ir.Scan, *numpyro_parents) -> tuple[tuple[torch.Tensor, ...], Callable]:
     for in_axis in op.in_axes:
         assert in_axis in [
             0,
             None,
-        ], "Torch only supports Autoregressive with in_axis of 0 or None"
+        ], "Torch only supports Scan with in_axis of 0 or None"
 
     mapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis == 0)
     unmapped_parents = tuple(p for (p, in_axis) in zip(numpyro_parents, op.in_axes) if in_axis is None)
@@ -437,14 +437,14 @@ def handle_autoregressive_inputs(op: ir.Autoregressive, *numpyro_parents) -> tup
     return mapped_parents, merge_args
 
 
-def eval_autoregressive(op: ir.Autoregressive, parent_values: Sequence[ArrayLike]):
-    assert isinstance(op, ir.Autoregressive)
+def eval_scan(op: ir.Scan, parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Scan)
     assert not op.random
 
     init = maketensor(parent_values[0])
     rest = tuple(maketensor(p) for p in parent_values[1:])
 
-    mapped_rest, merge_args = handle_autoregressive_inputs(op, *rest)
+    mapped_rest, merge_args = handle_scan_inputs(op, *rest)
     assert merge_args(mapped_rest) == tuple(rest)
 
     def myfun(carry, x):
@@ -456,12 +456,12 @@ def eval_autoregressive(op: ir.Autoregressive, parent_values: Sequence[ArrayLike
     return ys
 
 
-eval_handlers[ir.Autoregressive] = eval_autoregressive
+eval_handlers[ir.Scan] = eval_scan
 
 
 # TODO: This should be parallel!
-def log_prob_autoregressive(op: ir.Autoregressive, value: ArrayLike, parent_values: Sequence[ArrayLike]):
-    assert isinstance(op, ir.Autoregressive)
+def log_prob_scan(op: ir.Scan, value: ArrayLike, parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Scan)
     assert op.random
 
     value = maketensor(value)
@@ -469,7 +469,7 @@ def log_prob_autoregressive(op: ir.Autoregressive, value: ArrayLike, parent_valu
     init = maketensor(parent_values[0])
     rest = tuple(maketensor(p) for p in parent_values[1:])
 
-    mapped_rest, merge_args = handle_autoregressive_inputs(op, *rest)
+    mapped_rest, merge_args = handle_scan_inputs(op, *rest)
     assert merge_args(mapped_rest) == tuple(rest)
 
     def myfun(carry, value_x):
@@ -483,11 +483,11 @@ def log_prob_autoregressive(op: ir.Autoregressive, value: ArrayLike, parent_valu
     return torch.sum(ls)
 
 
-log_prob_handlers[ir.Autoregressive] = log_prob_autoregressive
+log_prob_handlers[ir.Scan] = log_prob_scan
 
 
-def sample_autoregressive(op: ir.Autoregressive, parent_values: Sequence[ArrayLike]):
-    assert isinstance(op, ir.Autoregressive)
+def sample_scan(op: ir.Scan, parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Scan)
     assert op.random
 
     # init = parent_values[0]
@@ -495,7 +495,7 @@ def sample_autoregressive(op: ir.Autoregressive, parent_values: Sequence[ArrayLi
     init = maketensor(parent_values[0])
     rest = tuple(maketensor(p) for p in parent_values[1:])
 
-    mapped_rest, merge_args = handle_autoregressive_inputs(op, *rest)
+    mapped_rest, merge_args = handle_scan_inputs(op, *rest)
     assert merge_args(mapped_rest) == tuple(rest)
 
     def myfun(carry, x):
@@ -507,7 +507,7 @@ def sample_autoregressive(op: ir.Autoregressive, parent_values: Sequence[ArrayLi
     return ys
 
 
-sample_handlers[ir.Autoregressive] = sample_autoregressive
+sample_handlers[ir.Scan] = sample_scan
 
 
 ################################################################################

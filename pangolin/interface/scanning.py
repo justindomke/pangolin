@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pangolin.ir import Autoregressive, Composite, Op
+from pangolin.ir import Scan, Composite, Op
 from pangolin.interface import (
     InfixRV,
     makerv,
@@ -24,7 +24,7 @@ import numpy as np
 # would like to insist that the function takes RV args but type system not up to the task
 
 
-type FlatAutoregressable[O: Op] = (
+type FlatScannable[O: Op] = (
     Callable[[InfixRV], InfixRV[O]]
     | Callable[[InfixRV, InfixRV], InfixRV[O]]
     | Callable[[InfixRV, InfixRV, InfixRV], InfixRV[O]]
@@ -37,13 +37,13 @@ type FlatAutoregressable[O: Op] = (
 A type alias for a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
 """
 
-type FlatAutoregressed[O: Op] = Callable[..., InfixRV[Autoregressive[Composite[O]]]]
+type FlatScanned[O: Op] = Callable[..., InfixRV[Scan[Composite[O]]]]
 """
-A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single autoregressive InfixRV output. Because of Python's wonderfully limited type system, this does not actually check the inputs.
+A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single scan InfixRV output. Because of Python's wonderfully limited type system, this does not actually check the inputs.
 """
 
 
-type Autoregressable[O: Op] = (
+type Scannable[O: Op] = (
     Callable[[InfixRV], InfixRV[O]]
     | Callable[[InfixRV, "PyTree[InfixRV]"], InfixRV[O]]
     | Callable[[InfixRV, "PyTree[InfixRV]", "PyTree[InfixRV]"], InfixRV[O]]
@@ -70,13 +70,13 @@ type Autoregressable[O: Op] = (
 A type alias for a function that takes one `InfixRV` input plus any number of pytrees of `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
 """
 
-type Autoregressed[O: Op] = Callable[..., InfixRV[Autoregressive[Composite[O]]]]
+type Scanned[O: Op] = Callable[..., InfixRV[Scan[Composite[O]]]]
 """
-A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional ``PyTree[InfixRV]`` and returns a single autoregressive RV output. Because of Python's limited type system, this does not actually check the inputs.
+A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional ``PyTree[InfixRV]`` and returns a single scan RV output. Because of Python's limited type system, this does not actually check the inputs.
 """
 
 
-def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[InfixRV]) -> int:
+def _get_scan_length(length: int | None, my_in_axes: Sequence[int | None], args: Sequence[InfixRV]) -> int:
     "If length is given, checks that it's compatible with all args. Otherwise, infers from args and chcecks they are compatible."
 
     my_length = length
@@ -89,21 +89,19 @@ def _get_autoregressive_length(length: int | None, my_in_axes: Sequence[int | No
                 my_length = arg.shape[ax]
 
     if my_length is None:
-        raise ValueError("Can't create autoregressive with length=None and no mapped axis")
+        raise ValueError("Can't create scan with length=None and no mapped axis")
 
     return my_length
 
 
-def autoregressive_flat[O: Op](
-    flat_fun: FlatAutoregressable[O], length: int, in_axes: tuple[int | None, ...]
-) -> FlatAutoregressed[O]:
+def scan_flat[O: Op](flat_fun: FlatScannable[O], length: int, in_axes: tuple[int | None, ...]) -> FlatScanned[O]:
     """
-    Given a "flat" function, create a function to generate an RV with an `Autoregressive` Op.
+    Given a "flat" function, create a function to generate an RV with an `Scan` Op.
 
     Doing
 
     ```python
-    z = autoregressive_flat(fun, length=5, in_axes=(0,None))(start, A, B)
+    z = scan_flat(fun, length=5, in_axes=(0,None))(start, A, B)
     ```
 
     is semantically similar to
@@ -120,17 +118,17 @@ def autoregressive_flat[O: Op](
     Parameters
     ----------
     flat_fun
-        function for base of autoregressive
+        function for base of scan
     length
-        length of autoregressive. Cannot be skipped
+        length of scan. Cannot be skipped
     in_axes
         which axis (or ``None``) to slice
 
     Examples
     --------
-    >>> x = autoregressive_flat(exp, length=5, in_axes=())(constant(7.7))
+    >>> x = scan_flat(exp, length=5, in_axes=())(constant(7.7))
     >>> x.op
-    Autoregressive(Composite(1, (Exp(),), [[0]]), 5, (), 0)
+    Scan(Composite(1, (Exp(),), [[0]]), 5, (), 0)
     >>> x.op.base_op
     Composite(1, (Exp(),), [[0]])
     >>> x.op.length
@@ -144,9 +142,9 @@ def autoregressive_flat[O: Op](
 
     >>> a = makerv(7.7)
     >>> b = makerv([1,2,3,4,5])
-    >>> x = autoregressive_flat(add, length=5, in_axes=(0,))(a, b)
+    >>> x = scan_flat(add, length=5, in_axes=(0,))(a, b)
     >>> x.op
-    Autoregressive(Composite(2, (Add(),), [[0, 1]]), 5, (0,), 0)
+    Scan(Composite(2, (Add(),), [[0, 1]]), 5, (0,), 0)
     >>> x.op.base_op
     Composite(2, (Add(),), [[0, 1]])
     >>> x.op.length
@@ -171,7 +169,7 @@ def autoregressive_flat[O: Op](
         base_op, constants = make_composite(flat_fun, init_shape, *base_args_shapes)
         where_self = 0
         # where_self = len(constants) # constants always first in composite
-        op = Autoregressive(
+        op = Scan(
             base_op,
             length,
             in_axes=[None] * len(constants) + list(in_axes),
@@ -182,16 +180,14 @@ def autoregressive_flat[O: Op](
     return myfun
 
 
-def autoregressive[O: Op](
-    fun: Autoregressable[O], length: None | int = None, in_axes: PyTree[int | None] = 0
-) -> Autoregressed[O]:
+def scan[O: Op](fun: Scannable[O], length: None | int = None, in_axes: PyTree[int | None] = 0) -> Scanned[O]:
     """
-    Given a function, create a function to generate an RV with an `Autoregressive` Op. Doing
+    Given a function, create a function to generate an RV with an `Scan` Op. Doing
 
     .. code-block:: python
 
-        auto_fun = autoregressive(fun, 5)
-        z = auto_fun(start)
+        scan_fun = scan(fun, 5)
+        z = scan_fun(start)
 
     is semantically like
 
@@ -208,8 +204,8 @@ def autoregressive[O: Op](
 
     .. code-block:: python
 
-        auto_fun = autoregressive(fun, 5, [0, None])
-        z = auto_fun(start, A, B)
+        scano_fun = scan(fun, 5, [0, None])
+        z = scan_fun(start, A, B)
 
     is semantically like:
 
@@ -233,14 +229,14 @@ def autoregressive[O: Op](
             This function can take extra inputs, which can be `RVLike` or pytrees of `RVLike`. These can be mapped as determined
             Can optionally take extra inputs that will be mapped.
         length:
-            Length of autoregressive. Can be ``None`` if any inputs are mapped along some axis.
+            Length of scan. Can be ``None`` if any inputs are mapped along some axis.
         in_axes:
             What axis to map each input other than ``carry`` over (or ``None`` if
             non-mapped). As with `vmap`, can be a pytree of `RV` corresponding to the structure of all
             inputs other than ``carry``.
 
     Returns:
-        Function that takes a single init `RVLike` plus some number of pytrees of `RVLike` with mapped axes and produces a single ``RV[Autoregressive]``
+        Function that takes a single init `RVLike` plus some number of pytrees of `RVLike` with mapped axes and produces a single ``RV[Scan]``
 
     Examples
     --------
@@ -249,8 +245,8 @@ def autoregressive[O: Op](
     >>> x = constant(3.3)
     >>> def fun(carry):
     ...     return normal(exp(carry), 1)
-    >>> z = autoregressive(fun, 5)(x)
-    >>> isinstance(z.op, Autoregressive)
+    >>> z = scan(fun, 5)(x)
+    >>> isinstance(z.op, Scan)
     True
     >>> z.op.base_op
     Composite(1, (Exp(), Constant(1), Normal()), [[0], [], [1, 2]])
@@ -268,8 +264,8 @@ def autoregressive[O: Op](
     >>> y = constant([1,2,3])
     >>> def fun(carry, yi):
     ...     return exponential(carry * yi)
-    >>> z = autoregressive(fun)(x,y)
-    >>> isinstance(z.op, Autoregressive)
+    >>> z = scan(fun)(x,y)
+    >>> isinstance(z.op, Scan)
     True
     >>> z.op.base_op
     Composite(2, (Mul(), Exponential()), [[0, 1], [2]])
@@ -285,8 +281,8 @@ def autoregressive[O: Op](
 
     >>> def fun(carry, yi):
     ...     return exponential(carry * yi)
-    >>> z = autoregressive(fun)(3.3, np.array([1,2,3]))
-    >>> isinstance(z.op, Autoregressive)
+    >>> z = scan(fun)(3.3, np.array([1,2,3]))
+    >>> isinstance(z.op, Scan)
     True
     >>> z.op.base_op
     Composite(2, (Mul(), Exponential()), [[0, 1], [2]])
@@ -298,10 +294,10 @@ def autoregressive[O: Op](
 
     See Also
     --------
-    Autoregressable
-    Autoregressed
-    pangolin.ir.Autoregressive
-    autoregress
+    Scannable
+    Scanned
+    pangolin.ir.Scan
+    repeat
     """
 
     def myfun(init: RVLike, *args: PyTree[RVLike]):
@@ -328,26 +324,26 @@ def autoregressive[O: Op](
         def new_flat_fun(init: RVLike, *args: RVLike) -> InfixRV:
             return flat_fun(init, *args)[0]
 
-        my_length = _get_autoregressive_length(length, flat_in_axes, flat_args)
+        my_length = _get_scan_length(length, flat_in_axes, flat_args)
 
-        return autoregressive_flat(new_flat_fun, my_length, flat_in_axes)(init, *flat_args)
+        return scan_flat(new_flat_fun, my_length, flat_in_axes)(init, *flat_args)
 
     return myfun
 
 
-def autoregress[O: Op](length: int | None = None, in_axes: Any = 0) -> Callable[[Autoregressable[O]], Autoregressed[O]]:
+def repeat[O: Op](length: int | None = None, in_axes: Any = 0) -> Callable[[Scannable[O]], Scanned[O]]:
     """
-    Simple decorator to create functions to create autoregressive RVs. The idea is that
+    Simple decorator to create functions to create scan RVs. The idea is that
 
     .. code-block:: python
 
-        autoregress(length, in_axes)(fun)
+        repeat(length, in_axes)(fun)
 
     is exactly the same as
 
     .. code-block:: python
 
-        autoregressive(fun, length, in_axes)
+        scan(fun, length, in_axes)
 
     This can be very convenient as a decorator.
 
@@ -356,21 +352,21 @@ def autoregress[O: Op](length: int | None = None, in_axes: Any = 0) -> Callable[
         in_axes: axis to map arguments other than ``carry`` over
 
     Returns:
-        Decorator that takes a function that transforms a `RVLike` and some number of pytress of `RVLike` into a single `RV` and returns a function that transforms a `RVLike` and some number of pytrees of `RVLike` into a single RV with an `ir.Autoregressive` op.
+        Decorator that takes a function that transforms a `RVLike` and some number of pytress of `RVLike` into a single `RV` and returns a function that transforms a `RVLike` and some number of pytrees of `RVLike` into a single RV with an `ir.Scan` op.
 
     Examples
     --------
 
-    Here are two equivalent examples. Here's `autoregressive`:
+    Here are two equivalent examples. Here's `scan`:
 
     >>> x = constant(3.3)
     >>> def fun(carry):
     ...     return normal(exp(carry), 1)
-    >>> z1 = autoregressive(fun,5)(x)
+    >>> z1 = scan(fun,5)(x)
 
-    And here's `autoregress`:
+    And here's `repeat`:
 
-    >>> @autoregress(5)
+    >>> @repeat(5)
     ... def fun(carry):
     ...     return normal(exp(carry), 1)
     >>> z2 = fun(x)
@@ -382,8 +378,8 @@ def autoregress[O: Op](length: int | None = None, in_axes: Any = 0) -> Callable[
 
     See Also
     --------
-    autoregressive
-    pangolin.ir.Autoregressive
+    scan
+    pangolin.ir.Scan
     """
 
-    return lambda fun: autoregressive(fun, length, in_axes)
+    return lambda fun: scan(fun, length, in_axes)

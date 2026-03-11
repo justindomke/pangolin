@@ -11,7 +11,7 @@ from .base import MixinBase
 from typing import Callable
 
 
-class AutoregressiveTests(MixinBase):
+class ScanTests(MixinBase):
     """
     Intended to be used as a mixin
     """
@@ -19,7 +19,7 @@ class AutoregressiveTests(MixinBase):
     def test_repeated_exp(self):
         length = 5
 
-        op = ir.Autoregressive(ir.Exp(), length, in_axes=[])
+        op = ir.Scan(ir.Exp(), length, in_axes=[])
         # out = get_numpyro_val(op, 0.1, is_observed=False)
 
         last = 0.1
@@ -40,7 +40,7 @@ class AutoregressiveTests(MixinBase):
     def test_repeated_exp_with_dummy(self):
         length = 5
 
-        op = ir.Autoregressive(ir.Exp(), length, in_axes=[])
+        op = ir.Scan(ir.Exp(), length, in_axes=[])
         # out = get_numpyro_val(op, 0.1, is_observed=False)
 
         last = 0.1
@@ -63,8 +63,8 @@ class AutoregressiveTests(MixinBase):
     def test_autoregressive_simple(self):
         x = pi.constant(0.5)
         length = 12
-        y = pi.autoregressive(lambda last: pi.normal(last + 1, 1e-4), length)(x)
-        assert isinstance(y.op, ir.Autoregressive)
+        y = pi.scan(lambda last: pi.normal(last + 1, 1e-4), length)(x)
+        assert isinstance(y.op, ir.Scan)
 
         def testfun(samps):
             [ys] = samps
@@ -78,9 +78,9 @@ class AutoregressiveTests(MixinBase):
         x = pi.constant(0.5)
         length = 12
         noise = pi.constant(1e-4)
-        y = pi.autoregressive(lambda last: pi.normal(last + 1, noise), length)(x)
+        y = pi.scan(lambda last: pi.normal(last + 1, noise), length)(x)
 
-        assert isinstance(y.op, ir.Autoregressive)
+        assert isinstance(y.op, ir.Scan)
         base_op = y.op.base_op
         assert isinstance(base_op, ir.Composite)
         assert base_op == ir.Composite(
@@ -92,7 +92,7 @@ class AutoregressiveTests(MixinBase):
             ),
             [[], [0, 2], [3, 1]],
         )
-        assert y.op == ir.Autoregressive(base_op, length, [None], 0)
+        assert y.op == ir.Scan(base_op, length, [None], 0)
 
         def testfun(samps):
             [ys] = samps
@@ -105,9 +105,9 @@ class AutoregressiveTests(MixinBase):
     def test_autoregressive_nonrandom(self):
         x = pi.normal(0.0, 1e-5)
         length = 12
-        y = pi.autoregressive(lambda last: last + 1, length)(x)
+        y = pi.scan(lambda last: last + 1, length)(x)
 
-        assert isinstance(y.op, ir.Autoregressive)
+        assert isinstance(y.op, ir.Scan)
 
         def testfun(samps):
             [ys] = samps
@@ -122,12 +122,12 @@ class AutoregressiveTests(MixinBase):
         length = 12
         increment = np.random.randn(length)
         for y in [
-            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment),
-            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4))(x, increment),
-            pi.autoregressive(lambda last, inc: pi.normal(last + inc, 1e-4), in_axes=0)(x, increment),
+            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment),
+            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4))(x, increment),
+            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), in_axes=0)(x, increment),
         ]:
 
-            assert isinstance(y.op, ir.Autoregressive)
+            assert isinstance(y.op, ir.Scan)
 
             def testfun(samps):
                 [ys] = samps
@@ -143,7 +143,7 @@ class AutoregressiveTests(MixinBase):
         x0 = np.random.randn(ndim)
         x = pi.vmap(pi.normal, [0, None], ndim)(x0, 1e-5)
         A = np.random.randn(ndim, ndim)
-        y = pi.autoregressive(lambda last: A @ last, length)(x)
+        y = pi.scan(lambda last: A @ last, length)(x)
 
         def testfun(samps):
             [ys] = samps
@@ -164,7 +164,7 @@ class AutoregressiveTests(MixinBase):
         x = pi.vmap(pi.normal, [0, None], ndim)(x0, 1e-5)
         A = np.random.randn(ndim, ndim)
         A_rv = pi.constant(A)
-        y = pi.autoregressive(lambda last: A_rv @ last, length)(x)
+        y = pi.scan(lambda last: A_rv @ last, length)(x)
 
         def testfun(samps):
             [ys] = samps
@@ -179,7 +179,7 @@ class AutoregressiveTests(MixinBase):
         test_util.inf_until_match(self.sample_flat, [y], [], [], testfun)
 
     def test_double_autoregressive(self):
-        randwalk = pi.autoregressive(lambda last, input: pi.normal(last + input, 1e-7), 10)
+        randwalk = pi.scan(lambda last, input: pi.normal(last + input, 1e-7), 10)
         # randwalk is a function that takes a scalar RV and a length-10 RV and produces a length-10 RV
 
         z = randwalk(0.0, np.arange(10))
@@ -187,7 +187,7 @@ class AutoregressiveTests(MixinBase):
         [zs] = self.sample_flat([z], [], [], niter=1)
         assert zs.shape == (1, 10)
 
-        vecwalk = pi.autoregressive(lambda last: randwalk(0.0, last), 5)
+        vecwalk = pi.scan(lambda last: randwalk(0.0, last), 5)
         # vecwalk is a fnction that takes a length-10 RV and produces a 5x10 RV
 
         u = vecwalk(np.zeros(10))
@@ -202,7 +202,7 @@ class AutoregressiveTests(MixinBase):
 #     x = makerv(0.5)
 #     length = 12
 #     noises = makerv(np.random.rand(length))
-#     op = ir.Autoregressive(ir.Normal(), length, (0,), 0)
+#     op = ir.Scan(ir.Normal(), length, (0,), 0)
 #     y = ir.RV(op, x, noises)
 #     ys = sample(y)
 #     #print(f"{ys=}")
@@ -211,7 +211,7 @@ class AutoregressiveTests(MixinBase):
 #     x = makerv(0.5)
 #     length = 12
 #     noise = makerv(1e-4)
-#     op = ir.Autoregressive(ir.Normal(), length, (None,), 0)
+#     op = ir.Scan(ir.Normal(), length, (None,), 0)
 #     y = ir.RV(op, x, noise)
 
 #     ys = sample(y)

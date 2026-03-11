@@ -55,7 +55,7 @@ Linear algebra               :func:`matmul` (or infix ``@``) `transpose` (or ``r
 Other multivariate functions :func:`sum` :func:`softmax` `diag` `diag_matrix` `fill_tril` `extract_tril`
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
-Control flow                 :func:`vmap` `broadcast` :func:`composite` :func:`autoregressive` :func:`autoregress`
+Control flow                 :func:`vmap` `broadcast` :func:`composite` :func:`scan` :func:`repeat`
 Indexing                     :func:`index` (or ``rv.[...]``) `vindex`
 Transformed densities        `Transform` `tforms` `compose_transforms`
 ============================ ======
@@ -97,7 +97,7 @@ from .base import RVLike
 # from . import vmap
 # from . import vmap
 from .compositing import composite
-from .autoregressing import Autoregressable, Autoregressed, autoregressive, autoregress
+from .scanning import Scannable, Scanned, scan, repeat
 from .indexing import index, vindex
 from .transforming import Transform, tforms, compose_transforms
 from .util import fill_tril, extract_tril
@@ -128,10 +128,10 @@ __all__ = [
     "vmap",
     "broadcast",
     "composite",
-    "Autoregressable",
-    "Autoregressed",
-    "autoregressive",
-    "autoregress",
+    "Scannable",
+    "Scanned",
+    "scan",
+    "repeat",
     "index",
     "vindex",
     "normal",
@@ -192,7 +192,7 @@ __all__ = [
     "extract_tril",
     "base",
     "compositing",
-    "autoregressing",
+    "scanning",
     "indexing",
     "print_upstream",
     "RVLike",

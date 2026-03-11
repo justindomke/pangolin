@@ -1,7 +1,7 @@
 import numpy as np
 from pangolin import ir
 
-from pangolin.torch_backend import (
+from pangolin.jax_backend import (
     ancestor_sample_flat,
     ancestor_log_prob_flat,
     eval_op,
@@ -10,49 +10,50 @@ from pangolin.torch_backend import (
 )
 import jax
 import numpyro.distributions
-import torch
-import numpy as np
+from jax import numpy as jnp
 
 
 def test_autoregressive_eval_nonrandom():
-    op = ir.Autoregressive(base_op=ir.Add(), length=3, in_axes=[0], where_self=0)
+    op = ir.Scan(base_op=ir.Add(), length=3, in_axes=[0], where_self=0)
 
-    x = torch.tensor([1.1, 2.2, 3.3])
+    x = jnp.array([1.1, 2.2, 3.3])
 
     out = eval_op(op, [0.0, x])
 
-    assert np.allclose(out, np.cumsum(x))
+    assert jnp.allclose(out, jnp.cumsum(x))
 
 
 def test_autoregressive_normal():
-    op = ir.Autoregressive(base_op=ir.Normal(), length=3, in_axes=[0], where_self=0)
-    sigma = np.array([1.0, 2.0, 3.0])
-    y = sample_op(op, [0.0, sigma])  # draw sample (not really tested...)
+    op = ir.Scan(base_op=ir.Normal(), length=3, in_axes=[0], where_self=0)
+    sigma = jnp.array([1.0, 2.0, 3.0])
+    key = jax.random.PRNGKey(0)
+    y = sample_op(op, key, [0.0, sigma])  # draw sample (not really tested...)
     l = log_prob_op(op, y, [0.0, sigma])  # compute log prob
 
     expected = 0.0
     last = 0.0
     for yi, sigma_i in zip(y, sigma, strict=True):
-        expected += torch.distributions.Normal(last, sigma_i).log_prob(yi)
+        expected += numpyro.distributions.Normal(last, sigma_i).log_prob(yi)
         last = yi
 
-    assert np.allclose(l, expected)
+    assert jnp.allclose(l, expected)
 
 
 def test_autoregressive_const_rv_mapped():
     x = ir.RV(ir.Constant(0.5))
     length = 12
     noises = ir.RV(ir.Constant(np.random.rand(length)))
-    op = ir.Autoregressive(ir.Normal(), length, (0,), 0)
+    op = ir.Scan(ir.Normal(), length, (0,), 0)
     y = ir.RV(op, x, noises)
-    [y_samp] = ancestor_sample_flat([y])
+    key = jax.random.PRNGKey(0)
+    [y_samp] = ancestor_sample_flat([y], key)
     assert y_samp.shape == (length,)
     l = ancestor_log_prob_flat([y], [y_samp])
 
     expected = 0.0
     last = x.op.value
     for yi, sigma_i in zip(y_samp, noises.op.value, strict=True):
-        expected += torch.distributions.Normal(torch.tensor(last), torch.tensor(sigma_i)).log_prob(torch.tensor(yi))
+        expected += numpyro.distributions.Normal(last, sigma_i).log_prob(yi)
         last = yi
     assert np.allclose(l, expected)
 
@@ -61,18 +62,17 @@ def test_autoregressive_const_rv_unmapped():
     x = ir.RV(ir.Constant(0.5))
     length = 12
     noise = ir.RV(ir.Constant(0.9))
-    op = ir.Autoregressive(ir.Normal(), length, (None,), 0)
+    op = ir.Scan(ir.Normal(), length, (None,), 0)
     y = ir.RV(op, x, noise)
-    [y_samp] = ancestor_sample_flat([y])
+    key = jax.random.PRNGKey(0)
+    [y_samp] = ancestor_sample_flat([y], key)
     assert y_samp.shape == (length,)
     l = ancestor_log_prob_flat([y], [y_samp])
 
     expected = 0.0
     last = x.op.value
     for yi in y_samp:
-        expected += torch.distributions.Normal(torch.tensor(last), torch.tensor(noise.op.value)).log_prob(
-            torch.tensor(yi)
-        )
+        expected += numpyro.distributions.Normal(last, noise.op.value).log_prob(yi)
         last = yi
     assert np.allclose(l, expected)
 
@@ -82,21 +82,20 @@ def test_autoregressive_simple_const_rv():
 
     length = 12
     base_op = ir.Composite(2, (ir.Constant(1), ir.Add(), ir.Normal()), [[], [0, 2], [3, 1]])
-    op = ir.Autoregressive(base_op, length, [None], 0)
+    op = ir.Scan(base_op, length, [None], 0)
 
     x = ir.RV(ir.Constant(0.5))
     noise = ir.RV(ir.Constant(0.3))
     y = ir.RV(op, x, noise)
 
-    [y_samp] = ancestor_sample_flat([y])
+    key = jax.random.PRNGKey(0)
+    [y_samp] = ancestor_sample_flat([y], key)
     l = ancestor_log_prob_flat([y], [y_samp])
 
     expected = 0.0
     last = x.op.value
     for yi in y_samp:
-        expected += torch.distributions.Normal(torch.tensor(last + 1), torch.tensor(noise.op.value)).log_prob(
-            torch.tensor(yi)
-        )
+        expected += numpyro.distributions.Normal(last + 1, noise.op.value).log_prob(yi)
         last = yi
 
     assert np.allclose(l, expected)

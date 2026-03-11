@@ -15,9 +15,9 @@ class ComplexTests(MixinBase):
     Intended to be used as a mixin
     """
 
-    def test_autoregressive(self):
+    def test_scan(self):
         # warmup
-        increasing = pi.autoregressive(lambda x: x + 1, 10)
+        increasing = pi.scan(lambda x: x + 1, 10)
         y = increasing(0)
 
         expected = np.arange(1, 11)
@@ -28,10 +28,10 @@ class ComplexTests(MixinBase):
         assert out.shape == expected.shape
         assert np.allclose(expected, out)
 
-    def test_autoregressive_mapped(self):
+    def test_scan_mapped(self):
         # warmup
         a = np.random.randn(10)
-        increasing = pi.autoregressive(lambda x, ai: x + ai, 10)
+        increasing = pi.scan(lambda x, ai: x + ai, 10)
         y = increasing(0.0, a)
 
         expected = np.cumsum(a)
@@ -42,8 +42,8 @@ class ComplexTests(MixinBase):
         assert out.shape == expected.shape
         assert np.allclose(expected, out)
 
-    def test_vmap_autoregressive_deterministic(self):
-        increasing = pi.autoregressive(lambda x: x + 1, 10)
+    def test_vmap_scan_deterministic(self):
+        increasing = pi.scan(lambda x: x + 1, 10)
         y = pi.vmap(increasing)(np.array([1, 2, 3, 4, 5]))
 
         expected = np.array([1, 2, 3, 4, 5])[:, None] + np.arange(1, 11)[None, :]
@@ -54,14 +54,14 @@ class ComplexTests(MixinBase):
         assert out.shape == expected.shape
         assert np.allclose(expected, out)
 
-    def test_vmap_autoregressive_deterministic_mapped(self):
+    def test_vmap_scan_deterministic_mapped(self):
         a = np.random.randn(10)
 
         for increasing in [
-            pi.autoregressive(lambda x, ai: x + ai, 10, in_axes=0),
-            pi.autoregressive(lambda x, ai: x + ai, in_axes=0),
-            pi.autoregressive(lambda x, ai: x + ai, 10),
-            pi.autoregressive(lambda x, ai: x + ai),
+            pi.scan(lambda x, ai: x + ai, 10, in_axes=0),
+            pi.scan(lambda x, ai: x + ai, in_axes=0),
+            pi.scan(lambda x, ai: x + ai, 10),
+            pi.scan(lambda x, ai: x + ai),
         ]:
 
             y = pi.vmap(increasing, [0, None])(np.array([1.0, 2, 3, 4, 5]), a)
@@ -74,14 +74,14 @@ class ComplexTests(MixinBase):
             assert out.shape == expected.shape
             assert np.allclose(expected, out)
 
-    def test_vmap_autoregressive_deterministic_mapped2(self):
+    def test_vmap_scan_deterministic_mapped2(self):
         a = np.random.randn(5, 10)
 
         for increasing in [
-            pi.autoregressive(lambda x, ai: x + ai, 10, in_axes=0),
-            pi.autoregressive(lambda x, ai: x + ai, in_axes=0),
-            pi.autoregressive(lambda x, ai: x + ai, 10),
-            pi.autoregressive(lambda x, ai: x + ai),
+            pi.scan(lambda x, ai: x + ai, 10, in_axes=0),
+            pi.scan(lambda x, ai: x + ai, in_axes=0),
+            pi.scan(lambda x, ai: x + ai, 10),
+            pi.scan(lambda x, ai: x + ai),
         ]:
 
             for y in [
@@ -97,13 +97,13 @@ class ComplexTests(MixinBase):
                 assert out.shape == expected.shape
                 assert np.allclose(expected, out)
 
-    def test_autoregressive_vmap(self):
+    def test_scan_vmap(self):
         a = np.random.randn(5)
         b = np.random.randn(5)
 
         vmap_add = pi.vmap(pi.add)
 
-        y = pi.autoregressive(lambda carry: vmap_add(carry, a), length=10)(b)
+        y = pi.scan(lambda carry: vmap_add(carry, a), length=10)(b)
 
         expected = b[None, :] + np.cumsum(a[None, :] + np.zeros(10)[:, None], axis=0)
 
@@ -113,16 +113,16 @@ class ComplexTests(MixinBase):
         assert y.shape == out.shape == expected.shape == (10, 5)
         assert np.allclose(expected, out)
 
-    def test_autoregressive_vmap_mapped(self):
+    def test_scan_vmap_mapped(self):
         a = np.random.randn(10, 5)
         b = np.random.randn(5)
 
         vmap_add = pi.vmap(pi.add)
 
-        y = pi.autoregressive(lambda carry, a_i: vmap_add(carry, a_i), length=10, in_axes=0)(b, a)
+        y = pi.scan(lambda carry, a_i: vmap_add(carry, a_i), length=10, in_axes=0)(b, a)
 
         # fmt: off
-        expected_op = ir.Autoregressive(
+        expected_op = ir.Scan(
                         ir.Composite(
                             2,
                             (
