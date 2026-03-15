@@ -29,9 +29,16 @@ Scalar distributions         :class:`Normal` :class:`NormalPrec` :class:`Lognorm
 Multivariate distributions   :class:`MultiNormal` :class:`Multinomial` :class:`Dirichlet` :class:`Wishart`
 Control flow                 :class:`VMap` :class:`Composite` :class:`Scan`
 Indexing                     `Index`
+Transformations              `Bijector` `Transformed`
 ============================ ============
 
-In addition, this module provides `print_upstream`, which provides a nice human-readable description of an entire graph.
+In addition, this module provides the following utilities:
+
+* `print_upstream` : Print a nice human-readable description of an entire graph.
+* `rv_equal`: Test if two random variables are mathematically equal.
+
+---
+
 """
 
 from __future__ import annotations  # so it's possible to preserve type aliases
@@ -1253,7 +1260,10 @@ class Composite[LastOp: Op](Op):
         par_nums: Sequence[Sequence[int]],
     ):
         assert isinstance(num_inputs, int)
-        assert all(isinstance(d, Op) for d in ops)
+        for op in ops:
+            if not isinstance(op, Op):
+                raise ValueError(f"Composite argument {op} is not Op")
+
         for my_par_nums in par_nums:
             assert all(isinstance(i, int) for i in my_par_nums)
         for d in ops[:-1]:
@@ -1581,12 +1591,13 @@ class Bijector(Op):
 
     That is, ``P_Y`` is the pushforward of ``P_X`` and ``P_X`` is the pullback of ``P_Y``.
 
-    We assume that this distribution will generally be used as a "pullback", meaning that an op is known for ``P(X)`` and one wishes to define an op for ``P(Y)``. In order to implement ``log_prob` for ``P(Y)`` it will be necessary to evaluate ``T⁻¹(y)`` and ``|det ∇T⁻¹(y)|``. In order to sample ``P(Y)`` it will be necessary to evaluate ``T(x)``.
+    We assume that this distribution will generally be used as a "pullback", meaning that an op is known for ``P(X)`` and one wishes to define an op for ``P(Y)``. In order to implement ``log_prob`` for ``P(Y)`` it will be necessary to evaluate ``T⁻¹(y)`` and ``|det ∇T⁻¹(y)|``. In order to sample ``P(Y)`` it will be necessary to evaluate ``T(x)``.
 
     Args:
-        forward: Implements ``T(x)``
-        inverse: Implements ``T⁻¹(y)``
-        log_det_jac: Implements ``log(|det ∇T(x)|) == -log(|det ∇T⁻¹(y)|)`` (given both ``x`` and ``y``).
+        forward: An op that implements ``T(x)``
+        inverse: An op that implements ``T⁻¹(y)``
+        log_det_jac: An op that implements ``log |det ∇T(x)| == -log |det ∇T⁻¹(y)|`` given both ``x`` and ``y``. (The op may use either or both elements as convenient.)
+        n_biject_params: Number of parameters for the bijection (default 0)
 
     Examples
     --------
@@ -1607,7 +1618,7 @@ class Bijector(Op):
 
     _random = False
 
-    def __init__(self, forward: Op, inverse: Op, log_det_jac: Op):
+    def __init__(self, forward: Op, inverse: Op, log_det_jac: Op, n_biject_params: int = 0):
         if forward.random:
             raise ValueError("forward op cannot be random")
         if inverse.random:
@@ -1618,10 +1629,16 @@ class Bijector(Op):
         self.forward = forward
         self.inverse = inverse
         self.log_det_jac = log_det_jac
+        self.n_biject_params = n_biject_params
 
     def _get_shape(self, y_shape: Shape, *param_shapes: Shape) -> Shape:
         x_shape = self.forward.get_shape(y_shape, *param_shapes)
         y_shape_pred = self.inverse.get_shape(x_shape, *param_shapes)
+        if len(param_shapes) != self.n_biject_params:
+            raise ValueError(
+                f"Number of bijection parameters {len(param_shapes)} not as expected ({self.n_biject_params})"
+            )
+
         if y_shape_pred != y_shape:
             raise ValueError(
                 f"y_shape {y_shape} did not match predicted y_shape {y_shape_pred}, indicating forward and inverse ops have incompatible shapes"
@@ -1631,22 +1648,36 @@ class Bijector(Op):
     def __eq__(self, other) -> bool:
         if not isinstance(other, Bijector):
             return False
-        return self.forward == other.forward and self.inverse == other.inverse and self.log_det_jac == other.log_det_jac
+        return (
+            self.forward == other.forward
+            and self.inverse == other.inverse
+            and self.log_det_jac == other.log_det_jac
+            and self.n_biject_params == other.n_biject_params
+        )
 
     def __hash__(self):
-        return hash((self.forward, self.inverse, self.log_det_jac))
+        return hash((self.forward, self.inverse, self.log_det_jac, self.n_biject_params))
 
     def __repr__(self):
-        return f"Bijector({repr(self.forward)}, {repr(self.inverse)}, {repr(self.log_det_jac)})"
+        if self.n_biject_params:
+            return f"Bijector({repr(self.forward)}, {repr(self.inverse)}, {repr(self.log_det_jac)}, {self.n_biject_params})"
+        else:
+            return f"Bijector({repr(self.forward)}, {repr(self.inverse)}, {repr(self.log_det_jac)})"
 
     def __str__(self):
-        return f"bijector({str(self.forward)}, {str(self.inverse)}, {str(self.log_det_jac)})"
+        if self.n_biject_params:
+            return (
+                f"bijector({str(self.forward)}, {str(self.inverse)}, {str(self.log_det_jac)}, {self.n_biject_params})"
+            )
+        else:
+            return f"bijector({str(self.forward)}, {str(self.inverse)}, {str(self.log_det_jac)})"
 
 
 class NamedBijector(Bijector):
     forward: ClassVar[Op]
     inverse: ClassVar[Op]
     log_det_jac: ClassVar[Op]
+    n_biject_params: ClassVar[int]
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -1678,12 +1709,14 @@ class ExpBijector(NamedBijector):
     forward = Exp()
     inverse = Log()
     log_det_jac = Composite(2, (Identity(),), [[0]])
+    n_biject_params = 0
 
 
 class MulBijector(NamedBijector):
     forward = Mul()
     inverse = Div()
     log_det_jac = Composite(3, (Identity(),), [[2]])
+    n_biject_params = 0
 
 
 ########################################################################################
@@ -1720,7 +1753,7 @@ class Transformed[O: Op, B: Bijector](Op):
 
     Examples
     --------
-    This is equivalent to a lognormal:
+    Create a new op that's equivalent to `Lognormal`:
 
     >>> op = Transformed(Normal(), ExpBijector())
     >>> op
@@ -1730,10 +1763,18 @@ class Transformed[O: Op, B: Bijector](Op):
     >>> op.get_shape((),())
     ()
 
+    Use that new op to create a random variable:
+
+    >>> y = RV(op, RV(Constant(0)), RV(Constant(1)))
+    >>> y
+    RV(Transformed(Normal(), ExpBijector()), RV(Constant(0)), RV(Constant(1)))
+    >>> print(y)
+    transformed(normal, exp_bijector)(0, 1)
+
+
     Args:
         base_op: The base op to transform (must be random)
         bijection: The bijection to apply
-        n_biject_args: Number of parameter parents for bijection (default 0)
     """
 
     _random = True
@@ -1742,38 +1783,30 @@ class Transformed[O: Op, B: Bijector](Op):
         self,
         base_op: O,
         bijector: B,
-        n_biject_args: int = 0,
     ):
         if not base_op.random:
             raise ValueError("base_op must be random")
 
         self.base_op = base_op
         self.bijector = bijector
-        self.n_biject_args = n_biject_args
 
     def _get_shape(self, *args: Shape) -> Shape:
-        biject_args_shapes = args[: self.n_biject_args]
-        dist_shapes = args[self.n_biject_args :]
+        biject_args_shapes = args[: self.bijector.n_biject_params]
+        dist_shapes = args[self.bijector.n_biject_params :]
 
         original_shape = self.base_op.get_shape(*dist_shapes)
         new_shape = self.bijector.get_shape(original_shape, *biject_args_shapes)
         return new_shape
 
     def __repr__(self):
-        if self.n_biject_args:
-            return f"Transformed({repr(self.base_op)}, {repr(self.bijector)}, {repr(self.n_biject_args)})"
-        else:
-            return f"Transformed({repr(self.base_op)}, {repr(self.bijector)})"
+        return f"Transformed({repr(self.base_op)}, {repr(self.bijector)})"
 
     def __str__(self):
         """
         Return a string representation of the VMap op. Just like ``__repr__`` except
         uses str for calling the recursive distribution.
         """
-        if self.n_biject_args:
-            return f"transformed({str(self.base_op)}, {str(self.bijector)}, {str(self.n_biject_args)})"
-        else:
-            return f"transformed({str(self.base_op)}, {str(self.bijector)})"
+        return f"transformed({str(self.base_op)}, {str(self.bijector)})"
 
 
 ########################################################################################
@@ -1892,12 +1925,12 @@ from functools import lru_cache
 @lru_cache(maxsize=None)
 def rv_equal(A: RV, B: RV) -> bool:
     """
-    Are ``A`` and ``B`` *distributionally* equal? That is, are they guaranteed to always have the same value? This is defined by the following rules:
+    Are ``A`` and ``B`` equal in a mathematical sense? That is, are they guaranteed to always have the same value? This is defined by the following rules:
 
-    1. If ``A.op`` is random, then ``A`` is is equal to ``B`` if and only if they refer to the same object in memory.
-    2. If ``A.op`` is non-random, then ``A`` is equal to ``B`` if and only if they have the same `Op` and their parents are equal (defined recursively using this function).
+    1. If ``A.op`` is random, then ``A`` is is `rv_equal` to ``B`` if and only if they refer to the same object in memory.
+    2. If ``A.op`` is non-random, then ``A`` is `rv_equal` to ``B`` if and only if they have the same `Op` and their parents are `rv_equal` (defined recursively using this function).
 
-    This function is implemented using caching. This doesn't change the results since `RV` and `Op` s are immutable.
+    This function is implemented using caching to make it efficient even with large graphs. This doesn't change the results since `RV` and `Op` s are immutable.
 
     Args:
         A: the first RV to be compared

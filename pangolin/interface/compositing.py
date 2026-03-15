@@ -1,7 +1,7 @@
 from pangolin.ir import Composite, Shape, Op
 from pangolin.interface import InfixRV, makerv, normal, create_rv
-from .base import generated_nodes, AbstractOp
-from pangolin import util
+from .base import generated_nodes, AbstractOp, exp
+from pangolin import util, ir
 import jax.tree_util
 from typing import Callable
 
@@ -91,6 +91,64 @@ def make_composite[LastOp: Op](
         current_position += 1
 
     return Composite(num_inputs, tuple(ops), tuple(par_nums)), consts
+
+
+def uncomposite_flat(op: Composite) -> Callable:
+    """
+    Turn a Composite op into function that creates a group of RVs representing the computation inside the composite.
+
+    Args:
+        op: A composite op
+
+    Returns: A function that takes a set of RVs representing inputs (must all have same RV type) and returns a single RV representing the output.
+
+    >>> op = Composite(1, [ir.Exp()], [[0]])
+    >>> fun = uncomposite_flat(op)
+    >>> x = ir.RV(ir.Constant(7))
+    >>> y = fun(x)
+    >>> ir.print_upstream(x=x, y=y)
+    shape | statement
+    ----- | ---------
+    ()    | x = 7
+    ()    | y = exp(x)
+
+    >>> op = Composite(2, [ir.Add(), ir.Mul(), ir.Div()], [[0,1],[0,2],[0,3]])
+    >>> fun = uncomposite_flat(op)
+    >>> a = ir.RV(ir.Constant(5))
+    >>> b = ir.RV(ir.Constant(7))
+    >>> x = fun(a,b)
+    >>> ir.print_upstream(a=a, b=b, x=x)
+    shape | statement
+    ----- | ---------
+    ()    | a = 5
+    ()    | b = 7
+    ()    | c = add(a, b)
+    ()    | d = mul(a, c)
+    ()    | x = div(a, d)
+    """
+
+    def fun[MyRV: ir.RV](*args: MyRV) -> MyRV:
+        if len(args) != op.num_inputs:
+            raise ValueError(f"{len(args)=} does not match {op.num_inputs=}.")
+
+        if len(args) == 0:
+            raise NotImplementedError("Must take nonzero args")
+
+        rv_type = type(args[0])
+        if not all(type(a) == rv_type for a in args):
+            raise ValueError(f"Mixed RV types: {args}")
+
+        rvs = list(args)  # shallow copy
+        for (
+            op_i,
+            par_nums_i,
+        ) in zip(op.ops, op.par_nums, strict=True):
+            pars = [rvs[j] for j in par_nums_i]
+            new_rv = rv_type(op_i, *pars)
+            rvs.append(new_rv)
+        return rvs[-1]
+
+    return fun
 
 
 def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Composite]]:

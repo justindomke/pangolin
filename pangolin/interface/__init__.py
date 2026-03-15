@@ -51,13 +51,13 @@ Constants                    :func:`constant`
 Arithmetic                   :func:`add` :func:`sub` :func:`mul` :func:`div` (or infix ``+``, ``-``, ``*``, ``/``)
 Trigonometry                 :func:`arccos` :func:`arccosh` :func:`arcsin` :func:`arcsinh` :func:`arctan` :func:`arctanh` :func:`cos` :func:`cosh` :func:`sin` :func:`sinh` :func:`tan` :func:`tanh`
 Other scalar functions       :func:`pow` (or infix ``**``) :func:`sqrt` :func:`abs` :func:`exp` :func:`inv_logit` :func:`expit` :func:`sigmoid` :func:`log` :func:`loggamma` :func:`logit` :func:`step`
-Linear algebra               :func:`matmul` (or infix ``@``) `transpose` (or ``rv.T``) `inv` `cholesky`
+Linear algebra               :func:`matmul` (or infix ``@``) :func:`transpose` (or ``rv.T``) :func:`inv` :func:`cholesky`
 Other multivariate functions :func:`sum` :func:`softmax` `diag` `diag_matrix` `fill_tril` `extract_tril`
 Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal` :func:`cauchy` :func:`bernoulli` :func:`bernoulli_logit` :func:`beta` :func:`binomial` :func:`categorical` :func:`uniform` :func:`beta_binomial` :func:`exponential` :func:`gamma` :func:`poisson` :func:`student_t`
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
-Control flow                 :func:`vmap` `broadcast` :func:`composite` :func:`scan` :func:`repeat`
-Indexing                     :func:`index` (or ``rv.[...]``) `vindex`
-Transformed densities        `Transform` `tforms` `compose_transforms`
+Control flow                 :func:`vmap` :func:`broadcast` :func:`composite` :func:`scan` :func:`repeat`
+Indexing                     :func:`index` (or ``rv[...]``) `vindex`
+Transformed densities        :class:`Transform` :class:`tforms` :func:`compose_transforms` :func:`unconstrain`
 ============================ ======
 
 Auto-casting

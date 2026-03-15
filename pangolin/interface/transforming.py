@@ -31,9 +31,162 @@ from .compositing import make_composite, generated_nodes, Composite
 from .base import AbstractOp
 from . import base
 from .util import fill_tril, extract_tril
-
+import jax.tree_util
+from .vmapping import vmap
+from .compositing import uncomposite_flat, composite
 
 Shape = ir.Shape
+
+
+def maybe_make_composite[LastOp: Op](
+    flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape
+) -> tuple[LastOp | Composite[LastOp] | Composite[ir.Identity], list[InfixRV]]:
+    """
+    Given a flat function
+    """
+
+    dummy_args = tuple(InfixRV(AbstractOp(shape)) for shape in input_shapes)
+
+    # generated_nodes runs on "flat" functions that return arrays, not single RVs
+    test_out = flat_fun(*dummy_args)
+    if test_out in dummy_args:
+        where_out = dummy_args.index(test_out)
+        num_inputs = len(dummy_args)
+        return Composite(num_inputs, (ir.Identity(),), [[where_out]]), []
+
+    f = lambda *args: [flat_fun(*args)]
+    all_vars, [out] = generated_nodes(f, *dummy_args)
+    assert isinstance(out, InfixRV), "output of function must be a single InfixRV"
+
+    single_op = all(a in dummy_args for a in out.parents)
+    same_parents = out.parents == dummy_args
+    if single_op and same_parents:
+        assert all_vars == [out]
+        return out.op, []
+
+    return make_composite(flat_fun, *input_shapes)
+
+
+def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *biject_args_shapes: Shape) -> Bijector:
+    """
+    Examples
+    --------
+    >>> bijector = make_bijector(lambda x: exp(x), lambda y: log(y), lambda x, y: y, ())
+    >>> print(bijector)
+    bijector(exp, log, composite(2, [identity], [[1]]))
+    """
+
+    n_biject_params = len(biject_args_shapes)
+
+    forward_op, forward_constants = maybe_make_composite(forward_fn, x_shape, *biject_args_shapes)
+    y_shape = forward_op.get_shape(x_shape, *biject_args_shapes)
+    inverse_op, inverse_constants = maybe_make_composite(inverse_fn, y_shape, *biject_args_shapes)
+    log_det_jac_op, log_det_jac_constants = maybe_make_composite(log_det_jac_fn, x_shape, y_shape, *biject_args_shapes)
+
+    if len(forward_constants):
+        raise ValueError("foward_fn cannot capture closure variables")
+    if len(inverse_constants):
+        raise ValueError("inverse_fn cannot capture closure variables")
+    if len(log_det_jac_constants):
+        raise ValueError("log_det_jac_fn cannot capture closure variables")
+
+    x_shape_pred = inverse_op.get_shape(y_shape, *biject_args_shapes)
+    if x_shape != x_shape_pred:
+        raise ValueError(f"x_shape {x_shape} does not match inverted shape {x_shape_pred}")
+
+    bijector = Bijector(forward_op, inverse_op, log_det_jac_op, n_biject_params)
+    return bijector
+
+
+# def compose_bijectors(bijectors: Sequence[Bijector], log_det_direction: str = "forward") -> Bijector:
+#     """
+#     Composes a sequence of Transform objects into a single Transform.
+
+#     The resulting Transform applies ``y = Tn(...T2(T1(x))...)``.yield
+
+#     If the individual transforms have arguments, these are in linear order. E.g. if you have ``T1(x,a)`` and ``T2(y,b)`` then ``compose_transforms([T1,T2])(x,a,b)`` applies ``z = T2(T1(x,a),b)``.
+
+#     Args:
+#         transforms: Sequence of `Transform` objects
+#         log_det_direction: Should the new ``log_det_jac`` function loop through the transforms in forward or inverse order?
+
+#     Returns:
+#         Composite `Transform` object.
+#     """
+
+#     import builtins
+
+#     total_biject_params = builtins.sum(t.n_biject_params for t in bijectors)
+
+#     def check_args(*args):
+#         if len(args) != total_biject_params:
+#             raise TypeError(f"Expected {total_biject_params} args, got {len(args)}")
+
+#     def composed_forward(x, *args):
+#         check_args(*args)
+
+#         current_x = x
+#         arg_idx = 0
+#         for b in bijectors:
+#             n = b.n_biject_params
+#             b_args = args[arg_idx : arg_idx + n]
+#             current_x = ir.RV(b.forward, current_x, *b_args)
+#             arg_idx += n
+#         return current_x
+
+#     def composed_inverse(y, *args):
+#         check_args(*args)
+
+#         current_y = y
+#         arg_idx = total_biject_params
+#         for b in reversed(bijectors):
+#             n = b.n_biject_params
+#             b_args = args[arg_idx - n : arg_idx]
+#             current_y = ir.RV(b.inverse, current_y, *b_args)
+#             arg_idx -= n
+#         return current_y
+
+#     def _log_det_forward(x, y, *args):
+#         """Iterates Forward (T1 -> Tn). Relies on x."""
+#         check_args(*args)
+
+#         log_det_sum = constant(0.0)
+#         current_x = x
+#         arg_idx = 0
+#         for b in bijectors:
+#             n = b.n_biject_params
+#             b_args = args[arg_idx : arg_idx + n]
+#             next_x = ir.RV(b.forward, current_x, *b_args)
+#             log_det_sum += ir.RV(b.log_det_jac, current_x, next_x, *b_args)
+#             current_x = next_x
+#             arg_idx += n
+
+#         return log_det_sum
+
+#     def _log_det_inverse(x, y, *args):
+#         """Iterates Backward (Tn -> T1). Relies on y."""
+#         check_args(*args)
+
+#         log_det_sum = constant(0.0)
+#         current_y = y
+#         arg_idx = total_biject_params
+#         for b in reversed(bijectors):
+#             n = b.n_biject_params
+#             b_args = args[arg_idx - n : arg_idx]
+#             previous_x = ir.RV(b.inverse, current_y, *b_args)
+#             log_det_sum += ir.RV(b.log_det_jac, previous_x, current_y, *b_args)
+#             current_y = previous_x
+#             arg_idx -= n
+#         return log_det_sum
+
+#     if log_det_direction == "forward":
+#         composed_log_det_jac = _log_det_forward
+#     elif log_det_direction == "inverse":
+#         composed_log_det_jac = _log_det_inverse
+#     else:
+#         raise ValueError("log_det_direction must be 'forward' or 'inverse'")
+
+#     return make_bijector(composed_forward, composed_inverse, composed_log_det_jac, total_biject_params)
 
 
 class Transform:
@@ -103,8 +256,8 @@ class Transform:
     >>> print(y) # doctest: +NORMALIZE_WHITESPACE
     transformed(normal,
                 bijector(mul,
-                        div,
-                        composite(3, [log], [[2]])), 1)(4.4, 3.3, 3.3)
+                         div,
+                         composite(3, [log], [[2]]), 1))(4.4, 3.3, 3.3)
 
     Create a lognormal distribution parameterized in terms of the precision of the original normal.
 
@@ -156,12 +309,25 @@ class Transform:
             if not x.op.random:
                 raise ValueError(f"Cannot transform non-random op {x.op}")
 
-            transformed_op = Transformed(x.op, bijector, self.n_biject_args)
+            transformed_op = Transformed(x.op, bijector)
             y = InfixRV(transformed_op, *biject_args, *x.parents)
             x = self.inverse(y, *biject_args)
             return y, x
 
         return transformed_fun
+
+    # def apply_inverted[O: Op](self, fun: Callable[..., InfixRV[O]], *biject_args: RVLike):
+    #     """
+    #     Args:
+    #         fun: Original function. Should take some number of `RVLike` arguments and return a single *random* `InfixRV`.
+    #         biject_args: Arguments to the transform.
+
+    #     Returns:
+    #         Wrapped version of ``fun`` that creates a tuple containing a deterministic `InfixRV` that depends on the first one that undoes the original transform.
+    #     """
+
+    #     get_y_x = self.apply_and_invert(fun, *biject_args)
+    #     return lambda *args: get_y_x(*args)[1]
 
     def __call__[O: Op](self, fun: Callable[..., InfixRV[O]], *biject_args: RVLike):
         """
@@ -191,60 +357,6 @@ class Transform:
 
     def __repr__(self) -> str:
         return f"Transform({self.forward}, {self.inverse}, {self.log_det_jac})"
-
-
-def maybe_make_composite[LastOp: Op](
-    flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape
-) -> tuple[LastOp | Composite[LastOp] | Composite[ir.Identity], list[InfixRV]]:
-    dummy_args = tuple(InfixRV(AbstractOp(shape)) for shape in input_shapes)
-
-    # generated_nodes runs on "flat" functions that return arrays, not single RVs
-    test_out = flat_fun(*dummy_args)
-    if test_out in dummy_args:
-        where_out = dummy_args.index(test_out)
-        num_inputs = len(dummy_args)
-        return Composite(num_inputs, (ir.Identity(),), [[where_out]]), []
-
-    f = lambda *args: [flat_fun(*args)]
-    all_vars, [out] = generated_nodes(f, *dummy_args)
-    assert isinstance(out, InfixRV), "output of function must be a single InfixRV"
-
-    single_op = all(a in dummy_args for a in out.parents)
-    same_parents = out.parents == dummy_args
-    if single_op and same_parents:
-        assert all_vars == [out]
-        return out.op, []
-
-    return make_composite(flat_fun, *input_shapes)
-
-
-def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *biject_args_shapes: Shape) -> Bijector:
-    """
-    Examples
-    --------
-    >>> bijector = make_bijector(lambda x: exp(x), lambda y: log(y), lambda x, y: y, ())
-    >>> print(bijector)
-    bijector(exp, log, composite(2, [identity], [[1]]))
-    """
-
-    forward_op, forward_constants = maybe_make_composite(forward_fn, x_shape, *biject_args_shapes)
-    y_shape = forward_op.get_shape(x_shape, *biject_args_shapes)
-    inverse_op, inverse_constants = maybe_make_composite(inverse_fn, y_shape, *biject_args_shapes)
-    log_det_jac_op, log_det_jac_constants = maybe_make_composite(log_det_jac_fn, x_shape, y_shape, *biject_args_shapes)
-
-    if len(forward_constants):
-        raise ValueError("foward_fn cannot capture closure variables")
-    if len(inverse_constants):
-        raise ValueError("inverse_fn cannot capture closure variables")
-    if len(log_det_jac_constants):
-        raise ValueError("log_det_jac_fn cannot capture closure variables")
-
-    x_shape_pred = inverse_op.get_shape(y_shape, *biject_args_shapes)
-    if x_shape != x_shape_pred:
-        raise ValueError(f"x_shape {x_shape} does not match inverted shape {x_shape_pred}")
-
-    bijector = Bijector(forward_op, inverse_op, log_det_jac_op)
-    return bijector
 
 
 ########################################################################################
@@ -404,13 +516,19 @@ class tforms:
     >>> y = tforms.scaled_logit(uniform, 3.5, 5.5)(3.0, 5.0)
     """
 
+    # to avoid masking
+    _exp = exp
+    _log = log
+
     # f(x) = exp(x)  <==>  df/dx = exp(x) = y  <==>  log df/dx = log(y)
-    exp = Transform(exp, log, lambda x, y: log(y))
+    exp = Transform(_exp, _log, lambda x, y: log(y))
     """
     A `Transform` instance that applies the exp bijector ``y = exp(x)``. Commonly used to transform from reals to positive reals.
     """
 
-    log = exp.reverse
+    # log = exp.reverse
+    # f(x) = log(x) <==> df/dx = 1/x <==> log df/dx = -log(x) = -y
+    log = Transform(_log, _exp, lambda x, y: -y)
 
     logit = Transform(base.logit, base.inv_logit, lambda x, y: -log(x) - log(1 - x))
     """
@@ -468,3 +586,167 @@ class tforms:
 
     def __init__(self):
         raise TypeError("Use tforms as a static namespace, do not instantiate.")
+
+
+# ########################################################################################
+# # Unconstraining
+# ########################################################################################
+
+
+# def unconstrain_op(op: Op) -> Callable[..., tuple[InfixRV, InfixRV]]:
+#     """
+#     >>> op = ir.Lognormal()
+#     >>> unconstrained_fun = unconstrain_op(op)
+#     >>> y = unconstrained_fun(constant(1.1), constant(2.2))
+#     >>> print_upstream(y)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 1.1
+#     ()    | b = 2.2
+#     ()    | c ~ transformed(lognormal, bijector(log, exp, composite(2, [-1, mul], [[], [1, 2]])))(a, b)
+#     ()    | d = exp(c)
+
+#     >>> op = ir.VMap(ir.Lognormal(), [0, None], 3)
+#     >>> unconstrained_fun = unconstrain_op(op)
+#     >>> y = unconstrained_fun(constant([1.1, 2.2, 3.3]), constant(4.4))
+#     >>> print_upstream(y)
+#     shape | statement
+#     ----- | ---------
+#     (3,)  | a = [1.1 2.2 3.3]
+#     ()    | b = 4.4
+#     (3,)  | c ~ vmap(transformed(lognormal, bijector(log, exp, composite(2, [-1, mul], [[], [1, 2]]))), [0, None], 3)(a, b)
+#     (3,)  | d = vmap(exp, [0], 3)(c)
+
+#     >>> op = ir.Uniform()
+#     >>> unconstrained_fun = unconstrain_op(op)
+#     >>> y = unconstrained_fun(constant(3.3), constant(4.4))
+#     >>> print_upstream(y)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 3.3
+#     ()    | b = 4.4
+#     ()    | c = sub(b, a)
+#     ()    | d ~ transformed(uniform, bijector(composite(3, [sub, sub, div, logit], [[0, 1], [1, 2], [3, 4], [5]]), composite(3, [sub, inv_logit, mul, add], [[2, 1], [0], [3, 4], [1, 5]]), composite(4, [sub, log, sub, log, add, sub, log, sub], [[0, 2], [4], [3, 0], [6], [5, 7], [3, 2], [9], [8, 10]]), 2))(a, b, a, b)
+#     ()    | e = inv_logit(d)
+#     ()    | f = mul(c, e)
+#     ()    | g = add(a, f)
+
+#     >>> op = ir.Beta()
+#     >>> unconstrained_fun = unconstrain_op(op)
+#     >>> y = unconstrained_fun(constant(3.3), constant(4.4))
+#     >>> print_upstream(y)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 3.3
+#     ()    | b = 4.4
+#     ()    | c ~ transformed(beta, bijector(logit, inv_logit, composite(2, [log, -1, mul, 1, sub, log, sub], [[0], [], [2, 3], [], [5, 0], [6], [4, 7]])))(a, b)
+#     ()    | d = inv_logit(c)
+#     """
+
+#     fun = lambda *pars: InfixRV(op, *pars)
+
+#     is_deterministic = not op.random
+#     is_unconstrained = isinstance(op, (ir.Normal, ir.NormalPrec, ir.Cauchy, ir.MultiNormal, ir.StudentT))
+
+#     if is_deterministic or is_unconstrained:
+
+#         def myfun(*args):
+#             x = InfixRV(op, *args)
+#             return x, x
+
+#         return myfun
+
+#     if isinstance(op, ir.VMap):
+#         base_op = op.base_op
+#         unconstrained_base_fun = unconstrain_op(base_op)
+#         return vmap(unconstrained_base_fun, op.in_axes, op.axis_size)
+
+#     if isinstance(op, ir.Composite):
+#         flat_fun = uncomposite_flat(op)
+
+#         # unfortunately, our abstractions seem broken!
+#         # the problem is that the composite can have intermediate computations that change the constraint set
+#         #
+#         def new_flat_fun(*args):
+#             out = flat_fun(*args)
+#             base_op = out.op
+#             unconstrained_base_fun = unconstrain_op(base_op)
+#             new_out = unconstrained_base_fun(*out.parents)
+#             return new_out
+
+#         return composite(new_flat_fun)
+
+#     # if isinstance(op, ir.Composite):
+#     # houston we have a problem
+#     # the last op is random, it's the one that needs to be unconstrained
+#     # buuut, the parameters of the bijection will depend in general on intermediate values in the composite
+#     # we could apply a transformation to the entire composite function, but that will require duplicate computation
+#     # instead, it seems like our best bet is to "replay" the composite
+
+#     # turn composite op into a flat function that takes parent args and returns final rv
+#     # modify that function to create a hidden transformed rv instead
+#     # trace the new function to get a new composite
+
+#     is_positive = isinstance(op, (ir.Lognormal, ir.Gamma, ir.Exponential))
+
+#     if is_positive:
+#         tform = tforms.log
+#         return tform.apply_and_invert(fun)
+
+#     if isinstance(op, ir.Uniform):
+#         tform = tforms.scaled_logit
+#         return lambda a, b: tform.apply_and_invert(fun, a, b)(a, b)
+
+#     if isinstance(op, ir.Beta):
+#         tform = tforms.logit
+#         return tform.apply_and_invert(fun)
+
+#     raise NotImplementedError(f"Can't unconstrain op {op}")
+
+
+# def unconstrain(vars: PyTree[InfixRV]) -> PyTree[InfixRV]:
+#     """
+#     Given a pytree of random variables, get a new pytree of random variables that have been automagically transformed to have unconstrained support.
+
+#     Args:
+#         vars: pytree of random variables
+
+#     Returns:
+#         Pytree of unconstrained random variables
+
+#     Examples
+#     --------
+#     >>> x = ir.RV(ir.Lognormal(), ir.RV(ir.Constant(0)), ir.RV(ir.Constant(1)))
+#     >>> ir.print_upstream(x)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 0
+#     ()    | b = 1
+#     ()    | c ~ lognormal(a, b)
+#     >>> new_x = unconstrain(x)
+#     >>> ir.print_upstream(new_x)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 0
+#     ()    | b = 1
+#     ()    | c ~ transformed(lognormal, bijector(log, exp, composite(2, [-1, mul], [[], [1, 2]])))(a, b)
+#     ()    | d = exp(c)
+
+#     """
+
+#     all_rvs = dag.upstream_nodes(vars)
+
+#     old_to_new: dict[InfixRV, InfixRV] = {}
+#     for old_rv in all_rvs:
+#         if isinstance(old_rv.op, ir.Lognormal):
+#             new_parents = [old_to_new[p] for p in old_rv.parents]
+#             fun = lambda *pars: InfixRV(old_rv.op, *pars)
+#             tform = tforms.log
+#             unconstrained_rv, new_rv = tform.apply_and_invert(fun)(*new_parents)
+#         else:
+#             new_rv = InfixRV(old_rv.op, *[old_to_new[p] for p in old_rv.parents])
+
+#         old_to_new[old_rv] = new_rv
+
+#     new_vars = jax.tree_util.tree_map(lambda var: old_to_new[var], vars)
+#     return new_vars
