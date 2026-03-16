@@ -97,27 +97,27 @@ from abc import ABC, abstractmethod
 
 class Handler(ABC):
     @abstractmethod
-    def sample(self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike]) -> ArrayLike:
+    def sample(self, op: Op, key: JaxArray, parent_values: Sequence[JaxArray]) -> JaxArray:
         pass
 
     @abstractmethod
-    def constrained_sample(
-        self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike], bijector_dict: dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_sample(
+        self, op: Op, key: JaxArray, parent_values: Sequence[JaxArray], bijector_dict: dict
+    ) -> tuple[JaxArray, JaxArray]:
         pass
 
     @abstractmethod
-    def log_prob(self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
+    def log_prob(self, op: Op, x: JaxArray, parent_values: Sequence[JaxArray]) -> JaxArray:
         pass
 
     @abstractmethod
-    def constrained_log_prob(
-        self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_log_prob(
+        self, op: Op, y: JaxArray, parent_values: Sequence[JaxArray], bijector_dict: dict
+    ) -> tuple[JaxArray, JaxArray]:
         pass
 
     @abstractmethod
-    def unconstrain(self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict) -> ArrayLike:
+    def constrain(self, op: Op, y: JaxArray, parent_values: Sequence[JaxArray], bijector_dict: dict) -> JaxArray:
         pass
 
 
@@ -135,104 +135,48 @@ def make_simple_eval(op_class):
     return simple_eval
 
 
-# def make_simple_sample(op_class: Type[Op]):
-#     bind = simple_dists[op_class]
-
-#     def simple_sample(op, key, parent_values, bijector_dict=None):
-#         bound_dist: dist.Distribution = bind(*parent_values)
-#         x = bound_dist.sample(key)
-#         if bijector_dict is None or bijector_dict[op_class] is None:
-#             return x
-#         else:
-#             bijector = bijector_dict[op_class](*parent_values)
-#             return bijector.forward(x)
-
-#     return simple_sample
-
-
-# def make_simple_log_prob(
-#     op_class: Type[Op],
-# ) -> Callable[[Op, ArrayLike, Sequence[ArrayLike], dict | None], ArrayLike]:
-#     bind = simple_dists[op_class]
-
-#     # def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
-#     #     bound_dist: dist.Distribution = bind(*parent_values)
-#     #     return bound_dist.log_prob(value)
-
-#     def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict=None) -> ArrayLike:
-#         # op ignored intentionally (to be homoiconic)
-#         bound_dist: dist.Distribution = bind(*parent_values)
-#         if bijector_dict is None or bijector_dict[op_class] is None:
-#             return bound_dist.log_prob(value)
-#         else:
-#             bijector = bijector_dict[op_class](*parent_values)
-#             x, ldj = bijector.inverse_and_log_det_jac(value)
-#             return bound_dist.log_prob(x) - ldj
-
-#     return my_log_prob
-
-
-# def make_simple_constrain(
-#     op_class: Type[Op],
-# ) -> Callable[[Op, ArrayLike, Sequence[ArrayLike], dict], ArrayLike]:
-#     def simple_constrain(op, value, parent_values, bijector_dict):
-#         if bijector_dict[op_class] is None:
-#             return value
-
-#         bijector = bijector_dict[op_class](*parent_values)
-#         return bijector.forward(value)
-
-#     return simple_constrain
-
-
-# def make_simple_unconstrain(
-#     op_class: Type[Op],
-# ) -> Callable[[Op, ArrayLike, Sequence[ArrayLike], dict], ArrayLike]:
-
-#     def simple_unconstrain(op, value, parent_values, bijector_dict):
-#         if bijector_dict[op_class] is None:
-#             return value
-
-#         bijector = bijector_dict[op_class](*parent_values)
-#         return bijector.inverse(value)
-
-#     return simple_unconstrain
-
-
 class SimpleHandler(Handler):
     def __init__(self, op_class: Type[Op]):
         self.op_class = op_class
         self.bind = simple_dists[self.op_class]
 
-    def sample(self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike]):
+    def sample(self, op, key, parent_values):
         bound_dist: dist.Distribution = self.bind(*parent_values)
-        return bound_dist.sample(key)  # type: ignore[arg-type]
+        x: JaxArray = bound_dist.sample(key)  # type: ignore[arg-type]
+        return x
 
-    def constrained_sample(
-        self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike], bijector_dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_sample(self, op, key, parent_values, bijector_dict):
         bound_dist: dist.Distribution = self.bind(*parent_values)
-        bijector = bijector_dict[self.op_class](*parent_values)
-        x = bound_dist.sample(key)  # type: ignore[arg-type]
-        y = bijector.forward(x)
+        x: JaxArray = bound_dist.sample(key)  # type: ignore[arg-type]
+        if bijector_dict[self.op_class] is None:
+            y = x
+        else:
+            bijector = bijector_dict[self.op_class](*parent_values)
+            y = bijector.forward(x)
         return y, x
 
-    def log_prob(self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
+    def log_prob(self, op, x, parent_values):
         bound_dist: dist.Distribution = self.bind(*parent_values)
-        return bound_dist.log_prob(x)
+        l: JaxArray = bound_dist.log_prob(x)  # type: ignore
+        return l
 
-    def constrained_log_prob(
-        self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_log_prob(self, op, y, parent_values, bijector_dict):
         bound_dist: dist.Distribution = self.bind(*parent_values)
-        bijector = bijector_dict[self.op_class](*parent_values)
-        x, ldj = bijector.inverse_and_log_det_jac(y)
-        l = bound_dist.log_prob(x) - ldj
+        if bijector_dict[self.op_class] is None:
+            x = y
+            l: JaxArray = bound_dist.log_prob(x)  # type: ignore
+        else:
+            bijector = bijector_dict[self.op_class](*parent_values)
+            x, ldj = bijector.inverse_and_log_det_jac(y)
+            l = bound_dist.log_prob(x) - ldj
         return l, x
 
-    def unconstrain(self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict) -> ArrayLike:
-        bijector = bijector_dict[self.op_class](*parent_values)
-        x = bijector.inverse(y)
+    def constrain(self, op, y, parent_values, bijector_dict):
+        if bijector_dict[self.op_class] is None:
+            x = y
+        else:
+            bijector = bijector_dict[self.op_class](*parent_values)
+            x = bijector.inverse(y)
         return x
 
 
@@ -242,16 +186,10 @@ class SimpleHandler(Handler):
 
 from typing import Type
 
-# log_prob_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict | None], Any]] = {}
-# sample_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict | None], Any]] = {}
-eval_handlers: dict[Type[Op], Callable[[Any, Sequence[ArrayLike]], Any]] = {}
-# unconstrain_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict], Any]] = {}
+eval_handlers: dict[Type[Op], Callable[[Any, Sequence[JaxArray]], Any]] = {}
 handlers: dict[Type[Op], Handler] = {}
 
 for op_class in simple_dists:
-    # log_prob_handlers[op_class] = make_simple_log_prob(op_class)
-    # sample_handlers[op_class] = make_simple_sample(op_class)
-    # unconstrain_handlers[op_class] = make_simple_unconstrain(op_class)
     handlers[op_class] = SimpleHandler(op_class)
 
 for op_class in simple_funs:
@@ -287,7 +225,7 @@ eval_handlers[ir.Sum] = eval_sum
 ################################################################################
 
 
-def summarize_composite(op: Op, parent_values: Sequence[ArrayLike]):
+def summarize_composite(op: Op, parent_values: Sequence[JaxArray]):
     if not (isinstance(op, ir.Composite)):
         raise ValueError("Can only handle Composite")
 
@@ -302,68 +240,43 @@ def summarize_composite(op: Op, parent_values: Sequence[ArrayLike]):
     assert False, "should be impossible"
 
 
-def eval_composite(op: ir.Composite, parent_values: Sequence[ArrayLike]):
+def eval_composite(op: ir.Composite, parent_values: Sequence[JaxArray]):
     assert not op.random
     final_op, final_parent_values = summarize_composite(op, parent_values)
     return eval_op(final_op, final_parent_values)
-
-
-# def log_prob_composite(op: ir.Composite, value, parent_values: Sequence[ArrayLike], bijector_dict=None):
-#     assert op.random
-#     final_op, final_parent_values = summarize_composite(op, parent_values)
-#     return log_prob_op(final_op, value, final_parent_values, bijector_dict)
-
-
-# def sample_composite(op: ir.Composite, key, parent_values: Sequence[ArrayLike], bijector_dict=None):
-#     assert op.random
-#     final_op, final_parent_values = summarize_composite(op, parent_values)
-#     return sample_op(final_op, key, final_parent_values, bijector_dict)
-
-
-# def unconstrain_composite(op: ir.Composite, value, parent_values: Sequence[ArrayLike], bijector_dict):
-#     assert op.random
-#     final_op, final_parent_values = summarize_composite(op, parent_values)
-#     return unconstrain_op(final_op, value, final_parent_values, bijector_dict)
 
 
 class CompositeHandler(Handler):
     def __init__(self):
         pass
 
-    def sample(self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike]):
+    def sample(self, op, key, parent_values):
         final_op, final_parent_values = summarize_composite(op, parent_values)
         x = sample_op(final_op, key, final_parent_values)
         return x
 
-    def constrained_sample(
-        self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike], bijector_dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_sample(self, op, key, parent_values, bijector_dict):
         final_op, final_parent_values = summarize_composite(op, parent_values)
-        return constrained_sample_op(final_op, key, final_parent_values, bijector_dict)
+        return unconstrained_sample_op(final_op, key, final_parent_values, bijector_dict)
 
-    def log_prob(self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
+    def log_prob(self, op, x, parent_values):
         final_op, final_parent_values = summarize_composite(op, parent_values)
         return log_prob_op(final_op, x, final_parent_values)
 
-    def constrained_log_prob(
-        self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_log_prob(self, op, y, parent_values, bijector_dict):
         final_op, final_parent_values = summarize_composite(op, parent_values)
-        return constrained_log_prob_op(final_op, y, final_parent_values, bijector_dict)
+        return unconstrained_log_prob_op(final_op, y, final_parent_values, bijector_dict)
 
-    def unconstrain(self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict) -> ArrayLike:
+    def constrain(self, op, y, parent_values, bijector_dict):
         final_op, final_parent_values = summarize_composite(op, parent_values)
-        return unconstrain_op(final_op, y, final_parent_values, bijector_dict)
+        return constrain_op(final_op, y, final_parent_values, bijector_dict)
 
 
 eval_handlers[ir.Composite] = eval_composite
-# log_prob_handlers[ir.Composite] = log_prob_composite
-# sample_handlers[ir.Composite] = sample_composite
-# unconstrain_handlers[ir.Composite] = unconstrain_composite
 handlers[ir.Composite] = CompositeHandler()
 
 ################################################################################
-# Autoregressive
+# Scan
 ################################################################################
 
 
@@ -424,85 +337,6 @@ def eval_scan(op: ir.Scan, parent_values: Sequence[ArrayLike]):
 eval_handlers[ir.Scan] = eval_scan
 
 
-# # TODO: This should be parallel!
-# def log_prob_scan(op: ir.Scan, value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict=None):
-#     if bijector_dict:
-#         raise NotImplementedError()
-
-#     assert isinstance(op, ir.Scan)
-#     assert op.random
-
-#     init = parent_values[0]
-#     rest = parent_values[1:]
-
-#     mapped_rest, merge_args = handle_scan_inputs(op, *rest)
-#     assert merge_args(mapped_rest) == tuple(rest)
-
-#     def myfun(carry, value_x):
-#         value = value_x[0]
-#         x = value_x[1:]
-#         inputs = (carry,) + merge_args(x)
-#         l = log_prob_op(op.base_op, value, inputs, bijector_dict)
-
-#         return value, l  # pass value to next iteration
-
-#     carry, ls = jax.lax.scan(myfun, init, (value,) + mapped_rest, length=op.length)
-#     return jnp.sum(ls)
-#
-# log_prob_handlers[ir.Scan] = log_prob_scan
-
-
-# def sample_scan(op: ir.Scan, key, parent_values: Sequence[ArrayLike], bijector_dict=None):
-#     assert isinstance(op, ir.Scan)
-#     assert op.random
-
-#     init = parent_values[0]
-#     rest = parent_values[1:]
-
-#     mapped_rest, merge_args = handle_scan_inputs(op, *rest)
-#     assert merge_args(mapped_rest) == tuple(rest)
-
-#     def myfun(carry, key_x):
-#         key = key_x[0]
-#         x = key_x[1:]
-#         inputs = (carry,) + merge_args(x)
-#         y = sample_op(op.base_op, key, inputs, bijector_dict)
-#         return y, y
-
-#     subkey = jax.random.split(key, op.length)
-
-#     carry, ys = jax.lax.scan(myfun, init, (subkey,) + mapped_rest, length=op.length)
-#     return ys
-
-
-# sample_handlers[ir.Scan] = sample_scan
-
-
-# def unconstrain_scan(op: ir.Scan, constrained_value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
-#     # TODO: should be parallel
-#     assert isinstance(op, ir.Scan)
-#     assert op.random
-
-#     init = parent_values[0]
-#     rest = parent_values[1:]
-
-#     mapped_rest, merge_args = handle_scan_inputs(op, *rest)
-#     assert merge_args(mapped_rest) == tuple(rest)
-
-#     def myfun(carry, value_x):
-#         value = value_x[0]
-#         x = value_x[1:]
-#         inputs = (carry,) + merge_args(x)
-#         unconstrained_value = unconstrain_op(op.base_op, value, inputs, bijector_dict)
-#         return value, unconstrained_value
-
-#     _, unconstrained_values = jax.lax.scan(myfun, init, (constrained_value,) + mapped_rest, length=op.length)
-#     return unconstrained_values
-
-
-# unconstrain_handlers[ir.Scan] = unconstrain_scan
-
-
 class ScanHandler(Handler):
     # TODO: Not confident this is correct!
 
@@ -523,9 +357,7 @@ class ScanHandler(Handler):
         carry, xs = jax.lax.scan(myfun, init, (subkey,) + mapped_rest, length=op.length)
         return xs
 
-    def constrained_sample(
-        self, op: Op, key: jax.Array, parent_values: Sequence[ArrayLike], bijector_dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    def unconstrained_sample(self, op, key, parent_values, bijector_dict):
         assert isinstance(op, ir.Scan)
         assert op.random
         init, merge_args, mapped_rest = summarize_scan(op, parent_values)
@@ -534,7 +366,7 @@ class ScanHandler(Handler):
             key = key_input[0]
             input = key_input[1:]
             inputs = (carry,) + merge_args(input)
-            y, x = constrained_sample_op(op.base_op, key, inputs, bijector_dict)
+            y, x = unconstrained_sample_op(op.base_op, key, inputs, bijector_dict)
             return x, (y, x)
 
         subkey = jax.random.split(key, op.length)
@@ -542,7 +374,8 @@ class ScanHandler(Handler):
         carry, (ys, xs) = jax.lax.scan(myfun, init, (subkey,) + mapped_rest, length=op.length)
         return (ys, xs)
 
-    def log_prob(self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]) -> ArrayLike:
+    # TODO: Should be parallel!
+    def log_prob(self, op, x, parent_values):
         assert isinstance(op, ir.Scan)
         assert op.random
         init, merge_args, mapped_rest = summarize_scan(op, parent_values)
@@ -558,9 +391,8 @@ class ScanHandler(Handler):
         carry, ls = jax.lax.scan(myfun, init, (x,) + mapped_rest, length=op.length)
         return jnp.sum(ls)
 
-    def constrained_log_prob(
-        self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict
-    ) -> tuple[ArrayLike, ArrayLike]:
+    # TODO: Should be parallel!
+    def unconstrained_log_prob(self, op, y, parent_values, bijector_dict):
         assert isinstance(op, ir.Scan)
         assert op.random
         init, merge_args, mapped_rest = summarize_scan(op, parent_values)
@@ -569,14 +401,14 @@ class ScanHandler(Handler):
             value = value_input[0]
             input = value_input[1:]
             inputs = (carry,) + merge_args(input)
-            l, x = constrained_log_prob_op(op.base_op, value, inputs, bijector_dict)
+            l, x = unconstrained_log_prob_op(op.base_op, value, inputs, bijector_dict)
 
             return value, (l, x)  # pass value to next iteration
 
-        carry, (ls, xs) = jax.lax.scan(myfun, init, (x,) + mapped_rest, length=op.length)
+        carry, (ls, xs) = jax.lax.scan(myfun, init, (y,) + mapped_rest, length=op.length)
         return jnp.sum(ls), xs
 
-    def unconstrain(self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict) -> ArrayLike:
+    def constrain(self, op, y, parent_values, bijector_dict):
         assert isinstance(op, ir.Scan)
         assert op.random
         init, merge_args, mapped_rest = summarize_scan(op, parent_values)
@@ -585,7 +417,7 @@ class ScanHandler(Handler):
             value = value_input[0]
             input = value_input[1:]
             inputs = (carry,) + merge_args(input)
-            x = unconstrain_op(op.base_op, value, inputs, bijector_dict)
+            x = constrain_op(op.base_op, value, inputs, bijector_dict)
             return x, x
 
         _, xs = jax.lax.scan(myfun, init, (y,) + mapped_rest, length=op.length)
@@ -615,7 +447,7 @@ eval_handlers[ir.VMap] = eval_vmap
 
 
 class VMapHandler(Handler):
-    def sample(self, op: Op, key, parent_values: Sequence[ArrayLike]):
+    def sample(self, op, key, parent_values):
         assert isinstance(op, ir.VMap)
         assert op.random
 
@@ -631,7 +463,7 @@ class VMapHandler(Handler):
         axis_size = op.axis_size
         return jax.vmap(base_sample, in_axes=in_axes, axis_size=axis_size)(subkey, *parent_values)
 
-    def constrained_sample(self, op: Op, key, parent_values: Sequence[ArrayLike], bijector_dict):
+    def unconstrained_sample(self, op, key, parent_values, bijector_dict):
         assert isinstance(op, ir.VMap)
         assert op.random
 
@@ -641,13 +473,13 @@ class VMapHandler(Handler):
         subkey = jax.random.split(key, out_axis_size)
 
         def base_sample(key, *args):
-            return constrained_sample_op(op.base_op, key, args, bijector_dict)
+            return unconstrained_sample_op(op.base_op, key, args, bijector_dict)
 
         in_axes = (0,) + op.in_axes
         axis_size = op.axis_size
         return jax.vmap(base_sample, in_axes=in_axes, axis_size=axis_size)(subkey, *parent_values)
 
-    def log_prob(self, op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]):
+    def log_prob(self, op, x, parent_values):
         assert isinstance(op, ir.VMap)
         assert op.random
 
@@ -658,24 +490,24 @@ class VMapHandler(Handler):
         axis_size = op.axis_size
         return jnp.sum(jax.vmap(base_log_prob, in_axes=in_axes, axis_size=axis_size)(x, *parent_values))
 
-    def constrained_log_prob(self, op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
+    def unconstrained_log_prob(self, op, y, parent_values, bijector_dict):
         assert isinstance(op, ir.VMap)
         assert op.random
 
         def base_log_prob(value, *args):
-            return constrained_log_prob_op(op.base_op, value, args, bijector_dict)
+            return unconstrained_log_prob_op(op.base_op, value, args, bijector_dict)
 
         in_axes = (0,) + op.in_axes
         axis_size = op.axis_size
         ls, x = jax.vmap(base_log_prob, in_axes=in_axes, axis_size=axis_size)(y, *parent_values)
         return jnp.sum(ls), x
 
-    def unconstrain(self, op: ir.Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
+    def constrain(self, op, y, parent_values, bijector_dict):
         assert isinstance(op, ir.VMap)
         assert op.random
 
         def base_unconstrain(value, *parent_values):
-            return unconstrain_op(op.base_op, value, parent_values, bijector_dict)
+            return constrain_op(op.base_op, value, parent_values, bijector_dict)
 
         in_axes = (0,) + op.in_axes
         axis_size = op.axis_size
@@ -748,6 +580,8 @@ def eval_op(op: Op, parent_values: Sequence[ArrayLike]):
     if op.random:
         raise ValueError("Cannot evaluate eval_op for random op")
 
+    parent_values = [jnp.array(v) for v in parent_values]
+
     op_class = type(op)
     handler = eval_handlers[op_class]
     out = handler(op, parent_values)
@@ -756,20 +590,14 @@ def eval_op(op: Op, parent_values: Sequence[ArrayLike]):
     return out
 
 
-def sample_op(op: Op, key, parent_values: Sequence[ArrayLike]):
+def sample_op(op: Op, key: JaxArray, parent_values: Sequence[ArrayLike]):
     """
     Given a single `Op` and parent values, draw a sample.
     """
     if not op.random:
         raise ValueError("Cannot evaluate sample_op for non-random op")
 
-    # op_class = type(op)
-    # handler = sample_handlers[op_class]
-    # out = handler(op, key, parent_values, bijector_dict)
-    # TODO: check bijected shapes
-    # expected_shape = op.get_shape(*[shape(v) for v in parent_values])
-    # assert shape(out) == expected_shape, "Error: shape was not as expected"
-    # return out
+    parent_values = [jnp.array(v) for v in parent_values]
 
     op_class = type(op)
     handler = handlers[op_class]
@@ -779,24 +607,18 @@ def sample_op(op: Op, key, parent_values: Sequence[ArrayLike]):
     return x
 
 
-def constrained_sample_op(op: Op, key, parent_values: Sequence[ArrayLike], bijector_dict):
+def unconstrained_sample_op(op: Op, key: JaxArray, parent_values: Sequence[ArrayLike], bijector_dict):
     """
     Given a single `Op` and parent values, draw a constrained sample. Also return unconstrained value.
     """
     if not op.random:
         raise ValueError("Cannot evaluate sample_op for non-random op")
 
-    # op_class = type(op)
-    # handler = sample_handlers[op_class]
-    # out = handler(op, key, parent_values, bijector_dict)
-    # TODO: check bijected shapes
-    # expected_shape = op.get_shape(*[shape(v) for v in parent_values])
-    # assert shape(out) == expected_shape, "Error: shape was not as expected"
-    # return out
+    parent_values = [jnp.array(v) for v in parent_values]
 
     op_class = type(op)
     handler = handlers[op_class]
-    y, x = handler.constrained_sample(op, key, parent_values, bijector_dict)
+    y, x = handler.unconstrained_sample(op, key, parent_values, bijector_dict)
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     assert shape(x) == expected_shape, "Error: shape was not as expected"
     return y, x
@@ -808,12 +630,9 @@ def log_prob_op(op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]):
     """
     if not op.random:
         raise ValueError("Cannot evaluate log_prob_op for non-random op")
-    # op_class = type(op)
-    # TODO: check bijected shapes
-    # expected_shape = op.get_shape(*[shape(v) for v in parent_values])
-    # if shape(value) != expected_shape:
-    #    raise ValueError(f"shape(value) {shape(value)} not {expected_shape} as expected")
-    # return log_prob_handlers[op_class](op, value, parent_values, bijector_dict)
+
+    x = jnp.array(x)
+    parent_values = [jnp.array(v) for v in parent_values]
 
     op_class = type(op)
     handler = handlers[op_class]
@@ -823,28 +642,34 @@ def log_prob_op(op: Op, x: ArrayLike, parent_values: Sequence[ArrayLike]):
     return l
 
 
-def constrained_log_prob_op(op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
+def unconstrained_log_prob_op(op: Op, y: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
     """
     Given a single `Op`, evaluate log_prob and return unconstrained value.
     """
     if not op.random:
         raise ValueError("Cannot evaluate log_prob_op for non-random op")
 
+    parent_values = [jnp.array(v) for v in parent_values]
+    y = jnp.array(y)
+
     op_class = type(op)
     handler = handlers[op_class]
-    l, x = handler.constrained_log_prob(op, y, parent_values, bijector_dict)
+    l, x = handler.unconstrained_log_prob(op, y, parent_values, bijector_dict)
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     assert shape(x) == expected_shape, "Error: shape was not as expected"
     return l, x
 
 
-def unconstrain_op(op: Op, constrained_value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict):
+def constrain_op(op: Op, constrained_value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict):
     if not op.random:
         raise ValueError("Cannot unconstrain non-random op")
 
+    parent_values = [jnp.array(v) for v in parent_values]
+    constrained_value = jnp.array(constrained_value)
+
     op_class = type(op)
     handler = handlers[op_class]
-    value = handler.unconstrain(op, constrained_value, parent_values, bijector_dict)
+    value = handler.constrain(op, constrained_value, parent_values, bijector_dict)
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     if shape(value) != expected_shape:
         raise ValueError(f"{shape(value)=} does not match {expected_shape=}")
@@ -858,65 +683,85 @@ def unconstrain_op(op: Op, constrained_value: ArrayLike, parent_values: Sequence
 # TODO: Add conditioning?
 
 
-def ancestor_sample_flat_single(vars: list[RV], key):
+def ancestor_sample_flat_single(vars: list[RV], key: JaxArray, bijector_dict: Optional[dict] = None):
     all_vars = dag.upstream_nodes(vars)
-    all_values = {}
+    constrained_values: dict[RV, JaxArray] = {}
+    unconstrained_values: dict[RV, JaxArray] = {}
     for var in all_vars:
-        parent_values = [all_values[p] for p in var.parents]
+        parent_values = [constrained_values[p] for p in var.parents]
         if var.op.random:
             key, subkey = jax.random.split(key)
-            all_values[var] = sample_op(var.op, subkey, parent_values)
+            if bijector_dict is None:
+                x = y = sample_op(var.op, subkey, parent_values)
+            else:
+                y, x = unconstrained_sample_op(var.op, subkey, parent_values, bijector_dict)
         else:
-            all_values[var] = eval_op(var.op, parent_values)
-    return [all_values[var] for var in vars]
+            x = y = eval_op(var.op, parent_values)
+        unconstrained_values[var] = y
+        constrained_values[var] = x
+    return [unconstrained_values[var] for var in vars]
 
 
-def ancestor_sample_flat(vars: list[RV], key: Optional[JaxArray] = None, size: Optional[int] = None):
+def ancestor_sample_flat(
+    vars: list[RV],
+    key: Optional[JaxArray] = None,
+    size: Optional[int] = None,
+    bijector_dict: Optional[dict] = None,
+):
+
     if key is None:
         # Generate random seed from numpy
         seed = np.random.randint(0, 2**32 - 1)
         key = jax.random.PRNGKey(seed)
 
     if size is None:
-        return ancestor_sample_flat_single(vars, key)
+        return ancestor_sample_flat_single(vars, key, bijector_dict)
     else:
-        mysample = lambda key: ancestor_sample_flat_single(vars, key)
+        mysample = lambda key: ancestor_sample_flat_single(vars, key, bijector_dict)
         keys = jax.random.split(key, size)
         return jax.vmap(mysample)(keys)
 
 
-def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike]):
+def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[JaxArray], bijector_dict: Optional[dict] = None):
     all_vars = dag.upstream_nodes(vars)
-    all_values = {var: val for var, val in zip(vars, values, strict=True)}
+    unconstrained_values = {var: val for var, val in zip(vars, values, strict=True)}
+    constrained_values = {}
     l = 0.0
     for var in all_vars:
-        parent_values = [all_values[p] for p in var.parents]
+        parent_values = [constrained_values[p] for p in var.parents]
         if var.op.random:
-            value = all_values[var]
-            l += log_prob_op(var.op, value, parent_values)
+            y = unconstrained_values[var]
+            if bijector_dict is None:
+                my_l = log_prob_op(var.op, y, parent_values)
+                x = y
+            else:
+                my_l, x = unconstrained_log_prob_op(var.op, y, parent_values, bijector_dict)
+            l += my_l
+            constrained_values[var] = x
         else:
             if var in vars:
                 raise ValueError("Can't provide value for non-random variable in ancestor_log_prob_flat")
             out = eval_op(var.op, parent_values)
-            all_values[var] = out
+            constrained_values[var] = out
     return l
 
 
-def ancestor_unconstrain(vars: Sequence[RV], values: Sequence[ArrayLike], bijector_dict):
+def ancestor_constrain(vars: Sequence[RV], values: Sequence[JaxArray], bijector_dict: dict):
     all_vars = dag.upstream_nodes(vars)
-    all_values = {var: val for var, val in zip(vars, values, strict=True)}
-    all_unconstrained_values = {}
+    unconstrained_values = {var: val for var, val in zip(vars, values, strict=True)}
+    constrained_values = {}
     for var in all_vars:
-        parent_values = [all_values[p] for p in var.parents]
+        parent_values = [constrained_values[p] for p in var.parents]
         if var.op.random:
-            value = all_values[var]
-            all_unconstrained_values[var] = unconstrain_op(var.op, value, parent_values, bijector_dict)
+            y = unconstrained_values[var]
+            x = constrain_op(var.op, y, parent_values, bijector_dict)
+            constrained_values[var] = x
         else:
             if var in vars:
                 raise ValueError("Can't provide value for non-random variable in ancestor_unconstrain")
             out = eval_op(var.op, parent_values)
-            all_values[var] = out
-    return [all_unconstrained_values[var] for var in vars]
+            constrained_values[var] = out
+    return [constrained_values[var] for var in vars]
 
 
 def fill_in(
@@ -925,6 +770,8 @@ def fill_in(
     desired_vars: Sequence[RV],
 ):
     # TODO: assert random / nonrandom / length / etc
+
+    random_values = [jnp.array(v) for v in random_values]
 
     for var in random_vars:
         if not var.op.random:
@@ -951,7 +798,9 @@ def fill_in(
 ################################################################################
 
 
-def ancestor_sample(vars: PyTree[RV], key: Optional[JaxArray] = None, size: Optional[int] = None):
+def ancestor_sample(
+    vars: PyTree[RV], key: Optional[JaxArray] = None, size: Optional[int] = None, biject_dict: Optional[dict] = None
+):
     """
     Draw exact samples!
 
@@ -1017,12 +866,12 @@ def ancestor_sample(vars: PyTree[RV], key: Optional[JaxArray] = None, size: Opti
         _,
     ) = util.flatten_args(vars, [], [])
 
-    flat_samps = ancestor_sample_flat(flat_vars, key, size)
+    flat_samps = ancestor_sample_flat(flat_vars, key, size, biject_dict)
 
     return unflatten(flat_samps)
 
 
-def ancestor_sampler(vars: PyTree[RV]) -> Callable[[JaxArray], Any]:
+def ancestor_sampler(vars: PyTree[RV], bijector_dict: Optional[dict] = None) -> Callable[[JaxArray], Any]:
     """
     Compiles a pytree of RVs into a plain-old JAX function that takes a PNGKey and returns a pytree with the same structure containing a joint sample from the distribution of those RVs.
 
@@ -1066,14 +915,14 @@ def ancestor_sampler(vars: PyTree[RV]) -> Callable[[JaxArray], Any]:
     ) = util.flatten_args(vars, [], [])
 
     def sampler(key):
-        flat_samps = ancestor_sample_flat(flat_vars, key)
+        flat_samps = ancestor_sample_flat(flat_vars, key, size=None, bijector_dict=bijector_dict)
 
         return unflatten(flat_samps)
 
     return sampler
 
 
-def ancestor_log_prob(*vars: PyTree[RV], **kwvars: PyTree[RV]) -> Callable:
+def ancestor_log_prob(*vars: PyTree[RV], bijector_dict: Optional[dict] = None, **kwvars: PyTree[RV]) -> Callable:
     """
     Given a pytree of vars, create a plain-old JAX function to compute log probabilities
 
@@ -1135,78 +984,9 @@ def ancestor_log_prob(*vars: PyTree[RV], **kwvars: PyTree[RV]) -> Callable:
         if vars_treedef != vals_treedef:
             raise ValueError("vars_treedef does not match vals_treedef")
 
-        return ancestor_log_prob_flat(flat_vars, flat_vals)
+        return ancestor_log_prob_flat(flat_vars, flat_vals, bijector_dict)
 
     return myfun
-
-
-################################################################################
-# Bijections
-################################################################################
-
-# class JaxBijector(ABC):
-#     """
-#     the idea is that if ``P(X)`` is some density and ``Y=T(X)`` is a diffeomorphism, then ``P(Y=y) = P(X=T⁻¹(y)) × |det ∇T⁻¹(y)|``
-#     """
-
-#     @abstractmethod
-#     def forward(self, x):
-#         pass
-
-#     @abstractmethod
-#     def inverse(self, y):
-#         pass
-
-#     @abstractmethod
-#     def log_jac_det(self, x, y):
-#         pass
-
-
-# class JaxBijector:
-#     """
-#     the idea is that if ``P(X)`` is some density and ``Y=T(X)`` is a diffeomorphism, then ``P(Y=y) = P(X=T⁻¹(y)) × |det ∇T⁻¹(y)|``
-#     """
-
-#     def __init__(self, forward, inverse, log_det_jac, n_biject_params=0):
-#         self._forward = forward
-#         self._inverse = inverse
-#         self._log_det_jac = log_det_jac
-#         self.n_biject_params = n_biject_params
-
-#     def forward(self, x, *params):
-#         if len(params) != self.n_biject_params:
-#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-#         return self._forward(x, *params)
-
-#     def inverse(self, y, *params):
-#         if len(params) != self.n_biject_params:
-#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-#         return self._inverse(y, *params)
-
-#     def log_det_jac(self, x, y, *params):
-#         if len(params) != self.n_biject_params:
-#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-#         return self._log_det_jac(x, y, *params)
-
-#     def forward_and_log_det_jac(self, x, *params):
-#         if len(params) != self.n_biject_params:
-#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-#         y = self.forward(x, *params)
-#         ldj = self.log_det_jac(x, y, *params)
-#         return y, ldj
-
-#     def inverse_and_log_det_jac(self, y, *params):
-#         if len(params) != self.n_biject_params:
-#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-#         x = self.inverse(y, *params)
-#         ldj = self.log_det_jac(x, y, *params)
-#         return x, ldj
-
-#     @property
-#     def reverse(self):
-#         return JaxBijector(
-#             self.inverse, self.forward, lambda y, x, *params: -self.log_det_jac(x, y, *params), self.n_biject_params
-#         )
 
 
 class JaxBijector:
@@ -1255,6 +1035,9 @@ def compose_jax_bijectors(bijectors: Sequence[JaxBijector], log_det_direction: s
     def composed_inverse(y):
         current_y = y
         for b in reversed(bijectors):
+            # print(f"{current_y.shape=}")
+            # print(f"{b=}")
+
             current_y = b.inverse(current_y)
         return current_y
 
@@ -1661,189 +1444,30 @@ def unconstrain_spd_bijector():
         >>> unconstrain_spd_bijector().inverse(unconstrained_vec)
         Array([[1., 2.],
                [2., 5.]], dtype=float32)
+
+        >>> X = jnp.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
+        >>> Y = unconstrain_spd_bijector().forward(X)
+        >>> Y
+        Array([0., 0., 0., 0., 0., 0.], dtype=float32)
+        >>> X_new = unconstrain_spd_bijector().inverse(Y)
+        >>> jnp.allclose(X, X_new)
+        Array(True, dtype=bool)
+
     """
     return compose_jax_bijectors([cholesky_bijector(), log_diagonal_bijector(), extract_tril_bijector()])
 
 
-class bijectors:
-    """
-    A namespace containing a bunch of pre-baked `JaxBijector` instances.
-    """
-
-    # f(x) = exp(x)  <==>  df/dx = exp(x) = y  <==>  log df/dx = log(y) = x
-    exp = JaxBijector(jnp.exp, jnp.log, lambda x, y: x)
-    """
-    A `JaxBijector` instance that applies the exponential function.
-
-    Example:
-        >>> import jax.numpy as jnp
-        >>> x = jnp.array(0.0)
-        >>> bijectors.exp.forward(x)  # doctest: +ELLIPSIS
-        Array(1., dtype=float32...)
-    """
-
-    # f(x) = log(x) <==> df/dx = 1/x <==> log df/dx = -log(x) = -y
-    log = JaxBijector(jnp.log, jnp.exp, lambda x, y: -y)
-    """
-    A `JaxBijector` instance that applies the natural logarithm.
-
-    Example:
-        >>> import jax.numpy as jnp
-        >>> x = jnp.array(1.0)
-        >>> bijectors.log.forward(x)  # doctest: +ELLIPSIS
-        Array(0., dtype=float32...)
-    """
-
-    # logit = JaxBijector(jax.scipy.special.logit, jax.scipy.special.expit, lambda x, y: -jnp.log(x) - jnp.log1p(-x))
-    # """
-    # A `Transform` instance that applies the logit bijector ``y = logit(x)``. Commonly used to transform from [0,1] to reals.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> x = jnp.array(0.5)
-    #     >>> bijectors.logit.forward(x)  # doctest: +ELLIPSIS
-    #     Array(0., dtype=float32...)
-    # """
-
-    # inv_logit = logit.reverse
-    # """
-    # A `JaxBijector` instance that applies the inverse logit (expit/sigmoid).
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> y = jnp.array(0.0)
-    #     >>> bijectors.inv_logit.forward(y)  # doctest: +ELLIPSIS
-    #     Array(0.5, dtype=float32...)
-    # """
-
-    # scaled_logit = JaxBijector(
-    #     lambda x, a, b: jax.scipy.special.logit((x - a) / (b - a)),
-    #     lambda y, a, b: a + (b - a) * jax.scipy.special.expit(y),
-    #     lambda x, y, a, b: jnp.log(b - a) - jnp.log(x - a) - jnp.log(b - x),
-    #     n_biject_params=2,
-    # )
-    # """
-    # A `JaxBijector` instance that applies the scaled logit ``y = logit((x-a)/(b-a))``. Commonly used to transform from [a,b] to reals.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> x = jnp.array(5.0)
-    #     >>> # Transform 5.0 from the bounds [0.0, 10.0] to unconstrained space
-    #     >>> bijectors.scaled_logit.forward(x, 0.0, 10.0)  # doctest: +ELLIPSIS
-    #     Array(0., dtype=float32...)
-    #     >>> bijectors.scaled_logit.inverse(jnp.array(0.0), 0.0, 10.0)  # doctest: +ELLIPSIS
-    #     Array(5., dtype=float32...)
-    # """
-
-    # cholesky = JaxBijector(
-    #     lambda X: jnp.linalg.cholesky(X),
-    #     lambda Y: Y @ Y.T,
-    #     _cholesky_log_det_jac,
-    # )
-    # """
-    # A `JaxBijector` instance that applies a Cholesky decomposition. Commonly used to transform from symmetric positive definite matrices into triangular matrices.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> X = jnp.array([[1., 0.], [0., 1.]])
-    #     >>> bijectors.cholesky.forward(X)
-    #     Array([[1., 0.],
-    #            [0., 1.]], dtype=float32)
-    # """
-
-    # fill_tril = JaxBijector(_fill_tril, _extract_tril, lambda x, y: 0.0)
-    # """
-    # A `JaxBijector` instance that fills a lower-triangular matrix from a vector. Used to transform from real vectors to lower-triangular matrices.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> x = jnp.array([1., 2., 3.])
-    #     >>> bijectors.fill_tril.forward(x)
-    #     Array([[1., 0.],
-    #            [2., 3.]], dtype=float32)
-    # """
-
-    # extract_tril = fill_tril.reverse
-    # """
-    # A `JaxBijector` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> X = jnp.array([[1., 0.], [2., 3.]])
-    #     >>> bijectors.extract_tril.forward(X)
-    #     Array([1., 2., 3.], dtype=float32)
-    # """
-
-    # exp_diagonal = JaxBijector(_exp_diagonal, _log_diagonal, _exp_diagonal_log_det_jac)
-    # """
-    # A `JaxBijector` instance that exponentiates the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> X = jnp.array([[0., 0.], [2., 0.]])
-    #     >>> bijectors.exp_diagonal.forward(X)
-    #     Array([[1., 0.],
-    #            [2., 1.]], dtype=float32)
-    # """
-
-    # log_diagonal = exp_diagonal.reverse
-    # """
-    # A `JaxBijector` instance that takes the logarithm of the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> X = jnp.array([[1., 0.], [2., 1.]])
-    #     >>> bijectors.log_diagonal.forward(X)
-    #     Array([[0., 0.],
-    #            [2., 0.]], dtype=float32)
-    # """
-
-    # unconstrain_spd = compose_jax_bijectors([cholesky, log_diagonal, extract_tril])
-    # """
-    # A `JaxBijector` instance that transforms a symmetric positive definite into the space of unconstrained reals. Accomplished by (1) taking a Cholesky decomposition (2) taking the logarithm of the diagonal (3) extracting the lower-triangular entries.
-
-    # Example:
-    #     >>> import jax.numpy as jnp
-    #     >>> # Identity matrix is symmetric positive definite
-    #     >>> X = jnp.array([[1., 0.], [0., 1.]])
-    #     >>> bijectors.unconstrain_spd.forward(X)
-    #     Array([0., 0., 0.], dtype=float32)
-
-    #     >>> # Transform back to SPD matrix
-    #     >>> unconstrained_vec = jnp.array([0., 2., 0.])
-    #     >>> bijectors.unconstrain_spd.inverse(unconstrained_vec)
-    #     Array([[1., 2.],
-    #            [2., 5.]], dtype=float32)
-    # """
-
-    # def __init__(self):
-    #     raise TypeError("Use bijectors as a static namespace, do not instantiate.")
-
-
-class BijectorFactory:
-    def __init__(self):
-        self.bijector_dict = {
-            ir.Normal: None,
-            ir.NormalPrec: None,
-            ir.Cauchy: None,
-            ir.Exponential: lambda a: log_bijector(),
-            ir.Gamma: lambda a: log_bijector(),
-            ir.StudentT: None,
-            ir.MultiNormal: None,
-            # ir.Dirichlet: lambda a, b: raise NotImplementedError(),
-            ir.Lognormal: lambda a, b: log_bijector(),
-            ir.Uniform: lambda a, b: scaled_logit_bijector(a, b),
-            ir.Wishart: lambda a, b: unconstrain_spd_bijector(),
-            ir.Beta: lambda a, b: logit_bijector(),
-        }
-
-    def get_bijector(self, op, *parent_values):
-
-        if not op.random:
-            return None
-
-        op_class = type(op)
-        parent_values = tuple(parent_values)
-
-        if op_class in self.bijector_dict:
-            return self.bijector_dict[op_class](*parent_values)
+default_bijector_dict = {
+    ir.Normal: None,
+    ir.NormalPrec: None,
+    ir.Cauchy: None,
+    ir.Exponential: lambda a: log_bijector(),
+    ir.Gamma: lambda a, b: log_bijector(),
+    ir.StudentT: None,
+    ir.MultiNormal: None,
+    # ir.Dirichlet: lambda a, b: raise NotImplementedError(),
+    ir.Lognormal: lambda a, b: log_bijector(),
+    ir.Uniform: lambda a, b: scaled_logit_bijector(a, b),
+    ir.Wishart: lambda a, b: unconstrain_spd_bijector(),
+    ir.Beta: lambda a, b: logit_bijector(),
+}

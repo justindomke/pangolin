@@ -17,8 +17,5 @@ class TestBlackjax(InferenceTests):
         ir.Poisson,
         ir.BetaBinomial,
         # blackjax also struggles with dists with hard boundaries
-        ir.Uniform,
-        ir.Exponential,
         ir.Dirichlet,
-        ir.Wishart,
     }

@@ -33,6 +33,8 @@ from jaxtyping import PyTree
 
 __all__ = ["sample", "E", "var", "std", "Calculate", "inf_until_match"]
 
+from pangolin.jax_backend import default_bijector_dict
+
 
 def inference_loop(rng_key, kernel, initial_states, num_samples):
     @jax.jit
@@ -61,12 +63,16 @@ def run_nuts(log_prob, key, initial_state, num_samples):
     return states.position
 
 
+# TODO: Raise error if given discrete latent variable
+
+
 def sample_flat(
     vars: list[RV],
     given_vars: list[RV],
     given_vals: list,
     *,
     niter: int,
+    bijector_dict: Optional[dict] = default_bijector_dict,
 ) -> list[jnp.ndarray]:
     """
     Given a "flat" specification of an inference problem, do inference using Numpyro. The basic algorithm is:
@@ -130,14 +136,21 @@ def sample_flat(
 
     @jax.jit
     def log_prob(latent_vals):
-        return jax_backend.ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals)
+        return jax_backend.ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals, bijector_dict)
 
     # key = jax.random.PRNGKey(0)
     seed = np.random.randint(0, 2**32 - 1)
     key = jax.random.PRNGKey(seed)
 
-    latent_vals = jax_backend.ancestor_sample_flat(latent_vars, key)
+    latent_vals = jax_backend.ancestor_sample_flat(latent_vars, key, bijector_dict=bijector_dict)
     latent_samps = run_nuts(log_prob, key, latent_vals, niter)
+
+    if bijector_dict is not None and len(latent_samps) > 0:
+
+        def constrain(latent_vals):
+            return jax_backend.ancestor_constrain(latent_vars, latent_vals, bijector_dict)
+
+        latent_samps = jax.vmap(constrain)(latent_samps)
 
     def fill(latent_vals):
         return jax_backend.fill_in(latent_vars + given_vars, latent_vals + given_vals, vars)

@@ -119,6 +119,8 @@ class DistributionTests(MixinBase):
             scipy_rv = scipy_fun(*inputs)
 
             expected_mean = get_mean(scipy_rv)
+            print(f"{expected_mean=}")
+
             expected_std = get_std(scipy_rv)
             expected_cov = get_cov(scipy_rv)
 

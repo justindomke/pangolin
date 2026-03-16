@@ -8,48 +8,34 @@ from pangolin import ir
 jax.config.update("jax_enable_x64", True)
 
 from pangolin.jax_backend import (
-    bijectors,
     log_diagonal_bijector,
     log_prob_op,
     sample_op,
     eval_op,
-    unconstrain_op,
+    constrain_op,
     log_bijector,
     scaled_logit_bijector,
     cholesky_bijector,
     unconstrain_spd_bijector,
     logit_bijector,
     compose_jax_bijectors,
-    constrained_log_prob_op,
-    constrained_sample_op,
-    unconstrain_op,
+    unconstrained_log_prob_op,
+    unconstrained_sample_op,
+    default_bijector_dict,
 )
 
-bijector_dict = {
-    ir.Normal: None,
-    ir.NormalPrec: None,
-    ir.Cauchy: None,
-    ir.Exponential: lambda a: log_bijector(),
-    ir.Gamma: lambda a: log_bijector(),
-    ir.StudentT: None,
-    ir.MultiNormal: None,
-    # ir.Dirichlet: lambda a, b: raise NotImplementedError(),
-    ir.Lognormal: lambda a, b: log_bijector(),
-    ir.Uniform: lambda a, b: scaled_logit_bijector(a, b),
-    ir.Wishart: lambda a, b: unconstrain_spd_bijector(),
-    ir.Beta: lambda a, b: logit_bijector(),
-}
+bijector_dict = default_bijector_dict
 
 
 def _test_op(op, parent_values):
     key = jax.random.PRNGKey(1)
     out = sample_op(op, key, parent_values)
-    out_bijected, out2 = constrained_sample_op(op, key, parent_values, bijector_dict)
-    out_unconstrained = unconstrain_op(op, out_bijected, parent_values, bijector_dict)
-    assert jnp.allclose(out, out_unconstrained)
+    out_bijected, out2 = unconstrained_sample_op(op, key, parent_values, bijector_dict)
+    out_constrained = constrain_op(op, out_bijected, parent_values, bijector_dict)
+    assert jnp.allclose(out, out_constrained)
     assert jnp.allclose(out, out2)
     log_prob = log_prob_op(op, out, parent_values)
-    log_prob_bijected = constrained_log_prob_op(op, out_bijected, parent_values, bijector_dict)
+    log_prob_bijected = unconstrained_log_prob_op(op, out_bijected, parent_values, bijector_dict)
 
 
 def test_normal_op():
