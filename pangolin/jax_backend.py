@@ -108,11 +108,11 @@ def make_simple_sample(op_class: Type[Op]):
     def simple_sample(op, key, parent_values, bijector_dict=None):
         bound_dist: dist.Distribution = bind(*parent_values)
         x = bound_dist.sample(key)
-        if bijector_dict is None:
+        if bijector_dict is None or bijector_dict[op_class] is None:
             return x
         else:
-            bijector = bijector_dict[op_class]
-            return bijector.forward(x, *parent_values)
+            bijector = bijector_dict[op_class](*parent_values)
+            return bijector.forward(x)
 
     return simple_sample
 
@@ -129,38 +129,60 @@ def make_simple_log_prob(
     def my_log_prob(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict=None) -> ArrayLike:
         # op ignored intentionally (to be homoiconic)
         bound_dist: dist.Distribution = bind(*parent_values)
-        if bijector_dict is None:
+        if bijector_dict is None or bijector_dict[op_class] is None:
             return bound_dist.log_prob(value)
         else:
-            bijector = bijector_dict[op_class]
-            x, ldj = bijector.inverse_and_log_det_jac(value, *parent_values)
+            bijector = bijector_dict[op_class](*parent_values)
+            x, ldj = bijector.inverse_and_log_det_jac(value)
             return bound_dist.log_prob(x) - ldj
 
     return my_log_prob
+
+def make_simple_constrain(
+    op_class: Type[Op],
+) -> Callable[[Op, ArrayLike, Sequence[ArrayLike], dict], ArrayLike]:
+
+
+def make_simple_unconstrain(
+    op_class: Type[Op],
+) -> Callable[[Op, ArrayLike, Sequence[ArrayLike], dict], ArrayLike]:
+
+    def simple_unconstrain(op, value, parent_values, bijector_dict):
+        if bijector_dict[op_class] is None:
+            return value
+
+        bijector = bijector_dict[op_class](*parent_values)
+        return bijector.inverse(value)
+
+    return simple_unconstrain
 
 
 ################################################################################
 # Basic dicts that map Op types to log_prob and/or sample handlers
 ################################################################################
 
-log_prob_handlers: dict[Type[Op], Callable] = {}
-sample_handlers: dict[Type[Op], Callable] = {}
-eval_handlers: dict[Type[Op], Callable] = {}
+from typing import Type
+
+log_prob_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict | None], Any]] = {}
+sample_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict | None], Any]] = {}
+eval_handlers: dict[Type[Op], Callable[[Any, Sequence[ArrayLike]], Any]] = {}
+unconstrain_handlers: dict[Type[Op], Callable[[Any, ArrayLike, Sequence[ArrayLike], dict], Any]] = {}
 
 for op_class in simple_dists:
     log_prob_handlers[op_class] = make_simple_log_prob(op_class)
     sample_handlers[op_class] = make_simple_sample(op_class)
-
+    unconstrain_handlers[op_class] = make_simple_unconstrain(op_class)
 
 for op_class in simple_funs:
     eval_handlers[op_class] = make_simple_eval(op_class)
+
 
 ################################################################################
 # Constant handler
 ################################################################################
 
 
-def eval_constant(op: ir.Constant, parent_values):
+def eval_constant(op: ir.Constant, parent_values: Sequence[ArrayLike]):
     return jnp.array(op.value)
 
 
@@ -214,9 +236,16 @@ def sample_composite(op: ir.Composite, key, parent_values: Sequence[ArrayLike], 
     return sample_op(final_op, key, final_parent_values, bijector_dict)
 
 
+def unconstrain_composite(op: ir.Composite, value, parent_values: Sequence[ArrayLike], bijector_dict):
+    assert op.random
+    final_op, final_parent_values = summarize_composite(op, parent_values)
+    return unconstrain_op(final_op, value, final_parent_values, bijector_dict)
+
+
 eval_handlers[ir.Composite] = eval_composite
 log_prob_handlers[ir.Composite] = log_prob_composite
 sample_handlers[ir.Composite] = sample_composite
+unconstrain_handlers[ir.Composite] = unconstrain_composite
 
 ################################################################################
 # Autoregressive
@@ -293,7 +322,8 @@ def log_prob_scan(op: ir.Scan, value: ArrayLike, parent_values: Sequence[ArrayLi
         value = value_x[0]
         x = value_x[1:]
         inputs = (carry,) + merge_args(x)
-        l = log_prob_op(op.base_op, value, inputs)
+        l = log_prob_op(op.base_op, value, inputs, bijector_dict)
+
         return value, l  # pass value to next iteration
 
     carry, ls = jax.lax.scan(myfun, init, (value,) + mapped_rest, length=op.length)
@@ -304,9 +334,6 @@ log_prob_handlers[ir.Scan] = log_prob_scan
 
 
 def sample_scan(op: ir.Scan, key, parent_values: Sequence[ArrayLike], bijector_dict=None):
-    if bijector_dict:
-        raise NotImplementedError()
-
     assert isinstance(op, ir.Scan)
     assert op.random
 
@@ -320,7 +347,7 @@ def sample_scan(op: ir.Scan, key, parent_values: Sequence[ArrayLike], bijector_d
         key = key_x[0]
         x = key_x[1:]
         inputs = (carry,) + merge_args(x)
-        y = sample_op(op.base_op, key, inputs)
+        y = sample_op(op.base_op, key, inputs, bijector_dict)
         return y, y
 
     subkey = jax.random.split(key, op.length)
@@ -330,6 +357,31 @@ def sample_scan(op: ir.Scan, key, parent_values: Sequence[ArrayLike], bijector_d
 
 
 sample_handlers[ir.Scan] = sample_scan
+
+
+def unconstrain_scan(op: ir.Scan, constrained_value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
+    # TODO: should be parallel
+    assert isinstance(op, ir.Scan)
+    assert op.random
+
+    init = parent_values[0]
+    rest = parent_values[1:]
+
+    mapped_rest, merge_args = handle_scan_inputs(op, *rest)
+    assert merge_args(mapped_rest) == tuple(rest)
+
+    def myfun(carry, value_x):
+        value = value_x[0]
+        x = value_x[1:]
+        inputs = (carry,) + merge_args(x)
+        unconstrained_value = unconstrain_op(op.base_op, value, inputs, bijector_dict)
+        return value, unconstrained_value
+
+    _, unconstrained_values = jax.lax.scan(myfun, init, (constrained_value,) + mapped_rest, length=op.length)
+    return unconstrained_values
+
+
+unconstrain_handlers[ir.Scan] = unconstrain_scan
 
 
 ################################################################################
@@ -353,9 +405,6 @@ eval_handlers[ir.VMap] = eval_vmap
 
 
 def sample_vmap(op: ir.VMap, key, parent_values: Sequence[ArrayLike], bijector_dict=None):
-    if bijector_dict:
-        raise NotImplementedError()
-
     assert isinstance(op, ir.VMap)
     assert op.random
 
@@ -365,7 +414,7 @@ def sample_vmap(op: ir.VMap, key, parent_values: Sequence[ArrayLike], bijector_d
     subkey = jax.random.split(key, out_axis_size)
 
     def base_sample(key, *args):
-        return sample_op(op.base_op, key, args)
+        return sample_op(op.base_op, key, args, bijector_dict)
 
     in_axes = (0,) + op.in_axes
     axis_size = op.axis_size
@@ -376,9 +425,6 @@ sample_handlers[ir.VMap] = sample_vmap
 
 
 def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict=None):
-    if bijector_dict:
-        raise NotImplementedError()
-
     assert isinstance(op, ir.VMap)
     assert op.random
 
@@ -392,10 +438,26 @@ def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLi
 
 log_prob_handlers[ir.VMap] = log_prob_vmap
 
+
+def unconstrain_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict):
+    assert isinstance(op, ir.VMap)
+    assert op.random
+
+    def base_unconstrain(value, *parent_values):
+        return unconstrain_op(op.base_op, value, parent_values, bijector_dict)
+
+    in_axes = (0,) + op.in_axes
+    axis_size = op.axis_size
+    return jax.vmap(base_unconstrain, in_axes=in_axes, axis_size=axis_size)(value, *parent_values)
+
+
+unconstrain_handlers[ir.VMap] = unconstrain_vmap
+
 ################################################################################
 # Transformed
 ################################################################################
 
+# Do we really even want to allow Transformed nodes? I guess so
 
 # def sample_transformed[O: Op, B: ir.Bijector](
 #     op: ir.Transformed[O, B], key, parent_values: Sequence[ArrayLike], bijector_dict=None
@@ -433,6 +495,8 @@ log_prob_handlers[ir.VMap] = log_prob_vmap
 
 # log_prob_handlers[ir.Transformed] = log_prob_transformed
 
+# TODO
+# unconstrain_handlers[ir.Transformed] = ...
 
 ################################################################################
 # Functions to do sample and/or log prob on a single node
@@ -456,8 +520,9 @@ def sample_op(op: Op, key, parent_values: Sequence[ArrayLike], bijector_dict=Non
     op_class = type(op)
     handler = sample_handlers[op_class]
     out = handler(op, key, parent_values, bijector_dict)
-    expected_shape = op.get_shape(*[shape(v) for v in parent_values])
-    assert shape(out) == expected_shape, "Error: shape was not as expected"
+    # TODO: check bijected shapes
+    # expected_shape = op.get_shape(*[shape(v) for v in parent_values])
+    # assert shape(out) == expected_shape, "Error: shape was not as expected"
     return out
 
 
@@ -468,9 +533,10 @@ def log_prob_op(op: Op, value: ArrayLike, parent_values: Sequence[ArrayLike], bi
     if not op.random:
         raise ValueError("Cannot evaluate log_prob_op for non-random op")
     op_class = type(op)
-    expected_shape = op.get_shape(*[shape(v) for v in parent_values])
-    if shape(value) != expected_shape:
-        raise ValueError(f"shape(value) {shape(value)} not {expected_shape} as expected")
+    # TODO: check bijected shapes
+    # expected_shape = op.get_shape(*[shape(v) for v in parent_values])
+    # if shape(value) != expected_shape:
+    #    raise ValueError(f"shape(value) {shape(value)} not {expected_shape} as expected")
     return log_prob_handlers[op_class](op, value, parent_values, bijector_dict)
 
 
@@ -487,6 +553,19 @@ def eval_op(op: Op, parent_values: Sequence[ArrayLike]):
     expected_shape = op.get_shape(*[shape(v) for v in parent_values])
     assert shape(out) == expected_shape, "Error: shape was not as expected"
     return out
+
+
+def unconstrain_op(op: Op, constrained_value: ArrayLike, parent_values: Sequence[ArrayLike], bijector_dict: dict):
+    if not op.random:
+        raise ValueError("Cannot unconstrain non-random op")
+
+    op_class = type(op)
+    handler = unconstrain_handlers[op_class]
+    value = handler(op, constrained_value, parent_values, bijector_dict)
+    expected_shape = op.get_shape(*[shape(v) for v in parent_values])
+    if shape(value) != expected_shape:
+        raise ValueError(f"{shape(value)=} does not match {expected_shape=}")
+    return value
 
 
 ################################################################################
@@ -540,6 +619,23 @@ def ancestor_log_prob_flat(vars: Sequence[RV], values: Sequence[ArrayLike], bije
             out = eval_op(var.op, parent_values)
             all_values[var] = out
     return l
+
+
+def ancestor_unconstrain(vars: Sequence[RV], values: Sequence[ArrayLike], bijector_dict):
+    all_vars = dag.upstream_nodes(vars)
+    all_values = {var: val for var, val in zip(vars, values, strict=True)}
+    all_unconstrained_values = {}
+    for var in all_vars:
+        parent_values = [all_values[p] for p in var.parents]
+        if var.op.random:
+            value = all_values[var]
+            all_unconstrained_values[var] = unconstrain_op(var.op, value, parent_values, bijector_dict)
+        else:
+            if var in vars:
+                raise ValueError("Can't provide value for non-random variable in ancestor_unconstrain")
+            out = eval_op(var.op, parent_values)
+            all_values[var] = out
+    return [all_unconstrained_values[var] for var in vars]
 
 
 def fill_in(
@@ -767,118 +863,213 @@ def ancestor_log_prob(*vars: PyTree[RV], **kwvars: PyTree[RV]) -> Callable:
 # Bijections
 ################################################################################
 
+# class JaxBijector(ABC):
+#     """
+#     the idea is that if ``P(X)`` is some density and ``Y=T(X)`` is a diffeomorphism, then ``P(Y=y) = P(X=T⁻¹(y)) × |det ∇T⁻¹(y)|``
+#     """
+
+#     @abstractmethod
+#     def forward(self, x):
+#         pass
+
+#     @abstractmethod
+#     def inverse(self, y):
+#         pass
+
+#     @abstractmethod
+#     def log_jac_det(self, x, y):
+#         pass
+
+
+# class JaxBijector:
+#     """
+#     the idea is that if ``P(X)`` is some density and ``Y=T(X)`` is a diffeomorphism, then ``P(Y=y) = P(X=T⁻¹(y)) × |det ∇T⁻¹(y)|``
+#     """
+
+#     def __init__(self, forward, inverse, log_det_jac, n_biject_params=0):
+#         self._forward = forward
+#         self._inverse = inverse
+#         self._log_det_jac = log_det_jac
+#         self.n_biject_params = n_biject_params
+
+#     def forward(self, x, *params):
+#         if len(params) != self.n_biject_params:
+#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
+#         return self._forward(x, *params)
+
+#     def inverse(self, y, *params):
+#         if len(params) != self.n_biject_params:
+#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
+#         return self._inverse(y, *params)
+
+#     def log_det_jac(self, x, y, *params):
+#         if len(params) != self.n_biject_params:
+#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
+#         return self._log_det_jac(x, y, *params)
+
+#     def forward_and_log_det_jac(self, x, *params):
+#         if len(params) != self.n_biject_params:
+#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
+#         y = self.forward(x, *params)
+#         ldj = self.log_det_jac(x, y, *params)
+#         return y, ldj
+
+#     def inverse_and_log_det_jac(self, y, *params):
+#         if len(params) != self.n_biject_params:
+#             raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
+#         x = self.inverse(y, *params)
+#         ldj = self.log_det_jac(x, y, *params)
+#         return x, ldj
+
+#     @property
+#     def reverse(self):
+#         return JaxBijector(
+#             self.inverse, self.forward, lambda y, x, *params: -self.log_det_jac(x, y, *params), self.n_biject_params
+#         )
+
 
 class JaxBijector:
     """
     the idea is that if ``P(X)`` is some density and ``Y=T(X)`` is a diffeomorphism, then ``P(Y=y) = P(X=T⁻¹(y)) × |det ∇T⁻¹(y)|``
     """
 
-    def __init__(self, forward, inverse, log_det_jac, n_biject_params=0):
+    def __init__(self, forward, inverse, log_det_jac):
         self._forward = forward
         self._inverse = inverse
         self._log_det_jac = log_det_jac
-        self.n_biject_params = n_biject_params
 
-    def forward(self, x, *params):
-        if len(params) != self.n_biject_params:
-            raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-        return self._forward(x, *params)
+    def forward(self, x):
+        return self._forward(x)
 
-    def inverse(self, y, *params):
-        if len(params) != self.n_biject_params:
-            raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-        return self._inverse(y, *params)
+    def inverse(self, y):
+        return self._inverse(y)
 
-    def log_det_jac(self, x, y, *params):
-        if len(params) != self.n_biject_params:
-            raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-        return self._log_det_jac(x, y, *params)
+    def log_det_jac(self, x, y):
+        return self._log_det_jac(x, y)
 
-    def forward_and_log_det_jac(self, x, *params):
-        if len(params) != self.n_biject_params:
-            raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-        y = self.forward(x, *params)
-        ldj = self.log_det_jac(x, y, *params)
+    def forward_and_log_det_jac(self, x):
+        y = self.forward(x)
+        ldj = self.log_det_jac(x, y)
         return y, ldj
 
-    def inverse_and_log_det_jac(self, y, *params):
-        if len(params) != self.n_biject_params:
-            raise ValueError(f"{len(params)=} not equal to {self.n_biject_params=}")
-        x = self.inverse(y, *params)
-        ldj = self.log_det_jac(x, y, *params)
+    def inverse_and_log_det_jac(self, y):
+        x = self.inverse(y)
+        ldj = self.log_det_jac(x, y)
         return x, ldj
 
     @property
     def reverse(self):
-        return JaxBijector(
-            self.inverse, self.forward, lambda y, x, *params: -self.log_det_jac(x, y, *params), self.n_biject_params
-        )
+        return JaxBijector(self.inverse, self.forward, lambda y, x: -self.log_det_jac(x, y))
 
 
 import builtins
 
 
+# def compose_jax_bijectors(bijectors: Sequence[JaxBijector], log_det_direction: str = "forward") -> JaxBijector:
+#     bijectors = tuple(bijectors)
+#     total_biject_params = builtins.sum(b.n_biject_params for b in bijectors)
+
+#     def check_args(args_tuple):
+#         if len(args_tuple) != total_biject_params:
+#             raise TypeError(f"Expected {total_biject_params} args, got {len(args_tuple)}")
+
+#     def composed_forward(x, *args):
+#         check_args(args)
+
+#         current_x = x
+#         arg_idx = 0
+#         for b in bijectors:
+#             n = b.n_biject_params
+#             b_args = args[arg_idx : arg_idx + n]
+#             current_x = b.forward(current_x, *b_args)
+#             arg_idx += n
+#         return current_x
+
+#     def composed_inverse(y, *args):
+#         check_args(args)
+
+#         current_y = y
+#         arg_idx = total_biject_params
+#         for b in reversed(bijectors):
+#             n = b.n_biject_params
+#             b_args = args[arg_idx - n : arg_idx]
+#             current_y = b.inverse(current_y, *b_args)
+#             arg_idx -= n
+#         return current_y
+
+#     def _log_det_forward(x, y, *args):
+#         check_args(args)
+
+#         log_det_sum = 0.0
+#         current_x = x
+#         arg_idx = 0
+#         for b in bijectors:
+#             n = b.n_biject_params
+#             b_args = args[arg_idx : arg_idx + n]
+#             next_x = b.forward(current_x, *b_args)
+#             log_det_sum += b.log_det_jac(current_x, next_x, *b_args)
+#             current_x = next_x
+#             arg_idx += n
+
+#         return log_det_sum
+
+#     def _log_det_inverse(x, y, *args):
+#         check_args(args)
+
+#         log_det_sum = 0.0
+#         current_y = y
+#         arg_idx = total_biject_params
+#         for b in reversed(bijectors):
+#             n = b.n_biject_params
+#             b_args = args[arg_idx - n : arg_idx]
+#             previous_x = b.inverse(current_y, *b_args)
+#             log_det_sum += b.log_det_jac(previous_x, current_y, *b_args)
+#             current_y = previous_x
+#             arg_idx -= n
+#         return log_det_sum
+
+#     if log_det_direction == "forward":
+#         composed_log_det_jac = _log_det_forward
+#     elif log_det_direction == "inverse":
+#         composed_log_det_jac = _log_det_inverse
+#     else:
+#         raise ValueError("log_det_direction must be 'forward' or 'inverse'")
+
+#     return JaxBijector(composed_forward, composed_inverse, composed_log_det_jac, total_biject_params)
+
+
 def compose_jax_bijectors(bijectors: Sequence[JaxBijector], log_det_direction: str = "forward") -> JaxBijector:
     bijectors = tuple(bijectors)
-    total_biject_params = builtins.sum(b.n_biject_params for b in bijectors)
 
-    def check_args(args_tuple):
-        if len(args_tuple) != total_biject_params:
-            raise TypeError(f"Expected {total_biject_params} args, got {len(args_tuple)}")
-
-    def composed_forward(x, *args):
-        check_args(args)
-
+    def composed_forward(x):
         current_x = x
-        arg_idx = 0
         for b in bijectors:
-            n = b.n_biject_params
-            b_args = args[arg_idx : arg_idx + n]
-            current_x = b.forward(current_x, *b_args)
-            arg_idx += n
+            current_x = b.forward(current_x)
         return current_x
 
-    def composed_inverse(y, *args):
-        check_args(args)
-
+    def composed_inverse(y):
         current_y = y
-        arg_idx = total_biject_params
         for b in reversed(bijectors):
-            n = b.n_biject_params
-            b_args = args[arg_idx - n : arg_idx]
-            current_y = b.inverse(current_y, *b_args)
-            arg_idx -= n
+            current_y = b.inverse(current_y)
         return current_y
 
-    def _log_det_forward(x, y, *args):
-        check_args(args)
-
+    def _log_det_forward(x, y):
         log_det_sum = 0.0
         current_x = x
-        arg_idx = 0
         for b in bijectors:
-            n = b.n_biject_params
-            b_args = args[arg_idx : arg_idx + n]
-            next_x = b.forward(current_x, *b_args)
-            log_det_sum += b.log_det_jac(current_x, next_x, *b_args)
+            next_x = b.forward(current_x)
+            log_det_sum += b.log_det_jac(current_x, next_x)
             current_x = next_x
-            arg_idx += n
 
         return log_det_sum
 
-    def _log_det_inverse(x, y, *args):
-        check_args(args)
-
+    def _log_det_inverse(x, y):
         log_det_sum = 0.0
         current_y = y
-        arg_idx = total_biject_params
         for b in reversed(bijectors):
-            n = b.n_biject_params
-            b_args = args[arg_idx - n : arg_idx]
-            previous_x = b.inverse(current_y, *b_args)
-            log_det_sum += b.log_det_jac(previous_x, current_y, *b_args)
+            previous_x = b.inverse(current_y)
+            log_det_sum += b.log_det_jac(previous_x, current_y)
             current_y = previous_x
-            arg_idx -= n
         return log_det_sum
 
     if log_det_direction == "forward":
@@ -888,7 +1079,7 @@ def compose_jax_bijectors(bijectors: Sequence[JaxBijector], log_det_direction: s
     else:
         raise ValueError("log_det_direction must be 'forward' or 'inverse'")
 
-    return JaxBijector(composed_forward, composed_inverse, composed_log_det_jac, total_biject_params)
+    return JaxBijector(composed_forward, composed_inverse, composed_log_det_jac)
 
 
 ########################################################################################
@@ -1108,6 +1299,167 @@ def _exp_diagonal_log_det_jac(X: jax.Array, Y: jax.Array):
     return jnp.trace(X)
 
 
+def exp_bijector():
+    """
+    Creates a `JaxBijector` instance that applies the exponential function.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array(0.0)
+        >>> exp_bijector().forward(x)  # doctest: +ELLIPSIS
+        Array(1., dtype=float32...)
+    """
+    # f(x) = exp(x)  <==>  df/dx = exp(x) = y  <==>  log df/dx = log(y) = x
+    return JaxBijector(jnp.exp, jnp.log, lambda x, y: x)
+
+
+def log_bijector():
+    """
+    Creates a `JaxBijector` instance that applies the natural logarithm.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array(1.0)
+        >>> log_bijector().forward(x)  # doctest: +ELLIPSIS
+        Array(0., dtype=float32...)
+    """
+
+    # f(x) = log(x) <==> df/dx = 1/x <==> log df/dx = -log(x) = -y
+    return JaxBijector(jnp.log, jnp.exp, lambda x, y: -y)
+
+
+def logit_bijector():
+    """
+    Creates a `JaxBijector` instance that applies the logit bijector ``y = logit(x)``. Commonly used to transform from [0,1] to reals.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array(0.5)
+        >>> logit_bijector().forward(x)  # doctest: +ELLIPSIS
+        Array(0., dtype=float32...)
+    """
+    return JaxBijector(jax.scipy.special.logit, jax.scipy.special.expit, lambda x, y: -jnp.log(x) - jnp.log1p(-x))
+
+
+def inv_logit_bijector():
+    """
+    Creates a `JaxBijector` instance that applies the inverse logit (expit/sigmoid).
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> y = jnp.array(0.0)
+        >>> inv_logit_bijector().forward(y)  # doctest: +ELLIPSIS
+        Array(0.5, dtype=float32...)
+    """
+
+    return logit_bijector().reverse
+
+
+def scaled_logit_bijector(a, b):
+    """
+    Creates a `JaxBijector` instance that applies the scaled logit ``y = logit((x-a)/(b-a))``. Commonly used to transform from [a,b] to reals.
+    """
+    return JaxBijector(
+        lambda x: jax.scipy.special.logit((x - a) / (b - a)),
+        lambda y: a + (b - a) * jax.scipy.special.expit(y),
+        lambda x, y: jnp.log(b - a) - jnp.log(x - a) - jnp.log(b - x),
+    )
+
+
+def cholesky_bijector():
+    """
+    Creates a `JaxBijector` instance that applies a Cholesky decomposition. Commonly used to transform from symmetric positive definite matrices into triangular matrices.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> X = jnp.array([[1., 0.], [0., 1.]])
+        >>> cholesky_bijector().forward(X)
+        Array([[1., 0.],
+               [0., 1.]], dtype=float32)
+    """
+    return JaxBijector(
+        lambda X: jnp.linalg.cholesky(X),
+        lambda Y: Y @ Y.T,
+        _cholesky_log_det_jac,
+    )
+
+
+def fill_tril_bijector():
+    """
+    A `JaxBijector` instance that fills a lower-triangular matrix from a vector. Used to transform from real vectors to lower-triangular matrices.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array([1., 2., 3.])
+        >>> fill_tril_bijector().forward(x)
+        Array([[1., 0.],
+               [2., 3.]], dtype=float32)
+    """
+    return JaxBijector(_fill_tril, _extract_tril, lambda x, y: jnp.array(0.0))
+
+
+def extract_tril_bijector():
+    """
+    A `JaxBijector` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> X = jnp.array([[1., 0.], [2., 3.]])
+        >>> extract_tril_bijector().forward(X)
+        Array([1., 2., 3.], dtype=float32)
+    """
+    # return fill_tril_bijector().reverse
+    return JaxBijector(_extract_tril, _fill_tril, lambda x, y: jnp.array(0.0))
+
+
+def exp_diagonal_bijector():
+    """
+    A `JaxBijector` instance that exponentiates the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> X = jnp.array([[0., 0.], [2., 0.]])
+        >>> exp_diagonal_bijector().forward(X)
+        Array([[1., 0.],
+               [2., 1.]], dtype=float32)
+    """
+    return JaxBijector(_exp_diagonal, _log_diagonal, _exp_diagonal_log_det_jac)
+
+
+def log_diagonal_bijector():
+    """
+    A `JaxBijector` instance that takes the logarithm of the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> X = jnp.array([[1., 0.], [2., 1.]])
+        >>> log_diagonal_bijector().forward(X)
+        Array([[0., 0.],
+               [2., 0.]], dtype=float32)
+    """
+    return exp_diagonal_bijector().reverse
+
+
+def unconstrain_spd_bijector():
+    """
+    Creates a `JaxBijector` instance that transforms a symmetric positive definite into the space of unconstrained reals. Accomplished by (1) taking a Cholesky decomposition (2) taking the logarithm of the diagonal (3) extracting the lower-triangular entries.
+
+    Example:
+        >>> import jax.numpy as jnp
+        >>> # Identity matrix is symmetric positive definite
+        >>> X = jnp.array([[1., 0.], [0., 1.]])
+        >>> unconstrain_spd_bijector().forward(X)
+        Array([0., 0., 0.], dtype=float32)
+
+        >>> # Transform back to SPD matrix
+        >>> unconstrained_vec = jnp.array([0., 2., 0.])
+        >>> unconstrain_spd_bijector().inverse(unconstrained_vec)
+        Array([[1., 2.],
+               [2., 5.]], dtype=float32)
+    """
+    return compose_jax_bijectors([cholesky_bijector(), log_diagonal_bijector(), extract_tril_bijector()])
+
+
 class bijectors:
     """
     A namespace containing a bunch of pre-baked `JaxBijector` instances.
@@ -1137,127 +1489,127 @@ class bijectors:
         Array(0., dtype=float32...)
     """
 
-    logit = JaxBijector(jax.scipy.special.logit, jax.scipy.special.expit, lambda x, y: -jnp.log(x) - jnp.log1p(-x))
-    """
-    A `Transform` instance that applies the logit bijector ``y = logit(x)``. Commonly used to transform from [0,1] to reals.
+    # logit = JaxBijector(jax.scipy.special.logit, jax.scipy.special.expit, lambda x, y: -jnp.log(x) - jnp.log1p(-x))
+    # """
+    # A `Transform` instance that applies the logit bijector ``y = logit(x)``. Commonly used to transform from [0,1] to reals.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> x = jnp.array(0.5)
-        >>> bijectors.logit.forward(x)  # doctest: +ELLIPSIS
-        Array(0., dtype=float32...)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> x = jnp.array(0.5)
+    #     >>> bijectors.logit.forward(x)  # doctest: +ELLIPSIS
+    #     Array(0., dtype=float32...)
+    # """
 
-    inv_logit = logit.reverse
-    """
-    A `JaxBijector` instance that applies the inverse logit (expit/sigmoid).
+    # inv_logit = logit.reverse
+    # """
+    # A `JaxBijector` instance that applies the inverse logit (expit/sigmoid).
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> y = jnp.array(0.0)
-        >>> bijectors.inv_logit.forward(y)  # doctest: +ELLIPSIS
-        Array(0.5, dtype=float32...)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> y = jnp.array(0.0)
+    #     >>> bijectors.inv_logit.forward(y)  # doctest: +ELLIPSIS
+    #     Array(0.5, dtype=float32...)
+    # """
 
-    scaled_logit = JaxBijector(
-        lambda x, a, b: jax.scipy.special.logit((x - a) / (b - a)),
-        lambda y, a, b: a + (b - a) * jax.scipy.special.expit(y),
-        lambda x, y, a, b: jnp.log(b - a) - jnp.log(x - a) - jnp.log(b - x),
-        n_biject_params=2,
-    )
-    """
-    A `JaxBijector` instance that applies the scaled logit ``y = logit((x-a)/(b-a))``. Commonly used to transform from [a,b] to reals.
+    # scaled_logit = JaxBijector(
+    #     lambda x, a, b: jax.scipy.special.logit((x - a) / (b - a)),
+    #     lambda y, a, b: a + (b - a) * jax.scipy.special.expit(y),
+    #     lambda x, y, a, b: jnp.log(b - a) - jnp.log(x - a) - jnp.log(b - x),
+    #     n_biject_params=2,
+    # )
+    # """
+    # A `JaxBijector` instance that applies the scaled logit ``y = logit((x-a)/(b-a))``. Commonly used to transform from [a,b] to reals.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> x = jnp.array(5.0)
-        >>> # Transform 5.0 from the bounds [0.0, 10.0] to unconstrained space
-        >>> bijectors.scaled_logit.forward(x, 0.0, 10.0)  # doctest: +ELLIPSIS
-        Array(0., dtype=float32...)
-        >>> bijectors.scaled_logit.inverse(jnp.array(0.0), 0.0, 10.0)  # doctest: +ELLIPSIS
-        Array(5., dtype=float32...)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> x = jnp.array(5.0)
+    #     >>> # Transform 5.0 from the bounds [0.0, 10.0] to unconstrained space
+    #     >>> bijectors.scaled_logit.forward(x, 0.0, 10.0)  # doctest: +ELLIPSIS
+    #     Array(0., dtype=float32...)
+    #     >>> bijectors.scaled_logit.inverse(jnp.array(0.0), 0.0, 10.0)  # doctest: +ELLIPSIS
+    #     Array(5., dtype=float32...)
+    # """
 
-    cholesky = JaxBijector(
-        lambda X: jnp.linalg.cholesky(X),
-        lambda Y: Y @ Y.T,
-        _cholesky_log_det_jac,
-    )
-    """
-    A `JaxBijector` instance that applies a Cholesky decomposition. Commonly used to transform from symmetric positive definite matrices into triangular matrices. 
+    # cholesky = JaxBijector(
+    #     lambda X: jnp.linalg.cholesky(X),
+    #     lambda Y: Y @ Y.T,
+    #     _cholesky_log_det_jac,
+    # )
+    # """
+    # A `JaxBijector` instance that applies a Cholesky decomposition. Commonly used to transform from symmetric positive definite matrices into triangular matrices.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> X = jnp.array([[1., 0.], [0., 1.]])
-        >>> bijectors.cholesky.forward(X)
-        Array([[1., 0.],
-               [0., 1.]], dtype=float32)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> X = jnp.array([[1., 0.], [0., 1.]])
+    #     >>> bijectors.cholesky.forward(X)
+    #     Array([[1., 0.],
+    #            [0., 1.]], dtype=float32)
+    # """
 
-    fill_tril = JaxBijector(_fill_tril, _extract_tril, lambda x, y: 0.0)
-    """
-    A `JaxBijector` instance that fills a lower-triangular matrix from a vector. Used to transform from real vectors to lower-triangular matrices.
+    # fill_tril = JaxBijector(_fill_tril, _extract_tril, lambda x, y: 0.0)
+    # """
+    # A `JaxBijector` instance that fills a lower-triangular matrix from a vector. Used to transform from real vectors to lower-triangular matrices.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> x = jnp.array([1., 2., 3.])
-        >>> bijectors.fill_tril.forward(x)
-        Array([[1., 0.],
-               [2., 3.]], dtype=float32)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> x = jnp.array([1., 2., 3.])
+    #     >>> bijectors.fill_tril.forward(x)
+    #     Array([[1., 0.],
+    #            [2., 3.]], dtype=float32)
+    # """
 
-    extract_tril = fill_tril.reverse
-    """
-    A `JaxBijector` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
+    # extract_tril = fill_tril.reverse
+    # """
+    # A `JaxBijector` instance that extracts the lower-triangular part of a matrix. Commonly used to transform from triangular lower-triangular matrices to real vectors.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> X = jnp.array([[1., 0.], [2., 3.]])
-        >>> bijectors.extract_tril.forward(X)
-        Array([1., 2., 3.], dtype=float32)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> X = jnp.array([[1., 0.], [2., 3.]])
+    #     >>> bijectors.extract_tril.forward(X)
+    #     Array([1., 2., 3.], dtype=float32)
+    # """
 
-    exp_diagonal = JaxBijector(_exp_diagonal, _log_diagonal, _exp_diagonal_log_det_jac)
-    """
-    A `JaxBijector` instance that exponentiates the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+    # exp_diagonal = JaxBijector(_exp_diagonal, _log_diagonal, _exp_diagonal_log_det_jac)
+    # """
+    # A `JaxBijector` instance that exponentiates the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> X = jnp.array([[0., 0.], [2., 0.]])
-        >>> bijectors.exp_diagonal.forward(X)
-        Array([[1., 0.],
-               [2., 1.]], dtype=float32)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> X = jnp.array([[0., 0.], [2., 0.]])
+    #     >>> bijectors.exp_diagonal.forward(X)
+    #     Array([[1., 0.],
+    #            [2., 1.]], dtype=float32)
+    # """
 
-    log_diagonal = exp_diagonal.reverse
-    """
-    A `JaxBijector` instance that takes the logarithm of the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
+    # log_diagonal = exp_diagonal.reverse
+    # """
+    # A `JaxBijector` instance that takes the logarithm of the diagonal of a matrix. Commonly used to transform real lower-triangular matrices into Cholesky factors.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> X = jnp.array([[1., 0.], [2., 1.]])
-        >>> bijectors.log_diagonal.forward(X)
-        Array([[0., 0.],
-               [2., 0.]], dtype=float32)
-    """
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> X = jnp.array([[1., 0.], [2., 1.]])
+    #     >>> bijectors.log_diagonal.forward(X)
+    #     Array([[0., 0.],
+    #            [2., 0.]], dtype=float32)
+    # """
 
-    unconstrain_spd = compose_jax_bijectors([cholesky, log_diagonal, extract_tril])
-    """
-    A `JaxBijector` instance that transforms a symmetric positive definite into the space of unconstrained reals. Accomplished by (1) taking a Cholesky decomposition (2) taking the logarithm of the diagonal (3) extracting the lower-triangular entries.
+    # unconstrain_spd = compose_jax_bijectors([cholesky, log_diagonal, extract_tril])
+    # """
+    # A `JaxBijector` instance that transforms a symmetric positive definite into the space of unconstrained reals. Accomplished by (1) taking a Cholesky decomposition (2) taking the logarithm of the diagonal (3) extracting the lower-triangular entries.
 
-    Example:
-        >>> import jax.numpy as jnp
-        >>> # Identity matrix is symmetric positive definite
-        >>> X = jnp.array([[1., 0.], [0., 1.]])
-        >>> bijectors.unconstrain_spd.forward(X)
-        Array([0., 0., 0.], dtype=float32)
+    # Example:
+    #     >>> import jax.numpy as jnp
+    #     >>> # Identity matrix is symmetric positive definite
+    #     >>> X = jnp.array([[1., 0.], [0., 1.]])
+    #     >>> bijectors.unconstrain_spd.forward(X)
+    #     Array([0., 0., 0.], dtype=float32)
 
-        >>> # Transform back to SPD matrix
-        >>> unconstrained_vec = jnp.array([0., 2., 0.])
-        >>> bijectors.unconstrain_spd.inverse(unconstrained_vec)
-        Array([[1., 2.],
-               [2., 5.]], dtype=float32)
-    """
+    #     >>> # Transform back to SPD matrix
+    #     >>> unconstrained_vec = jnp.array([0., 2., 0.])
+    #     >>> bijectors.unconstrain_spd.inverse(unconstrained_vec)
+    #     Array([[1., 2.],
+    #            [2., 5.]], dtype=float32)
+    # """
 
-    def __init__(self):
-        raise TypeError("Use bijectors as a static namespace, do not instantiate.")
+    # def __init__(self):
+    #     raise TypeError("Use bijectors as a static namespace, do not instantiate.")
