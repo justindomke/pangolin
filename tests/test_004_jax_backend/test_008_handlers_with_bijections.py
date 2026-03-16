@@ -20,6 +20,9 @@ from pangolin.jax_backend import (
     unconstrain_spd_bijector,
     logit_bijector,
     compose_jax_bijectors,
+    constrained_log_prob_op,
+    constrained_sample_op,
+    unconstrain_op,
 )
 
 bijector_dict = {
@@ -41,11 +44,12 @@ bijector_dict = {
 def _test_op(op, parent_values):
     key = jax.random.PRNGKey(1)
     out = sample_op(op, key, parent_values)
-    out_bijected = sample_op(op, key, parent_values, bijector_dict)
+    out_bijected, out2 = constrained_sample_op(op, key, parent_values, bijector_dict)
     out_unconstrained = unconstrain_op(op, out_bijected, parent_values, bijector_dict)
     assert jnp.allclose(out, out_unconstrained)
+    assert jnp.allclose(out, out2)
     log_prob = log_prob_op(op, out, parent_values)
-    log_prob_bijected = log_prob_op(op, out_bijected, parent_values, bijector_dict)
+    log_prob_bijected = constrained_log_prob_op(op, out_bijected, parent_values, bijector_dict)
 
 
 def test_normal_op():
