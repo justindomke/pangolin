@@ -78,13 +78,8 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 * [8schools.ipynb](demos/8schools.ipynb) is the classic 8-schools model.
 * [regression.ipynb](demos/regression.ipynb) is Bayesian linear regression.
 * [timeseries.ipynb](demos/timeseries.ipynb) is a simple timeseries model.
-* [autoregressive.ipynb](demos/autoregressive.ipynb) is an autoregressive Kalman-filter-esque model.
+* [scan.ipynb](demos/scan.ipynb) is a Kalman-filter-esque model.
 * [GP-regression.ipynb](demos/GP-regression.ipynb) is Gaussian Process regression.
-
-
-
-
-
 
 ## Values
 
