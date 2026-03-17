@@ -134,6 +134,10 @@ def sample_flat(
     all_vars = dag.upstream_nodes(tuple(vars) + tuple(given_vars))
     latent_vars = [var for var in all_vars if var.op.random and var not in given_vars]
 
+    for v in latent_vars:
+        if v.op.discrete:
+            raise ValueError(f"Blackjax backend does not support discrete latent/unobserved RV (saw op {v.op})")
+
     @jax.jit
     def log_prob(latent_vals):
         return jax_backend.ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals, bijector_dict)

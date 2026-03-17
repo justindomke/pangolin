@@ -136,15 +136,13 @@ class DistributionTests(MixinBase):
                         np.abs(empirical_mean - expected_mean) / (0.1 + np.linalg.norm(expected_mean)) < 0.25
                     )
 
-                # if expected_std is not None:
-                #     empirical_std = np.std(samps, axis=0)
-                #     match &= np.all(np.abs(empirical_std - expected_std) / (0.1 + expected_std) < 0.25)
+                if expected_std is not None:
+                    empirical_std = np.std(samps, axis=0)
+                    match &= np.all(np.abs(empirical_std - expected_std) / (0.1 + expected_std) < 0.25)
 
-                # if expected_cov is not None:
-                #     empirical_cov = np.cov(samps.T)
-                #     match &= np.all(
-                #         np.abs(empirical_cov - expected_cov) / (0.1 + np.linalg.norm(expected_cov)) < 0.25
-                #     )
+                if expected_cov is not None:
+                    empirical_cov = np.cov(samps.T)
+                    match &= np.all(np.abs(empirical_cov - expected_cov) / (0.1 + np.linalg.norm(expected_cov)) < 0.25)
 
                 return match
 

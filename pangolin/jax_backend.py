@@ -19,7 +19,7 @@ from pangolin import dag, util
 from jaxtyping import PyTree
 from jax.typing import ArrayLike
 
-__all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
+ __all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 
 ################################################################################
 # Dict of Ops that correspond to simple functions
@@ -1396,7 +1396,6 @@ def extract_tril_bijector():
         >>> extract_tril_bijector().forward(X)
         Array([1., 2., 3.], dtype=float32)
     """
-    # return fill_tril_bijector().reverse
     return JaxBijector(_extract_tril, _fill_tril, lambda x, y: jnp.array(0.0))
 
 
@@ -1457,17 +1456,99 @@ def unconstrain_spd_bijector():
     return compose_jax_bijectors([cholesky_bijector(), log_diagonal_bijector(), extract_tril_bijector()])
 
 
+import jax
+import jax.numpy as jnp
+
+
+def stick_breaking_forward(x):
+    """
+    Forward: K-simplex -> R^(K-1)
+    x: simplex vector of length K (positive, sums to 1)
+    returns: y unconstrained (length K-1)
+
+    Examples:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array([0.5, 0.25, 0.25])
+        >>> y = stick_breaking_forward(x)
+        >>> [round(val, 4) for val in y.tolist()]
+        [0.0, 0.0]
+    """
+    x_trunc = x[:-1]
+
+    # Exclusive cumulative sum: [0, x_1, x_1+x_2, ...]
+    cumsum_exclusive = jnp.cumsum(x_trunc) - x_trunc
+
+    # Denominator: [1.0, 1.0 - x_1, 1.0 - x_1 - x_2, ...]
+    cumsum_remainder = 1.0 - cumsum_exclusive
+
+    z = x_trunc / cumsum_remainder
+
+    y = jnp.log(z) - jnp.log(1.0 - z)
+
+    return y
+
+
+def stick_breaking_inverse(y):
+    """
+    Inverse: R^(K-1) -> K-simplex
+    y: unconstrained real vector of length K-1
+    returns: x on simplex (length K, sums to 1, positive)
+
+    Examples:
+        >>> import jax.numpy as jnp
+        >>> y = jnp.array([0.0, 0.0])
+        >>> x = stick_breaking_inverse(y)
+        >>> [round(val, 4) for val in x.tolist()]
+        [0.5, 0.25, 0.25]
+    """
+    z = jax.nn.sigmoid(y)
+
+    one_minus_z = 1.0 - z
+    cumprod = jnp.concatenate([jnp.array([1.0]), jnp.cumprod(one_minus_z)])
+
+    x = jnp.concatenate([z * cumprod[:-1], cumprod[-1:]])
+
+    return x
+
+
+def stick_breaking_log_det_jac(x, y):
+    """
+    Log |det J| for forward transform: x (simplex) -> y (unconstrained)
+    Uses only y for computation (x ignored but accepted for API compatibility)
+
+    Examples:
+        >>> import jax.numpy as jnp
+        >>> x = jnp.array([0.5, 0.25, 0.25])
+        >>> y = jnp.array([0.0, 0.0])
+        >>> log_det = stick_breaking_log_det_jac(x, y)
+        >>> round(float(log_det), 4)
+        3.4657
+    """
+    z = jax.nn.sigmoid(y)
+    log_z = jnp.log(z)
+    log_one_minus_z = jnp.log1p(-z)
+
+    log_remainder = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(log_one_minus_z)])
+
+    # Forward Jacobian log|det| = - sum_{k=1}^{K-1} (log(z_k) + log(1-z_k) + log_r_k)
+    return -jnp.sum(log_z + log_one_minus_z + log_remainder[:-1])
+
+
+def stick_breaking_bijector():
+    return JaxBijector(stick_breaking_forward, stick_breaking_inverse, stick_breaking_log_det_jac)
+
+
 default_bijector_dict = {
-    ir.Normal: None,
-    ir.NormalPrec: None,
+    ir.Beta: lambda a, b: logit_bijector(),
     ir.Cauchy: None,
+    ir.Dirichlet: lambda a: stick_breaking_bijector(),
     ir.Exponential: lambda a: log_bijector(),
     ir.Gamma: lambda a, b: log_bijector(),
-    ir.StudentT: None,
-    ir.MultiNormal: None,
-    # ir.Dirichlet: lambda a, b: raise NotImplementedError(),
     ir.Lognormal: lambda a, b: log_bijector(),
+    ir.MultiNormal: None,
+    ir.Normal: None,
+    ir.NormalPrec: None,
+    ir.StudentT: None,
     ir.Uniform: lambda a, b: scaled_logit_bijector(a, b),
     ir.Wishart: lambda a, b: unconstrain_spd_bijector(),
-    ir.Beta: lambda a, b: logit_bijector(),
 }

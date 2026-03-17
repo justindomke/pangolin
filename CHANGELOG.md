@@ -1,3 +1,5 @@
+**2026.03.17:** Jax backend and Blackjax interface now support constrained continuous variables (beta, dirichlet, exponential, gamma, lognormal, uniform, wishart)
+
 **2026.03.11:** Rename "autoregressive" to more sensible "scan".
 
 **2026.01.06:** Bump Python requirement to 3.12, make VMap, Composite, Autoregressive generic for your OCD `x: RV[AutoRegressive[Composite[VMap[Normal]]]]` type-hinting pleasure.

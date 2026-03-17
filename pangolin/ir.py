@@ -76,6 +76,7 @@ class Op(ABC):
 
     _frozen = False
     _random: bool | Callable[..., bool]
+    _discrete: bool | Callable[..., bool] | None = None
     _get_shape: Callable[..., Shape]
     _bijectable: bool | Callable[[int], bool] = False
 
@@ -91,6 +92,19 @@ class Op(ABC):
             return self._random()
         else:
             return self._random
+
+    @property
+    def discrete(self) -> bool:
+        """
+        Is this distribution discrete (``True``) or not (``False``)?
+        """
+        if self._discrete is None:
+            raise ValueError(f"Op {self} Cannot call discrete on a non-random op")
+
+        if callable(self._discrete):
+            return self._discrete()
+        else:
+            return self._discrete
 
     def get_shape(self, *parents_shapes: Shape) -> Shape:
         """
@@ -847,6 +861,7 @@ class Sum(Op):
 
 class Normal(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {
         "mu": "location / mean",
         "sigma": "scale / standard deviation",
@@ -855,6 +870,7 @@ class Normal(ScalarOp):
 
 class NormalPrec(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {
         "mu": "location / mean",
         "tau": "precision / inverse variance",
@@ -864,6 +880,7 @@ class NormalPrec(ScalarOp):
 
 class Lognormal(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {
         "mu": "logarithm of location",
         "sigma": "logarithm of scale (not sigma squared!)",
@@ -873,16 +890,19 @@ class Lognormal(ScalarOp):
 
 class Bernoulli(ScalarOp):
     _random = True
+    _discrete = True
     _expected_parents = {"theta": "probability (between 0 and 1)"}
 
 
 class BernoulliLogit(ScalarOp):
     _random = True
+    _discrete = True
     _expected_parents = {"theta": "logit of probability (unbounded)"}
 
 
 class Binomial(ScalarOp):
     _random = True
+    _discrete = True
     _expected_parents = {
         "N": "number of trials",
         "theta": "probability of success for each trial",
@@ -891,27 +911,32 @@ class Binomial(ScalarOp):
 
 class Cauchy(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {"mu": "location", "sigma": "scale"}
 
 
 class Uniform(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {"alpha": "lower bound", "beta": "upper bound"}
     _wikipedia = "Continuous_uniform"
 
 
 class Beta(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {"alpha": "shape", "beta": "shape"}
 
 
 class Exponential(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {"beta": "rate / inverse scale"}
 
 
 class Gamma(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {"alpha": "shape", "beta": "rate / inverse scale"}
     _notes = [
         'This follows `Stan <https://mc-stan.org/docs/functions-reference/positive_continuous_distributions.html#gamma-distribution>`__ in using the "shape/rate" parameterization, *not* the "shape/scale" parameterization.'
@@ -920,11 +945,13 @@ class Gamma(ScalarOp):
 
 class Poisson(ScalarOp):
     _random = True
+    _discrete = True
     _expected_parents = {"lambd": "lambda"}
 
 
 class BetaBinomial(ScalarOp):
     _random = True
+    _discrete = True
     _expected_parents = {
         "N": "as in binomial dist",
         "alpha": "as in beta dist",
@@ -938,6 +965,7 @@ class BetaBinomial(ScalarOp):
 
 class StudentT(ScalarOp):
     _random = True
+    _discrete = False
     _expected_parents = {
         "nu": "degress of freedom",
         "mu": "location (often 0)",
@@ -975,6 +1003,7 @@ class MultiNormal(Op):
     """
 
     _random = True
+    _discrete = False
     _get_shape = _vec_mat_get_shape
 
 
@@ -986,6 +1015,7 @@ class Categorical(Op):
     """
 
     _random = True
+    _discrete = True
 
     def _get_shape(self, weights_shape: Shape) -> Shape:
         """
@@ -1012,6 +1042,7 @@ class Multinomial(Op):
     """
 
     _random = True
+    _discrete = True
 
     def _get_shape(self, n_shape: Shape, p_shape: Shape) -> Shape:
         """
@@ -1036,6 +1067,7 @@ class Dirichlet(Op):
     """
 
     _random = True
+    _discrete = False
 
     def _get_shape(self, concentration_shape: Shape) -> Shape:
         """
@@ -1058,6 +1090,7 @@ class Wishart(Op):
     """
 
     _random = True
+    _discrete = False
 
     def _get_shape(self, nu_shape: Shape, S_shape: Shape) -> Shape:
         """
@@ -1160,6 +1193,13 @@ class VMap[BaseOp: Op](Op):
         """
 
         return self.base_op.random
+
+    def _discrete(self) -> bool:
+        """
+        Equal to ``base_op.discrete``
+        """
+
+        return self.base_op.discrete
 
     # tuple[int | None, ...] means a tuple of int or None of any length
     # list[int | None] means a list of any length (... not appropriate)
@@ -1280,6 +1320,12 @@ class Composite[LastOp: Op](Op):
         """
         return self.ops[-1].random
 
+    def _discrete(self) -> bool:
+        """
+        Equal to ``ops[-1].discrete``
+        """
+        return self.ops[-1].discrete
+
     def _get_shape(self, *parents_shapes: Shape) -> Shape:
         all_shapes = list(parents_shapes)
         for my_op, my_par_nums in zip(self.ops, self.par_nums):
@@ -1351,6 +1397,12 @@ class Scan[O: Op](Op):
         """
 
         return self.base_op.random
+
+    def _discrete(self) -> bool:
+        """
+        Equal to ``self.base_op.discrete``
+        """
+        return self.base_op.discrete
 
     def _get_shape(self, start_shape: Shape, *other_shapes: Shape) -> Shape:
         base_input_shapes = []
@@ -1617,6 +1669,7 @@ class Bijector(Op):
     # TODO: Maybe someday this should accept functions like forward_and_log_det
 
     _random = False
+    _discrete = False
 
     def __init__(self, forward: Op, inverse: Op, log_det_jac: Op, n_biject_params: int = 0):
         if forward.random:
