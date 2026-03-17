@@ -22,9 +22,9 @@ interface Module
 
 .. autofunction:: pangolin.interface.override
 
-.. autodata:: pangolin.interface.Autoregressable
+.. autodata:: pangolin.interface.Scannable
 
-.. autodata:: pangolin.interface.Autoregressed
+.. autodata:: pangolin.interface.Scanned
 
 Sub-Packages
 ------------
