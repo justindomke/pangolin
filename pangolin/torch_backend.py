@@ -600,8 +600,8 @@ def sample_transformed[O: Op, B: ir.Bijector](op: ir.Transformed[O, B], parent_v
     assert op.random
     assert op.base_op.random
 
-    bijector_args = tuple(parent_values[: op.n_biject_args])
-    dist_args = parent_values[op.n_biject_args :]
+    bijector_args = tuple(parent_values[: op.bijector.n_biject_params])
+    dist_args = parent_values[op.bijector.n_biject_params :]
 
     x = sample_op(op.base_op, dist_args)
     y = eval_op(op.bijector.forward, (x,) + bijector_args)
@@ -618,8 +618,8 @@ def log_prob_transformed[O: Op, B: ir.Bijector](
     assert op.random
     assert op.base_op.random
 
-    bijector_args = tuple(parent_values[: op.n_biject_args])
-    dist_args = parent_values[op.n_biject_args :]
+    bijector_args = tuple(parent_values[: op.bijector.n_biject_params])
+    dist_args = parent_values[op.bijector.n_biject_params :]
 
     x = eval_op(op.bijector.inverse, (y,) + bijector_args)
     log_px = log_prob_op(op.base_op, x, dist_args)
