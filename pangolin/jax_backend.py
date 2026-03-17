@@ -19,7 +19,7 @@ from pangolin import dag, util
 from jaxtyping import PyTree
 from jax.typing import ArrayLike
 
- __all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
+__all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 
 ################################################################################
 # Dict of Ops that correspond to simple functions
