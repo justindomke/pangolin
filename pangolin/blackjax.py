@@ -33,7 +33,7 @@ from jaxtyping import PyTree
 
 __all__ = ["sample", "E", "var", "std", "Calculate", "inf_until_match"]
 
-from pangolin.jax_backend import default_bijector_dict
+from pangolin.jax_backend.bijectors import default_bijector_dict
 
 
 def inference_loop(rng_key, kernel, initial_states, num_samples):

@@ -8,23 +8,15 @@ from pangolin import ir
 jax.config.update("jax_enable_x64", True)
 
 from pangolin.jax_backend import (
-    log_diagonal_bijector,
-    log_prob_op,
+    bijectors,
     sample_op,
-    eval_op,
-    constrain_op,
-    log_bijector,
-    scaled_logit_bijector,
-    cholesky_bijector,
-    unconstrain_spd_bijector,
-    logit_bijector,
-    compose_jax_bijectors,
-    unconstrained_log_prob_op,
     unconstrained_sample_op,
-    default_bijector_dict,
+    constrain_op,
+    log_prob_op,
+    unconstrained_log_prob_op,
 )
 
-bijector_dict = default_bijector_dict
+bijector_dict = bijectors.default_bijector_dict
 
 
 def _test_op(op, parent_values):

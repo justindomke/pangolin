@@ -7,19 +7,7 @@ import numpy as np
 # Enable float64 for highly precise exact Jacobian testing
 jax.config.update("jax_enable_x64", True)
 
-from pangolin.jax_backend import (
-    exp_bijector,
-    log_bijector,
-    logit_bijector,
-    inv_logit_bijector,
-    scaled_logit_bijector,
-    fill_tril_bijector,
-    extract_tril_bijector,
-    exp_diagonal_bijector,
-    log_diagonal_bijector,
-    cholesky_bijector,
-    unconstrain_spd_bijector,
-)
+from pangolin.jax_backend import bijectors
 
 # ==========================================
 # Helpers for structured Matrix Jacobians
@@ -101,37 +89,37 @@ def check_bijector(
 
 def test_exp():
     x = jnp.array(2.5)
-    bijector = exp_bijector()
+    bijector = bijectors.exp()
     check_bijector(bijector, x)
 
 
 def test_log():
     x = jnp.array(2.5)  # Must be strictly positive
-    bijector = log_bijector()
+    bijector = bijectors.log()
     check_bijector(bijector, x)
 
 
 def test_logit():
     x = jnp.array(0.75)  # Must be in (0, 1)
-    bijector = logit_bijector()
+    bijector = bijectors.logit()
     check_bijector(bijector, x)
 
 
 def test_inv_logit():
     y = jnp.array(1.5)
-    bijector = inv_logit_bijector()
+    bijector = bijectors.inv_logit()
     check_bijector(bijector, y)
 
 
 def test_scaled_logit():
     x = jnp.array(4.0)
-    bijector = scaled_logit_bijector(1.0, 5.0)
+    bijector = bijectors.scaled_logit(1.0, 5.0)
     check_bijector(bijector, x)
 
 
 def test_fill_tril():
     x = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    bijector = fill_tril_bijector()
+    bijector = bijectors.fill_tril()
     check_bijector(
         bijector,
         x,
@@ -143,7 +131,7 @@ def test_fill_tril():
 
 def test_extract_tril():
     X = jnp.array([[1.0, 0.0, 0.0], [2.0, 3.0, 0.0], [4.0, 5.0, 6.0]])
-    bijector = extract_tril_bijector()
+    bijector = bijectors.extract_tril()
     check_bijector(
         bijector,
         X,
@@ -155,7 +143,7 @@ def test_extract_tril():
 
 def test_exp_diagonal():
     X = jnp.array([[1.0, 0.0, 0.0], [2.0, 3.0, 0.0], [4.0, 5.0, 6.0]])
-    bijector = exp_diagonal_bijector()
+    bijector = bijectors.exp_diagonal()
     check_bijector(
         bijector,
         X,
@@ -168,7 +156,7 @@ def test_exp_diagonal():
 def test_log_diagonal():
     # Diagonal must be strictly positive for log
     X = jnp.array([[1.0, 0.0, 0.0], [-2.0, 3.0, 0.0], [-4.0, 5.0, 6.0]])
-    bijector = log_diagonal_bijector()
+    bijector = bijectors.log_diagonal()
     check_bijector(bijector, X, free_x_fn=extract_tril, free_y_fn=extract_tril, reconstruct_x_fn=reconstruct_tril)
 
 
@@ -176,7 +164,7 @@ def test_cholesky():
     # Construct a strictly positive-definite matrix
     L = jnp.array([[2.0, 0.0, 0.0], [0.5, 2.0, 0.0], [-0.5, 0.5, 2.0]])
     X_spd = L @ L.T
-    bijector = cholesky_bijector()
+    bijector = bijectors.cholesky()
 
     check_bijector(
         bijector,
@@ -191,7 +179,7 @@ def test_unconstrain_spd():
     # Construct a strictly positive-definite matrix
     L = jnp.array([[2.0, 0.0, 0.0], [0.5, 2.0, 0.0], [-0.5, 0.5, 2.0]])
     X_spd = L @ L.T
-    bijector = unconstrain_spd_bijector()
+    bijector = bijectors.spd_to_unconstrained()
 
     check_bijector(
         bijector,

@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath("../../pangolin/"))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "Pangolin"
-copyright = "2025, Justin Domke"
+copyright = "2022-2206, Justin Domke"
 author = "Justin Domke"
 release = "0.0.1"
 
