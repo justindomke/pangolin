@@ -1,4 +1,4 @@
-**2026.03.17:** Jax backend and Blackjax interface now support constrained continuous variables (beta, dirichlet, exponential, gamma, lognormal, uniform, wishart)
+**2026.03.17:** Jax backend and blackjax now support auto-constrained continuous variables
 
 **2026.03.11:** Rename "autoregressive" to more sensible "scan".
 
