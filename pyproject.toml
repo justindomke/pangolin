@@ -25,6 +25,9 @@ dev = [
     "pytest-timeout",
     "arviz",
     "ty",
+    "ipykernel",
+    "seaborn",
+    "ipywidgets",
 ]
 docs = [
     "sphinx",
