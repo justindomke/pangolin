@@ -151,7 +151,7 @@ class SimpleHandler(Handler):
     def unconstrained_sample(self, op, key, parent_values, bijector_dict):
         bound_dist: dist.Distribution = self.bind(*parent_values)
         x: JaxArray = bound_dist.sample(key)  # type: ignore[arg-type]
-        if bijector_dict[self.op_class] is None:
+        if op.discrete or bijector_dict[self.op_class] is None:
             y = x
         else:
             bijector = bijector_dict[self.op_class](*parent_values)
@@ -165,7 +165,7 @@ class SimpleHandler(Handler):
 
     def unconstrained_log_prob(self, op, y, parent_values, bijector_dict):
         bound_dist: dist.Distribution = self.bind(*parent_values)
-        if bijector_dict[self.op_class] is None:
+        if op.discrete or bijector_dict[self.op_class] is None:
             x = y
             l: JaxArray = bound_dist.log_prob(x)  # type: ignore
         else:
