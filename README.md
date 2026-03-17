@@ -80,6 +80,8 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 * [timeseries.ipynb](demos/timeseries.ipynb) is a simple timeseries model.
 * [scan.ipynb](demos/scan.ipynb) is a Kalman-filter-esque model.
 * [GP-regression.ipynb](demos/GP-regression.ipynb) is Gaussian Process regression.
+* [1PL.ipynb](demos/1PL.ipynb) is a simple item-response-theory model.
+* [2PL.ipynb](demos/2PL.ipynb) is a slightly more complex item-response-theory model.
 
 ## Values
 
