@@ -194,7 +194,7 @@ def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Co
 
 
 def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
-    """Turn a function into a new function that returns a single Composite RV. Typically this would be used to create autoregressive distributions via the `autoregressive` function, rather than called directly by the user.
+    """Turn a function into a new function that returns a single Composite RV. Typically this would be used to create scan distributions via the `scan` function, rather than called directly by the user.
 
     Parameters
     ----------
