@@ -85,7 +85,11 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 
 ## Comparison to other PPLs
 
-<details name="bb" markdown="1">
+Here are a few complete models, implemented in various PPLs.
+
+**Beta-binomial model.**
+
+<details markdown="1">
 <summary>
 Data / setup
 </summary>
@@ -103,7 +107,7 @@ print(f"Generated {x_obs.sum()} heads out of {N} flips ({z_true=})")
 ```
 </details>
 
-<details name="bb" markdown="1">
+<details markdown="1">
 <summary>
 Pangolin
 </summary>
@@ -116,7 +120,7 @@ z = pi.beta(2,2)
 x = pi.vmap(pi.bernoulli, None, N)(z)
 z_samps = pangolin.blackjax.sample(z, x, x_obs)
 
-print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))```
+print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))
 ```
 
 </details>
