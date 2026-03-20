@@ -1,6 +1,6 @@
 ![pangolin](pangolin-logo.png)
 
-Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is still something of an early-stage research project.
+Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is still something of a research project.
 
 ## Installation
 
@@ -14,11 +14,11 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
-## Examples and comparisons to other PPLs
+## Examples and comparisons
 
 ### Simple "probabilistic calculator"
 
-If `z ~ normal(0,2)` and `x ~ normal(0,6)` then what is `E[z | x=-10]`?
+If `z ~ normal(0,2)` and `x ~ normal(0,6)` then what is `E[z | x = -10]`?
 
 ```python
 from pangolin import interface as pi
@@ -29,7 +29,7 @@ x = pi.normal(x,6)
 print(E(z, x, -10.0))
 ```
 
-Here is the same model in other PPLs. See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb) 
+Here is the same model in other PPLs. (Or see [calculator-ppls.ipynb](demos/calculator-ppls.ipynb).)
 
 <details markdown="1" name="calculator">
 <summary>PyMC</summary>
@@ -42,7 +42,7 @@ with pm.Model():
     x = pm.Normal('x', z, 6, observed=-10)
     trace = pm.sample(chains=1)
     z_samps = trace.posterior['z'].values
-    E_z = np.mean(z_samps)
+    print(np.mean(z_samps))
 ```
 
 </details>
@@ -63,7 +63,7 @@ nuts_kernel = pyro.infer.mcmc.NUTS(model)
 mcmc = pyro.infer.mcmc.MCMC(nuts_kernel, warmup_steps=500, num_samples=1000, num_chains=1)
 mcmc.run()
 z_samps = mcmc.get_samples()['z'].numpy()
-E_z = np.mean(z_samps)
+print(np.mean(z_samps))
 ```
 
 </details>
@@ -85,7 +85,7 @@ nuts_kernel = numpyro.infer.NUTS(model)
 mcmc = numpyro.infer.MCMC(nuts_kernel, num_warmup=500, num_samples=1000, num_chains=1)
 mcmc.run(jax.random.PRNGKey(42))
 z_samps = mcmc.get_samples()['z']
-E_z = np.mean(z_samps)
+print(np.mean(z_samps))
 ```
 
 </details>
@@ -113,7 +113,7 @@ model = pyjags.Model(
 
 samples = model.sample(1000, ['z'])
 z_samps = samples['z'].flatten()
-E_z = np.mean(z_samps)
+print(np.mean(z_samps))
 ```
 
 </details>
@@ -154,11 +154,176 @@ with tempfile.TemporaryDirectory() as tmpdir:
     )
     z_samps = fit.stan_variable('z')
 
-    E_z = np.mean(z_samps)
-
+    print(np.mean(z_samps))
 ```
 
 </details>
+
+### Beta-Bernoulli model
+
+This is basically the simplest Bayesian model. If you've seen a bunch of coinflips from a bent coin, what is the true bias?
+
+To start, generate synthetic data.
+
+```python
+import numpy as np
+
+z_true = 0.7                             # True probability of heads
+N = 100                                  # Number of flips
+x_obs = np.random.binomial(1, z_true, N) # Synthetic data
+```
+
+Then in Pangolin you can do inference this way:
+
+```python
+import pangolin
+from pangolin import interface as pi
+
+z = pi.beta(2,2)
+x = pi.vmap(pi.bernoulli, None, N)(z)
+z_samps = pangolin.blackjax.sample(z, x, x_obs)
+
+print(np.mean(z_samps), np.std(z_samps))
+```
+
+Here is the same model in other PPLs. (Or see [beta-bernoulli-ppls.ipynb](demos/beta_bernoulli-ppls.ipynb).)
+
+
+<details markdown="1" name="bb">
+<summary>PyMC</summary>
+
+```python
+import pymc as pm
+
+with pm.Model() as coin_model:
+    z = pm.Beta('z', alpha=2, beta=2)
+    x = pm.Bernoulli('x', z, observed=x_obs)
+    trace = pm.sample(chains=1)
+    z_samps = trace.posterior['z'].values
+    print(np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
+
+<details markdown="1" name="bb">
+<summary>Pyro</summary>
+
+```python
+import pyro
+import torch
+
+x_obs_torch = torch.tensor(x_obs, dtype=torch.float)
+
+def model():
+    z = pyro.sample('z', pyro.distributions.Beta(2.0, 2.0))
+    with pyro.plate('N', N):
+        x = pyro.sample('x', pyro.distributions.Bernoulli(z), obs=x_obs_torch)
+
+nuts_kernel = pyro.infer.mcmc.NUTS(model)
+mcmc = pyro.infer.mcmc.MCMC(nuts_kernel, warmup_steps=500, num_samples=1000, num_chains=1)
+mcmc.run()
+z_samps = mcmc.get_samples()['z'].numpy()
+print(np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
+
+<details markdown="1" name="bb">
+<summary>NumPyro</summary>
+
+```python
+import numpyro
+import jax
+import jax.numpy as jnp
+
+def model():
+    z = numpyro.sample('z', numpyro.distributions.Beta(2.0, 2.0))
+    with numpyro.plate('data', N):
+        x = numpyro.sample('x', numpyro.distributions.Bernoulli(z), obs=x_obs)
+
+nuts_kernel = numpyro.infer.NUTS(model)
+mcmc = numpyro.infer.MCMC(nuts_kernel, num_warmup=500, num_samples=1000, num_chains=1)
+mcmc.run(jax.random.PRNGKey(42))
+z_samps = mcmc.get_samples()['z']
+print(np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
+
+<details markdown="1" name="bb">
+<summary>JAGS</summary>
+
+```python
+import pyjags
+
+model_code = """
+model {
+  z ~ dbeta(2, 2)
+  for (i in 1:N) {
+    x[i] ~ dbern(z)
+  }
+}
+"""
+
+model = pyjags.Model(
+    code=model_code,
+    data={'N': N, 'x': x_obs.tolist()},
+    chains=1,
+    adapt=500
+)
+
+samples = model.sample(1000, ['z'])
+z_samps = samples['z'].flatten()
+print(np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
+
+<details markdown="1" name="bb">
+<summary>Stan</summary>
+
+```python
+import cmdstanpy
+import tempfile
+from pathlib import Path
+
+stan_code = """
+data {
+  int<lower=0> N;
+  array[N] int<lower=0, upper=1> x;
+}
+parameters {
+  real<lower=0, upper=1> z;
+}
+model {
+  z ~ beta(2, 2);
+  x ~ bernoulli(z);
+}
+"""
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    stan_file = Path(tmpdir) / "coin_model.stan"
+    stan_file.write_text(stan_code)
+
+    model = cmdstanpy.CmdStanModel(stan_file=str(stan_file))
+
+    fit = model.sample(
+        data={'N': N, 'x': x_obs},
+        chains=1,
+        iter_warmup=500,
+        iter_sampling=1000,
+        seed=42
+    )
+    z_samps = fit.stan_variable('z')
+    print(np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
 
 ### Eight-schools
 
