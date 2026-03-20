@@ -24,7 +24,7 @@ from pangolin.blackjax import E
 
 x = pi.normal(0,2) # x ~ normal(0,2)
 y = pi.normal(x,6) # y ~ normal(x,6)
-print(E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
+print(E(x,y,-2.0)) # E[x|y=-10] (close to -1.0)
 ```
 
 For comparison, here is how this would be implemented in other PPLs.
@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 </details>
 
-See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb.ipynb) 
+See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb) 
 
 ### Eight-schools
 
