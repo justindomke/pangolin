@@ -117,6 +117,8 @@ x = pi.vmap(pi.bernoulli, None, N)(z)
 z_samps = pangolin.blackjax.sample(z, x, x_obs)
 
 print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))```
+```
+
 </details>
 
 ## Values
