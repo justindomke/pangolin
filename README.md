@@ -87,7 +87,7 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 
 Here are a few complete models, implemented in various PPLs.
 
-**Beta-binomial model.**
+### Beta-binomial model
 
 <details markdown="1">
 <summary>
@@ -97,13 +97,9 @@ Data / setup
 ```python
 import numpy as np
 
-np.random.seed(42)
-z_true = 0.7  # True probability of heads
-N = 100       # Number of flips
-
-# Generate synthetic observations
+z_true = 0.7
+N = 100
 x_obs = np.random.binomial(1, z_true, N)
-print(f"Generated {x_obs.sum()} heads out of {N} flips ({z_true=})")
 ```
 </details>
 
@@ -124,6 +120,168 @@ print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))
 ```
 
 </details>
+
+<details markdown="1">
+<summary>PyMC</summary>
+
+```python
+import pymc as pm
+
+with pm.Model() as coin_model:
+    z = pm.Beta('z', alpha=2, beta=2)
+    x = pm.Bernoulli('x', z, observed=x_obs)
+    trace = pm.sample(chains=1)
+    z_samps = trace.posterior['z'].values
+
+print(f"Posterior mean & std: {np.mean(z_samps)} {np.std(z_samps)}")
+```
+
+</details>
+
+
+<details markdown="1">
+<summary>Pyro</summary>
+
+```python
+import pyro
+import torch
+
+x_obs_torch = torch.tensor(x_obs, dtype=torch.float)
+
+def model():
+    z = pyro.sample('z', pyro.distributions.Beta(2.0, 2.0))
+    with pyro.plate('N', N):
+        pyro.sample('x', pyro.distributions.Bernoulli(z), obs=x_obs_torch)
+
+nuts_kernel = pyro.infer.mcmc.NUTS(model)
+mcmc = pyro.infer.mcmc.MCMC(nuts_kernel, warmup_steps=500, num_samples=1000, num_chains=1)
+mcmc.run()
+z_samps = mcmc.get_samples()['z'].numpy()
+
+print(f"Posterior mean & std: {np.mean(z_samps)} {np.std(z_samps)}")
+```
+
+</details>
+
+<details markdown="1">
+<summary>NumPyro </summary>
+
+```python
+import numpyro
+numpyro.set_host_device_count(4)
+import jax
+import jax.numpy as jnp
+
+def model():
+    z = numpyro.sample('z', numpyro.distributions.Beta(2.0, 2.0))
+    with numpyro.plate('data', N):
+        numpyro.sample('x', numpyro.distributions.Bernoulli(z), obs=x_obs)
+
+nuts_kernel = numpyro.infer.NUTS(model)
+mcmc = numpyro.infer.MCMC(nuts_kernel, num_warmup=500, num_samples=1000, num_chains=1)
+mcmc.run(jax.random.PRNGKey(42))
+z_samps = mcmc.get_samples()['z']
+
+print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))
+```
+
+</details>
+
+<details markdown="1">
+<summary>JAGS</summary>
+
+```python
+import pyjags
+
+model_code = """
+model {
+  z ~ dbeta(2, 2)
+  for (i in 1:N) {
+    x[i] ~ dbern(z)
+  }
+}
+"""
+
+model = pyjags.Model(
+    code=model_code,
+    data={'N': N, 'x': x_obs.tolist()},
+    chains=1,
+    adapt=500
+)
+
+samples = model.sample(1000, ['z'])
+z_samp = samples['z'].flatten()
+
+print(f"Posterior mean & std:", np.mean(z_samp), np.std(z_samp))
+```
+
+</details>
+
+
+<details markdown="1">
+<summary>Stan</summary>
+
+```python
+import cmdstanpy
+import tempfile
+from pathlib import Path
+
+stan_code = """
+data {
+  int<lower=0> N;
+  array[N] int<lower=0, upper=1> x;
+}
+parameters {
+  real<lower=0, upper=1> z;
+}
+model {
+  z ~ beta(2, 2);
+  x ~ bernoulli(z);
+}
+"""
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    stan_file = Path(tmpdir) / "coin_model.stan"
+    stan_file.write_text(stan_code)
+
+    model = cmdstanpy.CmdStanModel(stan_file=str(stan_file))
+
+    fit = model.sample(
+        data={'N': N, 'x': x_obs},
+        chains=1,
+        iter_warmup=500,
+        iter_sampling=1000,
+        seed=42
+    )
+    z_samps = fit.stan_variable('z')
+
+    print(f"Posterior mean & std:", np.mean(samps), np.std(samps))
+```
+
+</details>
+
+
+<details markdown="1">
+<summary> </summary>
+
+```python
+
+```
+
+</details>
+
+
+<details markdown="1">
+<summary> </summary>
+
+```python
+
+```
+
+</details>
+
+
+
 
 ## Values
 
