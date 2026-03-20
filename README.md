@@ -83,6 +83,42 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 * [1PL.ipynb](demos/1PL.ipynb) is a simple item-response-theory model.
 * [2PL.ipynb](demos/2PL.ipynb) is a slightly more complex item-response-theory model.
 
+## Comparison to other PPLs
+
+<details name="bb" markdown="1">
+<summary>
+Data / setup
+</summary>
+
+```python
+import numpy as np
+
+np.random.seed(42)
+z_true = 0.7  # True probability of heads
+N = 100       # Number of flips
+
+# Generate synthetic observations
+x_obs = np.random.binomial(1, z_true, N)
+print(f"Generated {x_obs.sum()} heads out of {N} flips ({z_true=})")
+```
+</details>
+
+<details name="bb" markdown="1">
+<summary>
+Pangolin
+</summary>
+
+```python
+import pangolin
+from pangolin import interface as pi
+
+z = pi.beta(2,2)
+x = pi.vmap(pi.bernoulli, None, N)(z)
+z_samps = pangolin.blackjax.sample(z, x, x_obs)
+
+print(f"Posterior mean & std:", np.mean(z_samps), np.std(z_samps))```
+</details>
+
 ## Values
 
 (For the current Python interface)
