@@ -352,7 +352,7 @@ plt.ylabel('treatment effect')
 
 Here is the same model in other PPLs. (Or see [eight-schools-ppls.ipynb](demos/eight-schools-ppls.ipynb).)
 
-<details markdown="1">
+<details markdown="1" name="8schools">
 <summary>PyMC</summary>
 
 ```python
@@ -370,7 +370,7 @@ with pm.Model():
 
 </details>
 
-<details markdown="1">
+<details markdown="1" name="8schools">
 <summary>Pyro</summary>
 
 ```python
@@ -396,7 +396,7 @@ z_samps = mcmc.get_samples()['z'].numpy()
 </details>
 
 
-<details markdown="1">
+<details markdown="1" name="8schools">
 <summary>NumPyro</summary>
 
 ```python
@@ -421,7 +421,7 @@ z_samps = mcmc.get_samples()['z']
 
 </details>
 
-<details markdown="1">
+<details markdown="1" name="8schools">
 <summary>JAGS</summary>
 
 ```python
@@ -451,7 +451,7 @@ z_samps = np.array(samples['z'])[:,:,0].T
 
 </details>
 
-<details markdown="1">
+<details markdown="1" name="8schools">
 <summary>Stan</summary>
 
 ```python
