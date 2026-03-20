@@ -324,22 +324,22 @@ with tempfile.TemporaryDirectory() as tmpdir:
 Bayesian inference on the 8-schools model:
 
 ```python
+# setup
 import numpy as np
-
 N = 8
 stddevs = np.array([15, 10, 16, 11, 9, 11, 10, 18])
 x_obs = np.array([28, 8, -3, 7, -1, 1, 18, 12])
 
+# inference
 import pangolin
 from pangolin import interface as pi
-
 mu = pi.normal(0,10)
 tau = pi.lognormal(0,5)
 z = pi.vmap(pi.normal, None, N)(mu, tau)
 x = pi.vmap(pi.normal)(z, stddevs)
 z_samps = pangolin.blackjax.sample(z, x, x_obs, niter=10000)
 
-# plot results (no pangolin here!)
+# plot
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
