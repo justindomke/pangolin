@@ -16,7 +16,7 @@ See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
 ## Examples
 
-Simple "probabilistic calculator":
+### Simple "probabilistic calculator"
 
 ```python
 from pangolin import interface as pi
@@ -26,6 +26,140 @@ x = pi.normal(0,2) # x ~ normal(0,2)
 y = pi.normal(x,6) # y ~ normal(x,6)
 print(E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
+
+For comparison, here is how this would be implemented in other PPLs. (Or see [calculator-ppls.ipynb](demos/calculator-ppls.ipynb.ipynb).)
+
+<details markdown="1">
+<summary>PyMC</summary>
+
+```python
+import pymc as pm
+
+with pm.Model() as coin_model:
+    z = pm.Normal('z', 0, 2)
+    x = pm.Normal('x', z, 6, observed=-10)
+    trace = pm.sample(chains=1)
+    z_samps = trace.posterior['z'].values
+
+E_z = np.mean(z_samps)
+```
+
+</details>
+
+
+<details markdown="1">
+<summary>Pyro</summary>
+
+```python
+import pyro
+import torch
+
+def model():
+    z = pyro.sample('z', pyro.distributions.Normal(0, 2))
+    x = pyro.sample('x', pyro.distributions.Normal(z, 6), obs=torch.tensor(-10.0))
+
+nuts_kernel = pyro.infer.mcmc.NUTS(model)
+mcmc = pyro.infer.mcmc.MCMC(nuts_kernel, warmup_steps=500, num_samples=1000, num_chains=1)
+mcmc.run()
+z_samps = mcmc.get_samples()['z'].numpy()
+E_z = np.mean(z_samps)
+```
+
+</details>
+
+
+<details markdown="1">
+<summary>NumPyro</summary>
+
+```python
+import numpyro
+import jax
+import jax.numpy as jnp
+
+def model():
+    z = numpyro.sample('z', numpyro.distributions.Normal(0, 2))
+    x = numpyro.sample('x', numpyro.distributions.Normal(z, 6), obs=-10)
+
+nuts_kernel = numpyro.infer.NUTS(model)
+mcmc = numpyro.infer.MCMC(nuts_kernel, num_warmup=500, num_samples=1000, num_chains=1)
+mcmc.run(jax.random.PRNGKey(42))
+z_samps = mcmc.get_samples()['z']
+E_z = np.mean(z_samps)
+```
+
+</details>
+
+
+<details markdown="1">
+<summary>JAGS</summary>
+
+```python
+import pyjags
+
+model_code = """
+model {
+  z ~ dnorm(0, 1/2^2)
+  x ~ dnorm(z, 1/6^2)
+}
+"""
+
+model = pyjags.Model(
+    code=model_code,
+    data={'x': -10},
+    chains=1,
+    adapt=500
+)
+
+samples = model.sample(1000, ['z'])
+z_samps = samples['z'].flatten()
+E_z = np.mean(z_samps)
+```
+
+</details>
+
+<details markdown="1">
+<summary>Stan</summary>
+
+```python
+import cmdstanpy
+import tempfile
+from pathlib import Path
+
+stan_code = """
+data {
+  real x;
+}
+parameters {
+  real z;
+}
+model {
+  z ~ normal(0, 2);
+  x ~ normal(z, 6);
+}
+"""
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    stan_file = Path(tmpdir) / "calculator_model.stan"
+    stan_file.write_text(stan_code)
+
+    model = cmdstanpy.CmdStanModel(stan_file=str(stan_file))
+
+    fit = model.sample(
+        data={'x': -10.0},
+        chains=1,
+        iter_warmup=500,
+        iter_sampling=1000,
+        seed=42
+    )
+    z_samps = fit.stan_variable('z')
+
+    E_z = np.mean(z_samps)
+
+```
+
+</details>
+
+
 
 Bayesian inference on the 8-schools model:
 
@@ -151,7 +285,7 @@ x_obs_torch = torch.tensor(x_obs, dtype=torch.float)
 def model():
     z = pyro.sample('z', pyro.distributions.Beta(2.0, 2.0))
     with pyro.plate('N', N):
-        pyro.sample('x', pyro.distributions.Bernoulli(z), obs=x_obs_torch)
+        x = pyro.sample('x', pyro.distributions.Bernoulli(z), obs=x_obs_torch)
 
 nuts_kernel = pyro.infer.mcmc.NUTS(model)
 mcmc = pyro.infer.mcmc.MCMC(nuts_kernel, warmup_steps=500, num_samples=1000, num_chains=1)
@@ -175,7 +309,7 @@ import jax.numpy as jnp
 def model():
     z = numpyro.sample('z', numpyro.distributions.Beta(2.0, 2.0))
     with numpyro.plate('data', N):
-        numpyro.sample('x', numpyro.distributions.Bernoulli(z), obs=x_obs)
+        x = numpyro.sample('x', numpyro.distributions.Bernoulli(z), obs=x_obs)
 
 nuts_kernel = numpyro.infer.NUTS(model)
 mcmc = numpyro.infer.MCMC(nuts_kernel, num_warmup=500, num_samples=1000, num_chains=1)
