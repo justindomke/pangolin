@@ -27,27 +27,26 @@ y = pi.normal(x,6) # y ~ normal(x,6)
 print(E(x,y,-2.0)) # E[x|y=-2] (close to -0.2)
 ```
 
-For comparison, here is how this would be implemented in other PPLs. (Or see [calculator-ppls.ipynb](demos/calculator-ppls.ipynb.ipynb).)
+For comparison, here is how this would be implemented in other PPLs.
 
-<details markdown="1">
+<details markdown="1" name="calculator">
 <summary>PyMC</summary>
 
 ```python
 import pymc as pm
 
-with pm.Model() as coin_model:
+with pm.Model():
     z = pm.Normal('z', 0, 2)
     x = pm.Normal('x', z, 6, observed=-10)
     trace = pm.sample(chains=1)
     z_samps = trace.posterior['z'].values
-
-E_z = np.mean(z_samps)
+    E_z = np.mean(z_samps)
 ```
 
 </details>
 
 
-<details markdown="1">
+<details markdown="1" name="calculator">
 <summary>Pyro</summary>
 
 ```python
@@ -68,7 +67,7 @@ E_z = np.mean(z_samps)
 </details>
 
 
-<details markdown="1">
+<details markdown="1" name="calculator">
 <summary>NumPyro</summary>
 
 ```python
@@ -90,7 +89,7 @@ E_z = np.mean(z_samps)
 </details>
 
 
-<details markdown="1">
+<details markdown="1" name="calculator">
 <summary>JAGS</summary>
 
 ```python
@@ -117,7 +116,7 @@ E_z = np.mean(z_samps)
 
 </details>
 
-<details markdown="1">
+<details markdown="1" name="calculator">
 <summary>Stan</summary>
 
 ```python
@@ -159,6 +158,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 </details>
 
+See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb.ipynb) 
+
+### Eight-schools
 
 
 Bayesian inference on the 8-schools model:
