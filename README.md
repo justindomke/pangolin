@@ -14,20 +14,22 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
-## Examples
+## Examples and comparisons to other PPLs
 
 ### Simple "probabilistic calculator"
+
+If `z ~ normal(0,2)` and `x ~ normal(0,6)` then what is `E[z | x=-10]`?
 
 ```python
 from pangolin import interface as pi
 from pangolin.blackjax import E
 
-x = pi.normal(0,2) # x ~ normal(0,2)
-y = pi.normal(x,6) # y ~ normal(x,6)
-print(E(x,y,-2.0)) # E[x|y=-10] (close to -1.0)
+z = pi.normal(0,2)
+x = pi.normal(x,6)
+print(E(z, x, -10.0))
 ```
 
-For comparison, here is how this would be implemented in other PPLs.
+Here is the same model in other PPLs. See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb) 
 
 <details markdown="1" name="calculator">
 <summary>PyMC</summary>
@@ -157,8 +159,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
 ```
 
 </details>
-
-See also: [calculator-ppls.ipynb](demos/calculator-ppls.ipynb) 
 
 ### Eight-schools
 
