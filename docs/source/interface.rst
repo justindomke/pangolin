@@ -25,11 +25,3 @@ interface
 .. autodata:: pangolin.interface.Scannable
 
 .. autodata:: pangolin.interface.Scanned
-
-Sub-Packages
-------------
-
-.. toctree::
-   :maxdepth: 1
-
-   transforming
