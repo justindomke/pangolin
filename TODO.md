@@ -6,6 +6,8 @@
 
 * Add softplus et al.
 
+* Simplify interface.Transform
+
 # After 0.0.1
 
 * Use __slots__ on RV / Op
