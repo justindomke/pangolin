@@ -20,24 +20,23 @@ At a high level, Pangolin has two goals:
 
 1. To make things simple for end users who just want to do inference.
 
-2. To make things simple for *researchers* who want to develop new inference algorithms, develop new ways of specifying probabilistic models, share models between different backends (JAX / PyTorch), share backends written in different languages between interfaces written in different languages, etc. 
-etc.
+2. To make things simple for *researchers* who want to develop new inference algorithms, develop new ways of specifying probabilistic models, share models between different backends (JAX / PyTorch), benchmark inference algorithms written in different languages, etc.
 
 ## Why (for end users)?
 
-For end-users, Pangolin provides an interface that is simple and explicit and tries to avoid some of the complexities of modern PPLs. In particular:
+For end-users, Pangolin tries to provide an interface that is simple and explicit. In particular:
 
 * **Gradual enhancement.** Easy things should be *really* easy. More complex features should be easy to discover. Steep learning curves should be avoided.
 
 * **Small API surface.** The set of abstractions the user needs to learn should be as small as possible. 
 
-* **Explicitness.** Many modern PPLs lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by JAX. If you see `x = vmap(normal, [0, None])(a, b)` that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* a one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index), so if you see `u = z[x,y]` then you know that `u.ndim = x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
+* **Explicitness.** Many modern PPLs (e.g. Pyro / NumPyro / PyMC / Orxy) lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by [`jax.vmap`](https://docs.jax.dev/en/latest/_autosummary/jax.vmap.html). If you see `x = vmap(normal, [0, None])(a, b)` that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* be one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index). If you see `u = z[x,y]` then you know that `z.ndim == 2` and `u.ndim == x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
 
 * **Graceful interop.** As much as possible, the system should feel like a natural part of the broader ecosystem, rather than a "new language". In particular, Pangolin tries to avoid several oddities common in other modern PPLs:
 
-  * No "sample" statements or no string labels for variables. In Pyro or NumPyro you write `z = sample('z', Normal(0, 1))`. In Pangolin you just write `z = normal(0,1)`. If you want to refer to that variable later you just use a reference to the resulting `RV` object.
+  * No "sample" statements or string labels. In Pyro or NumPyro you write `z = sample('z', Normal(0, 1))`. In Pangolin you just write `z = normal(0,1)`. If you want to refer to `z` later, you use a reference to the resulting `RV` object, e.g. by writing `E(z)` to get the expected value of `z`. You can organize random variables into (recursive) lists or tuples or dictionaries however you want. For example, if `x` `y`, and `z` are scalar `RV`s, then `E([x, {'alice': y, 'bob': z}])` will return a list where the first element is a float, and the second element is a dictionary with keys `'alice'` and `'bob'`, each of which map to a float.
 
-  * No attaching data to random variables with "obs" statements. In Pyro or NumPyro or PyMC, if a random variable `x` is observed, you need to write something like `x = sample('x', Normal(z, 1), obs=x_obs)`. In Pangolin, you always just write `x = normal(z, 1)`. You decide if you want to condition on `z` at the inference stage, e.g. by using `E(z)` to estimate the expected value of `z` or `E(z, x, x_obs)` to do it conditioning on `x=x_obs`. This is how it works in math, after all.
+  * No attaching data to random variables with "obs" statements. In Pyro or NumPyro or PyMC, if a random variable `x` is observed, you need to write something like `x = sample('x', Normal(z, 1), obs=x_obs)`. In Pangolin, you always just write `x = normal(z, 1)`. You decide if you want to condition on `z` at the inference stage, e.g. by using `E(z, x, x_obs)` to estimate the expected value of `z` conditioning on `x=x_obs`. This is how it works in math, after all.
 
   * No "model" objects. In Pyro/NumPyro/PyMC and friends you create a "model" object that sort of contains a group of random variables. In Pangolin, you just manipulate random variables, with no additional layer of abstraction. This is also how it works in math.
 
@@ -45,19 +44,19 @@ For end-users, Pangolin provides an interface that is simple and explicit and tr
 
 ## Why (for researchers)?
 
-Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: `Op`s represent abstract conditional distributions or deterministic functions, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically it.
+Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: An `Op` represents a conditional distributionsor deterministic function, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically all there is to it.
 
-All other parts of Pangolin are decoupled: They only depend on the IR, not on each other. For example, the interface offers a friendly way for users to specify models, with optional broadcasting, program transformations, and so on. Internally, this is quite complicateded. But it just produces models in the IR. The different backends only look at the IR, and don't even know that the interface layer exists.
+All other parts of Pangolin are decoupled: They only depend on the IR, not on each other. For example, the [interface](https://justindomke.github.io/pangolin/interface.html) offers a friendly way for users to specify models, with optional broadcasting, program transformations, and so on. Internally, this is quite complicateded. But it just produces models in the IR. The different backends only look at the IR, and don't even know that the interface layer exists.
 
 This makes many things easy that are typically quite difficult in modern PPLs:
 
 * Say you want to create a new inference algorithm that programatically inspects the model. That's easy, because the IR is just a static graph of random variables.
 
-* Say you want to create a probabilistic model and share it with collaborators, some of whom use JAX and some of whom use PyTorch. That's fine. The former group can use the [JAX backend](pangolin/jax_backend) and the latter group can use the [torch backend](pangolin/torch_backend.py).
+* Say you want to create a probabilistic model and share it with collaborators, some of whom use JAX and some of whom use PyTorch. That's fine. The former group can use the [JAX backend](pangolin/jax_backend) while the latter group use the [torch backend](pangolin/torch_backend.py).
 
 * Say you want to create a new "backend" that will do inference using a different array computing framework instead of JAX or PyTorch. This is pretty easy. The [torch backend](pangolin/torch_backend.py) is around 1000 lines. The (more capable) [JAX backend](pangolin/jax_backend) is around 2000 lines. The [blackjax interface](pangolin/blackjax.py) is 400 lines.
 
-* Say you hate the Pangolin interface. That's fine. You can create a new one. As long as you can compile models into the Pangolin IR, you can still use the existing inference algorithms.
+* Say you hate Pangolin's interface. That's fine. Make a new one! As long as you produce models into the Pangolin IR, you can still use the existing backends.
 
 * In the future, we hope to make the IR language independent, so interfaces and backends could be in other languages, e.g. R or Julia. (This is possible in principle now, but could be made easier.)
 
@@ -564,26 +563,6 @@ For more examples, take a look at the [demos](demos/). Here's a recommended orde
 * [GP-regression.ipynb](demos/GP-regression.ipynb) is Gaussian Process regression.
 * [1PL.ipynb](demos/1PL.ipynb) is a simple item-response-theory model.
 * [2PL.ipynb](demos/2PL.ipynb) is a slightly more complex item-response-theory model.
-
-
-## Values
-
-(For the current Python interface)
-
-* **Gradual enhancement.** Easy things should be *really* easy. More complex features should be easily discoverable. Steep learning curves should be avoided.
-* **Small API surface.** The set of abstractions the user needs to learn should be as small as possible.
-* **Graceful interop.** As much as possible, the system should feel lke a natural part of the broader Python NumPy ecosystem, rather than a "new language".
-* **Look like math.** As much as possible, calculations should resemble mathematical notation. Exceptions are allowed when algorithmic limitations make this impossible or where standard mathematical notation is ambiguous or bad.
-
-## Long-term goals
-
-Long-term, Pangolin has the following goals:
-
-1. To "decouple" probabilistic models from inference algorithms. It should be possible to write a model *once*, and then perform inference using many inference "backends". (Among other things, this should facilitate benchmarks)
-2. To make it easier to experiment with novel inference algorithms that inspect the target distribution. 
-3. To support different possible interfaces, in different languages.
-4. To be "unopinionated" about how users might specify models, and how inference might be done.
-
 
 ## See also
 
