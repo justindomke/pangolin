@@ -1,4 +1,4 @@
-torch_backend Module
+torch_backend
 ====================
 
 .. automodule:: pangolin.torch_backend

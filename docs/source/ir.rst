@@ -1,4 +1,4 @@
-ir Module
+ir
 =========
 
 .. automodule:: pangolin.ir

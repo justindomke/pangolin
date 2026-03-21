@@ -1,4 +1,4 @@
-jax_backend Module
+jax_backend
 ==================
 
 .. automodule:: pangolin.jax_backend

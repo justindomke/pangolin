@@ -1,4 +1,4 @@
-util Module
+util
 ===========
 
 .. automodule:: pangolin.util

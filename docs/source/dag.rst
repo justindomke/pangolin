@@ -1,4 +1,4 @@
-dag Module
+dag
 ==========
 
 .. automodule:: pangolin.dag

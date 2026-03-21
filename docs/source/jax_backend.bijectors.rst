@@ -1,4 +1,4 @@
-jax_backend.bijectors Module
+jax_backend.bijectors
 ==================
 
 .. automodule:: pangolin.jax_backend.bijectors

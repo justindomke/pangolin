@@ -1,4 +1,4 @@
-interface Module
+interface
 ================
 
 .. automodule:: pangolin.interface

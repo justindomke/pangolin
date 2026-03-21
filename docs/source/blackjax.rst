@@ -1,4 +1,4 @@
-blackjax Module
+blackjax
 ================
 
 .. automodule:: pangolin.blackjax
