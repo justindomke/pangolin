@@ -28,6 +28,10 @@ dev = [
     "ipykernel",
     "seaborn",
     "ipywidgets",
+    "pymc",
+    "pyro-ppl",
+    "pyjags-jw",
+    "cmdstanpy",
 ]
 docs = [
     "sphinx",

@@ -1,6 +1,6 @@
 ![pangolin](pangolin-logo.png)
 
-Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is still something of a research project.
+Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is now usable, but is still something of a research project.
 
 ## Installation
 
@@ -13,6 +13,53 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 ## API Docs
 
 See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
+
+## Why?
+
+At a high level, Pangolin has two goals:
+
+1. To make things simple for end users who just want to do inference.
+
+2. To make things simple for *researchers* who want to develop new inference algorithms, develop new ways of specifying probabilistic models, share models between different backends (JAX / PyTorch), share backends written in different languages between interfaces written in different languages, etc. 
+etc.
+
+## Why (for end users)?
+
+For end-users, Pangolin provides an interface that is simple and explicit and tries to avoid some of the complexities of modern PPLs. In particular:
+
+* **Gradual enhancement.** Easy things should be *really* easy. More complex features should be easy to discover. Steep learning curves should be avoided.
+
+* **Small API surface.** The set of abstractions the user needs to learn should be as small as possible. 
+
+* **Explicitness.** Many modern PPLs lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by JAX. If you see `x = vmap(normal, [0, None])(a, b)` that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* a one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index), so if you see `u = z[x,y]` then you know that `u.ndim = x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
+
+* **Graceful interop.** As much as possible, the system should feel like a natural part of the broader ecosystem, rather than a "new language". In particular, Pangolin tries to avoid several oddities common in other modern PPLs:
+
+  * No "sample" statements or no string labels for variables. In Pyro or NumPyro you write `z = sample('z', Normal(0, 1))`. In Pangolin you just write `z = normal(0,1)`. If you want to refer to that variable later you just use a reference to the resulting `RV` object.
+
+  * No attaching data to random variables with "obs" statements. In Pyro or NumPyro or PyMC, if a random variable `x` is observed, you need to write something like `x = sample('x', Normal(z, 1), obs=x_obs)`. In Pangolin, you always just write `x = normal(z, 1)`. You decide if you want to condition on `z` at the inference stage, e.g. by using `E(z)` to estimate the expected value of `z` or `E(z, x, x_obs)` to do it conditioning on `x=x_obs`. This is how it works in math, after all.
+
+  * No "model" objects. In Pyro/NumPyro/PyMC and friends you create a "model" object that sort of contains a group of random variables. In Pangolin, you just manipulate random variables, with no additional layer of abstraction. This is also how it works in math.
+
+* In Pangolin you can see the internal representation. After building a model, you can call `print_upstream` to see the internal representation, with the parents and shapes of all random variables.
+
+## Why (for researchers)?
+
+Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: `Op`s represent abstract conditional distributions or deterministic functions, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically it.
+
+All other parts of Pangolin are decoupled: They only depend on the IR, not on each other. For example, the interface offers a friendly way for users to specify models, with optional broadcasting, program transformations, and so on. Internally, this is quite complicateded. But it just produces models in the IR. The different backends only look at the IR, and don't even know that the interface layer exists.
+
+This makes many things easy that are typically quite difficult in modern PPLs:
+
+* Say you want to create a new inference algorithm that programatically inspects the model. That's easy, because the IR is just a static graph of random variables.
+
+* Say you want to create a probabilistic model and share it with collaborators, some of whom use JAX and some of whom use PyTorch. That's fine. The former group can use the [JAX backend](pangolin/jax_backend) and the latter group can use the [torch backend](pangolin/torch_backend.py).
+
+* Say you want to create a new "backend" that will do inference using a different array computing framework instead of JAX or PyTorch. This is pretty easy. The [torch backend](pangolin/torch_backend.py) is around 1000 lines. The (more capable) [JAX backend](pangolin/jax_backend) is around 2000 lines. The [blackjax interface](pangolin/blackjax.py) is 400 lines.
+
+* Say you hate the Pangolin interface. That's fine. You can create a new one. As long as you can compile models into the Pangolin IR, you can still use the existing inference algorithms.
+
+* In the future, we hope to make the IR language independent, so interfaces and backends could be in other languages, e.g. R or Julia. (This is possible in principle now, but could be made easier.)
 
 ## Examples and comparisons
 
@@ -164,20 +211,25 @@ with tempfile.TemporaryDirectory() as tmpdir:
 This is arguably the simplest Bayesian model. If you've seen a bunch of coinflips from a bent coin, what is the true bias? To start, generate synthetic data.
 
 ```python
+# synthetic data
 import numpy as np
-import pangolin
-from pangolin import interface as pi
-
-# create synthetic data
+np.random.seed(67)
 z_true = 0.7
-N = 100
+N = 20
 x_obs = np.random.binomial(1, z_true, N)
 
-# do inference
+# create model
+import pangolin
+from pangolin import interface as pi
 z = pi.beta(2,2)
 x = pi.vmap(pi.bernoulli, None, N)(z)
-z_samps = pangolin.blackjax.sample(z, x, x_obs)
-print(np.mean(z_samps), np.std(z_samps))
+
+# do inference
+z_samps = pangolin.blackjax.sample(z, x, x_obs) # p(z | x = x_obs)
+
+# plot
+import seaborn as sns
+sns.histplot(z_samps, binrange=[0,1])
 ```
 
 Here is the same model in other PPLs. (Or see [beta-bernoulli-ppls.ipynb](demos/beta-bernoulli-ppls.ipynb).)
@@ -321,7 +373,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 ### Eight-schools
 
-Bayesian inference on the 8-schools model:
+Bayesian inference on the classic 8-schools model:
 
 ```python
 # setup
@@ -333,17 +385,18 @@ x_obs = np.array([28, 8, -3, 7, -1, 1, 18, 12])
 # inference
 import pangolin
 from pangolin import interface as pi
-mu = pi.normal(0,10)
+
+mu  = pi.normal(0,10)
 tau = pi.lognormal(0,5)
-z = pi.vmap(pi.normal, None, N)(mu, tau)
-x = pi.vmap(pi.normal)(z, stddevs)
+z   = pi.vmap(pi.normal, None, N)(mu, tau)
+x   = pi.vmap(pi.normal)(z, stddevs)
 z_samps = pangolin.blackjax.sample(z, x, x_obs, niter=10000)
 
 # plot
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
-sns.swarmplot(np.array(theta_samps)[:,::50].T,s=2,zorder=0)
+sns.swarmplot(np.array(z_samps)[:,::50].T,s=2,zorder=0)
 plt.xlabel('school')
 plt.ylabel('treatment effect')
 ```
