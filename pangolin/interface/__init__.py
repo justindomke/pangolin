@@ -57,7 +57,7 @@ Scalar distributions         :func:`normal` :func:`normal_prec` :func:`lognormal
 Multivariate distributions   :func:`multi_normal` :func:`multinomial` :func:`dirichlet` :func:`wishart`
 Control flow                 :func:`vmap` :func:`broadcast` :func:`composite` :func:`scan` :func:`repeat`
 Indexing                     :func:`index` (or ``rv[...]``) `vindex`
-Transformed densities        :class:`Transform` :class:`tforms` :func:`compose_transforms` :func:`unconstrain`
+Transformed densities        :class:`Transform` :class:`tforms` :func:`compose_transforms`
 ============================ ======
 
 Auto-casting
