@@ -658,7 +658,7 @@ class Matmul(Op):
             raise ValueError(f"First parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
 
         if len(b_shape) not in [1, 2]:
-            raise ValueError(f"Second parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
+            raise ValueError(f"Second parent for Matmul must have 1 or 2 dims (got {len(b_shape)}).")
 
         if len(a_shape) == 1 and len(b_shape) == 1:
             # inner product
@@ -1128,7 +1128,6 @@ def split_shape(shape: Shape, i: int | None) -> tuple[Shape, int | None]:
 def get_sliced_shapes(
     shapes: Sequence[Shape], in_axes: tuple[int | None, ...], axis_size: int | None
 ) -> tuple[list[Shape], int]:
-    axis_size = axis_size
     remaining_shapes = []
     for i, shape in zip(in_axes, shapes, strict=True):
         new_shape, new_axis_size = split_shape(shape, i)
