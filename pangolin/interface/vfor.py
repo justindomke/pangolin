@@ -508,17 +508,68 @@ def extract_from_rvs_single_axis(dummy_index: InfixRV[Axis], output: PyTree[Infi
 
     return indexed_rvs, indexed_dims, replay
 
-def vfor_decorator(**kwargs: int):
-    return lambda fun: vfor(fun, **kwargs)
+
+from typing import overload, Any
 
 
-def vfor(fun: Callable, **kwargs: int):
+# Overload 1: Direct call or bare decorator (@vfor or vfor(fun, i=3))
+@overload
+def vfor[P: PyTree[InfixRV]](fun: Callable[..., P], /, **kwargs: int) -> P: ...
+
+
+# Overload 2: Decorator factory (@vfor(i=3) or vfor(i=3)(fun))
+@overload
+def vfor[P: PyTree[InfixRV]](fun: None = None, /, **kwargs: int) -> Callable[[Callable[..., P]], P]: ...
+
+
+def vfor[P: PyTree[InfixRV]](
+    fun: Callable[..., P] | None = None, /, **kwargs: int
+) -> P | Callable[[Callable[..., P]], P]:
     """
-    `vfor` is an alternative (hopefully more natural) interface for broadcasting, inspired by the `for` syntax in `Dex <https://github.com/google-research/dex-lang>`_.
+    `vfor` is an alternative (hopefully more natural) interface for vmapping, where you align dimensions by name instead of through `in_axes` arguments. (Inspired by `Dex <https://github.com/google-research/dex-lang>`_.)
+
+    Say you wanted to write a function to compute ``c[i,j] = sqrt(a[i]*b[j])``. Using vmap, this would be:
+
+    >>> a = constant([1., 2., 3,])
+    >>> b = constant([4., 5., 6.])
+    >>> e = vmap(
+    ...         vmap(
+    ...             lambda a_i, b_j: (a_i * b_j)**0.5,
+    ...             [None, 0]
+    ...         ),
+    ...         [0, None]
+    ... )(a, b)
+    >>> print_upstream(e)
+    shape  | statement
+    ------ | ---------
+    (3,)   | a = [1. 2. 3.]
+    (3,)   | b = [4. 5. 6.]
+    (3, 3) | c = vmap(vmap(mul, [None, 0], 3), [0, None], 3)(a, b)
+    ()     | d = 0.5
+    (3, 3) | e = vmap(vmap(pow, [0, None], 3), [0, None], 3)(c, d)
+
+    Using `vfor` you can simply write
+
+    >>> a = constant([1., 2., 3,])
+    >>> b = constant([4., 5., 6.])
+    >>> e = vfor(lambda i, j: (a[i] * b[j])**0.5)
+    >>> print_upstream(e)
+    shape  | statement
+    ------ | ---------
+    (3,)   | a = [1. 2. 3.]
+    (3,)   | b = [4. 5. 6.]
+    (3, 3) | c = vmap(vmap(mul, [None, 0], 3), [0, None], 3)(a, b)
+    ()     | d = 0.5
+    (3, 3) | e = vmap(vmap(pow, [0, None], 3), [0, None], 3)(c, d)
+
+    This function supports two different call signatures to make it convenient to use as a wrapper or decorator.
+
+    * ``vfor()(fun)`` is equivalent to ``vfor(fun)``
+    * ``vfor(i=3, j=4)(fun)`` is equivalent to ``vfor(fun, i=3, j=4)``.
 
     Args:
-        fun: A function that takes "indices" and produces an output or `None` to return a function.
-        size: A sequence of integer sizes or `None` if they should be inferred from existing RVs.
+        fun: A function that takes "indices" and produces an output or `None` to create a decorator. (Default: None)
+        **kwargs: names of indices declaring sizes. (Optional.)
 
     Returns:
         A pytree of RVs representing `fun` mapped over all the indices. Or, if `fun` is `None`, returns a Callable that will create said pytree when passed a function.
@@ -529,18 +580,50 @@ def vfor(fun: Callable, **kwargs: int):
     Mutiply each element by two.
 
     >>> x = constant([1.1, 2.2, 3.3])
+    >>> y = vfor(lambda i: x[i]*2)
+    >>> print(y)
+    vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
+
+    You can provide an axis size for safety.
+
+    >>> x = constant([1.1, 2.2, 3.3])
     >>> y = vfor(lambda i: x[i]*2, i=3)
     >>> print(y)
     vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
 
-    Two indices with single array.
+    Or, you can provide the axis size before the function.
+
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> y = vfor(i=3)(lambda i: x[i]*2)
+    >>> print(y)
+    vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
+
+    Or, you can use `vfor` as a decorator.
+
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> @vfor
+    ... def y(i):
+    ...     return x[i]*2
+    >>> print(y)
+    vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
+
+    Or, you can use `vfor` as a decorator with an axis size for safety.
+
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> @vfor(i=3)
+    ... def y(i):
+    ...     return x[i]*2
+    >>> print(y)
+    vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
+
+    An example passing two indices with a single parent RV:
 
     >>> x = constant([[1,2,3],[4,5,6]])
     >>> y = vfor(lambda i, j: x[j,i] + 2.2)
     >>> print(y)
     vmap(vmap(add, [0, None], 2), [1, None], 3)([[1 2 3] [4 5 6]], 2.2)
 
-    Slice first dimension of a and only dimension of b.
+    Slice the first dimension of a and the first/only dimension of b.
 
     >>> a = constant([[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]])
     >>> b = constant([7.7, 8.8])
@@ -562,6 +645,46 @@ def vfor(fun: Callable, **kwargs: int):
     (3, 2) | b = [[ 7.7  8.8 ] [ 9.9 10.1 ] [11.11 12.12]]
     (3, 3) | c = vmap(vmap(matmul, [None, 0], 3), [1, None], 3)(a, b)
 
+    Or, with explicit axis lengths
+
+    >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+    >>> b = constant([[7.7, 8.8],[9.9, 10.10],[11.11, 12.12]])
+    >>> c = vfor(lambda i, j: a[:,i] @ b[j,:], i=3, j=3)
+    >>> print_upstream(c)
+    shape  | statement
+    ------ | ---------
+    (2, 3) | a = [[1.1 2.2 3.3] [4.4 5.5 6.6]]
+    (3, 2) | b = [[ 7.7  8.8 ] [ 9.9 10.1 ] [11.11 12.12]]
+    (3, 3) | c = vmap(vmap(matmul, [None, 0], 3), [1, None], 3)(a, b)
+
+    Or as a decorator
+
+    >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+    >>> b = constant([[7.7, 8.8],[9.9, 10.10],[11.11, 12.12]])
+    >>> @vfor
+    ... def c(i,j):
+    ...     return a[:,i] @ b[j,:]
+    >>> print_upstream(c)
+    shape  | statement
+    ------ | ---------
+    (2, 3) | a = [[1.1 2.2 3.3] [4.4 5.5 6.6]]
+    (3, 2) | b = [[ 7.7  8.8 ] [ 9.9 10.1 ] [11.11 12.12]]
+    (3, 3) | c = vmap(vmap(matmul, [None, 0], 3), [1, None], 3)(a, b)
+
+    Or as a decorator with marked axes lengths
+
+    >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+    >>> b = constant([[7.7, 8.8],[9.9, 10.10],[11.11, 12.12]])
+    >>> @vfor(i=3, j=3)
+    ... def c(i,j):
+    ...     return a[:,i] @ b[j,:]
+    >>> print_upstream(c)
+    shape  | statement
+    ------ | ---------
+    (2, 3) | a = [[1.1 2.2 3.3] [4.4 5.5 6.6]]
+    (3, 2) | b = [[ 7.7  8.8 ] [ 9.9 10.1 ] [11.11 12.12]]
+    (3, 3) | c = vmap(vmap(matmul, [None, 0], 3), [1, None], 3)(a, b)
+
     For technical reasons, returning an array without further processing will cause an error
 
     >>> x = constant([1.1, 2.2, 3.3])
@@ -571,11 +694,8 @@ def vfor(fun: Callable, **kwargs: int):
     ValueError: fun passed to generated_nodes cannot return input values
     """
 
-    # num_indices = get_positional_count(fun)
-
-    # if size:
-    #     if len(size) != num_indices:
-    #         raise ValueError(f"Given size {size} has length different from num_indices {num_indices}")
+    if fun is None:
+        return lambda fun: vfor(fun, **kwargs)
 
     arg_names = get_positional_names(fun)
     num_indices = len(arg_names)
@@ -600,3 +720,15 @@ def vfor(fun: Callable, **kwargs: int):
         else:
             new_fun = vmap(new_fun, in_axes, axis_size)
     return new_fun(*arrays)
+
+
+def test():
+    A = constant([1, 2, 3])
+
+    @vfor(i=3)
+    def B(i):
+        return A[i] * 2
+
+    C = B
+
+    # B = vfor(lambda i: A[i] * 2)

@@ -1,3 +1,5 @@
+**2026.03.30:** Add `vfor` as an alternative to `vmap`.
+
 **2026.03.17:** Jax backend and blackjax now support auto-constrained continuous variables
 
 **2026.03.11:** Rename "autoregressive" to more sensible "scan".
