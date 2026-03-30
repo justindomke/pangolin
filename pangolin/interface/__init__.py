@@ -102,6 +102,7 @@ from .indexing import index, vindex
 from .transforming import Transform, tforms, compose_transforms
 from .util import fill_tril, extract_tril
 from pangolin.ir import print_upstream
+from .vfor import vfor
 
 RVLike = RVLike  # no-op assignment so it can be documented
 """A type class indicating either:
@@ -126,6 +127,7 @@ __all__ = [
     "InfixRV",
     "constant",
     "vmap",
+    "vfor",
     "broadcast",
     "composite",
     "Scannable",
