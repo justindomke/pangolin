@@ -2,10 +2,6 @@
 
 Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is now usable, but is still something of a research project.
 
-## Installation
-
-See [`INSTALL.md`](INSTALL.md)
-
 ## Changelog
 
 See [`CHANGELOG.md`](CHANGELOG.md)
@@ -14,11 +10,11 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
-## Quickstart
+## Installation / Quickstart
 
 If you have [uv](https://docs.astral.sh/uv/) installed, you can test pangolin in a temporary environment by just using `--with pangolin` at the command line. For example:
 
-```bash
+```console
 $ uv run --with pangolin python
 Python 3.14.3 
 Type "help", "copyright", "credits" or "license" for more information.
@@ -30,7 +26,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 Array(1.0402008, dtype=float32)
 ```
 
-More broadly, pangolin is [on pypi](https://pypi.org/project/pangolin/) so you can install it by using `pip install pangolin` or `uv add pangolin` or whatever. 
+More broadly, pangolin is [on pypi](https://pypi.org/project/pangolin/) so you can install it by using `pip install pangolin` or `uv add pangolin` or whatever. See [`INSTALL.md`](INSTALL.md) for details.
 
 ## Why?
 
