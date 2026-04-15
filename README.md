@@ -14,6 +14,24 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
+## Quickstart
+
+If you have [uv](https://docs.astral.sh/uv/) installed, you can test pangolin in a temporary environment by just using `--with pangolin` at the command line. For example:
+
+```bash
+$ uv run --with pangolin python
+Python 3.14.3 
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import pangolin
+>>> from pangolin import interface as pi
+>>> x = pi.normal(0,1)
+>>> y = pi.normal(x,1)
+>>> Ex = pangolin.blackjax.E(x, y, 2)
+Array(1.0402008, dtype=float32)
+```
+
+More broadly, pangolin is [on pypi](https://pypi.org/project/pangolin/) so you can install it by using `pip install pangolin` or `uv add pangolin` or whatever. 
+
 ## Why?
 
 At a high level, Pangolin has two goals:
