@@ -2,15 +2,15 @@
 name = "pangolin"
 version = "0.0.1"
 description = "Probabilistic inference focused on fun"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     "jax",
     "jaxtyping",
     "numpy",
     "scipy",
     "numpyro",
-    "makefun>=1.16.0",
-    "blackjax>=1.2.5",
+    "makefun",
+    "blackjax",
 ]
 
 [build-system]
