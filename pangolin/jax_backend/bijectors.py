@@ -466,7 +466,7 @@ def _cholesky_log_det_jac(X, Y):
     of the forward transformation (from SPD matrix to Cholesky factor).
 
     The formula implemented is:
-    $$ \log |\det J| = -k \log(2) - \sum_{i=1}^{k} (k-i+1) \log(Y_{ii}) $$
+    $$ log |det J| = -k log(2) - sum_{i=1}^{k} (k-i+1) log(Y_{ii}) $$
 
     Args:
         X: Original symmetric positive-definite matrix of shape $(k, k)$ (unused
