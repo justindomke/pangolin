@@ -254,6 +254,9 @@ class Constant(Op):
 
     def __init__(self, value: ArrayLike):
         self.value = np.array(value)
+        if not np.issubdtype(self.value.dtype, np.number):
+            raise ValueError(f"Data {value} does not produce numeric dtype")
+
         """The actual stored data, stored as an immutable numpy array"""
         self.value.flags.writeable = False  # make value immutable
         super().__init__()
@@ -658,7 +661,7 @@ class Matmul(Op):
             raise ValueError(f"First parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
 
         if len(b_shape) not in [1, 2]:
-            raise ValueError(f"Second parent for Matmul must have 1 or 2 dims (got {len(a_shape)}).")
+            raise ValueError(f"Second parent for Matmul must have 1 or 2 dims (got {len(b_shape)}).")
 
         if len(a_shape) == 1 and len(b_shape) == 1:
             # inner product
