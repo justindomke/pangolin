@@ -12,18 +12,19 @@ See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
 
 ## Installation / Quickstart
 
-If you have [uv](https://docs.astral.sh/uv/) installed, you can test pangolin in a temporary environment by just using `--with pangolin` at the command line. For example:
+If you have [uv](https://docs.astral.sh/uv/) installed, you can test pangolin in a temporary environment by just using `--with pangolin` at the command line. For example, say `m ~ normal(0,1)` and `s ~ lognormal(0,1)` and `x ~ normal(m, s)` is observed to have value `x=3.5`. Then you can calculate the posterior mean of `m` and `s` like so:
 
 ```console
 $ uv run --with pangolin python
 Python 3.14.3 
 Type "help", "copyright", "credits" or "license" for more information.
->>> import pangolin
 >>> from pangolin import interface as pi
->>> x = pi.normal(0,1)
->>> y = pi.normal(x,1)
->>> Ex = pangolin.blackjax.E(x, y, 2)
-Array(1.0402008, dtype=float32)
+>>> from pangolin.blackjax import E
+>>> m = pi.normal(0,1)
+>>> s = pi.lognormal(0,1)
+>>> x = pi.normal(m, s)
+>>> E([m, s], x, 3.5)
+[Array(0.70249635, dtype=float32), Array(2.8581674, dtype=float32)]
 ```
 
 More broadly, pangolin is [on pypi](https://pypi.org/project/pangolin/) so you can install it by using `pip install pangolin` or `uv add pangolin` or whatever. See [`INSTALL.md`](INSTALL.md) for details.
@@ -44,7 +45,7 @@ For end-users, Pangolin tries to provide an interface that is simple and explici
 
 * **Small API surface.** The set of abstractions the user needs to learn should be as small as possible. 
 
-* **Explicitness.** Many modern PPLs (e.g. Pyro / NumPyro / PyMC / Orxy) lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by [`jax.vmap`](https://docs.jax.dev/en/latest/_autosummary/jax.vmap.html). If you see `x = vmap(normal, [0, None])(a, b)` that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* be one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index). If you see `u = z[x,y]` then you know that `z.ndim == 2` and `u.ndim == x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
+* **Explicitness.** Many modern PPLs (e.g. Pyro / NumPyro / PyMC / Orxy) lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by [`jax.vmap`](https://docs.jax.dev/en/latest/_autosummary/jax.vmap.html). If you see `x = vmap(normal, [0, None])(a, b)` or `x = vfor(lambda i: normal(a[i], b))`, that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* be one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index). If you see `u = z[x,y]` then you know that `z.ndim == 2` and `u.ndim == x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
 
 * **Graceful interop.** As much as possible, the system should feel like a natural part of the broader ecosystem, rather than a "new language". In particular, Pangolin tries to avoid several oddities common in other modern PPLs:
 
@@ -58,7 +59,7 @@ For end-users, Pangolin tries to provide an interface that is simple and explici
 
 ## Why (for researchers)?
 
-Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: An `Op` represents a conditional distributionsor deterministic function, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically all there is to it.
+Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: An `Op` represents a conditional distribution or deterministic function, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically all there is to it.
 
 All other parts of Pangolin are decoupled: They only depend on the IR, not on each other. For example, the [interface](https://justindomke.github.io/pangolin/interface.html) offers a friendly way for users to specify models, with optional broadcasting, program transformations, and so on. Internally, this is quite complicateded. But it just produces models in the IR. The different backends only look at the IR, and don't even know that the interface layer exists.
 
