@@ -408,7 +408,17 @@ def extract_from_rvs(dummy_indices: Sequence[InfixRV], output: PyTree[InfixRV]):
                     n += 1
                     continue
 
-            replayed_rv = InfixRV(rv.op, *[rv_to_replayed[p] for p in rv.parents])
+            # replayed_rv = InfixRV(rv.op, *[rv_to_replayed[p] for p in rv.parents])
+
+            my_parents = []
+            for p in rv.parents:
+                if p in rv_to_replayed:
+                    my_p = rv_to_replayed[p]
+                else:
+                    my_p = p
+                my_parents.append(my_p)
+            replayed_rv = InfixRV(rv.op, *my_parents)
+
             rv_to_replayed[rv] = replayed_rv
 
         results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
@@ -492,7 +502,6 @@ def extract_from_rvs_single_axis(dummy_index: InfixRV[Axis], output: PyTree[Infi
                     n += 1
                     continue
 
-            # new_parents = [rv_to_replayed[p] for p in rv.parents]
             new_parents = []
             for p in rv.parents:
                 if p in rv_to_replayed:
@@ -500,8 +509,7 @@ def extract_from_rvs_single_axis(dummy_index: InfixRV[Axis], output: PyTree[Infi
                 else:
                     new_parents.append(p)
 
-            replayed_rv = InfixRV(rv.op, *new_parents)
-            rv_to_replayed[rv] = replayed_rv
+            rv_to_replayed[rv] = InfixRV(rv.op, *new_parents)
 
         results_flat = [rv_to_replayed[out_rv] for out_rv in output_rvs]
         return jax.tree_util.tree_unflatten(output_treedef, results_flat)
