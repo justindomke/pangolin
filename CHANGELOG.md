@@ -1,3 +1,7 @@
+**2026.04.20:** Fix vfor bug, add unicode DAG printing, bump to 0.0.3.
+
+**2026.04.15:** Published to PyPi. Start version numbering at 0.0.1, bump to 0.0.2.
+
 **2026.03.30:** Add `vfor` as an alternative to `vmap`.
 
 **2026.03.17:** Jax backend and blackjax now support auto-constrained continuous variables
