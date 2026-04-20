@@ -35,6 +35,7 @@ Transformations              `Bijector` `Transformed`
 In addition, this module provides the following utilities:
 
 * `print_upstream` : Print a nice human-readable description of an entire graph.
+* `graph_upstream` : Print a nice unicode graph.
 * `rv_equal`: Test if two random variables are mathematically equal.
 
 ---
@@ -2054,6 +2055,34 @@ def rv_equal(A: RV, B: RV) -> bool:
 ################################################################################
 
 
+def upstream_named(*vars: PyTree[RV], **named_vars: RV):
+    import jax.tree_util
+
+    all_vars = jax.tree_util.tree_leaves([vars, named_vars])
+    nodes = dag.upstream_nodes(all_vars)
+
+    vars_named = util.reverse_dict(named_vars)
+
+    count = 0
+    node_to_id = {}  # type: ignore
+    id_to_node = {}
+    for node in nodes:
+        assert isinstance(node, RV)
+
+        if node in vars_named:
+            id = vars_named[node]
+        else:
+            # find a unique id
+            while util.num2str(count) in id_to_node or util.num2str(count) in named_vars:
+                count += 1
+            id = util.num2str(count)
+
+        node_to_id[node] = id
+        id_to_node[id] = node
+
+    return node_to_id
+
+
 def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     """Prints all upstream variables in a friendly readable format.
 
@@ -2103,40 +2132,30 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
     ()    | t = 2
     ()    | u ~ normal(s, t)
     (3,)  | v = [75 50 99]
+
+    See Also:
+        `graph_upstream`
+
     """
 
-    import jax.tree_util
+    node_to_id = upstream_named(*vars, **named_vars)
 
-    all_vars = jax.tree_util.tree_leaves([vars, named_vars])
-    nodes = dag.upstream_nodes(all_vars)
-    # nodes = cast(list[RV], nodes)  # list[Node] -> list[RV]
-
-    if all_vars == []:
+    if len(node_to_id) == 0:
         print("[empty vars, nothing to print]")
         return
 
     # get maximum # parents
     max_pars = 0
     max_shape = 5
-    for node in nodes:
+    for node in node_to_id:
         max_pars = max(max_pars, len(node.parents))
         max_shape = max(max_shape, len(str(node.shape)))
 
-    # if len(nodes) > 1:
-    #     digits = 1 + int(np.log10(len(nodes) - 1))
-    #     par_str_len = (digits + 1) * max_pars - 1
-    # else:
-    #     par_str_len = 0
-
-    vars_named = util.reverse_dict(named_vars)
-
-    count = 0
-    node_to_id = {}  # type: ignore
-    id_to_node = {}
     print(f"shape{' ' * (max_shape - 5)} | statement")
     print(f"{'-' * max_shape} | ---------")
-    for node in nodes:
+    for node in node_to_id:
         assert isinstance(node, RV)
+        id = node_to_id[node]
 
         par_ids = [node_to_id[p] for p in node.parents]
 
@@ -2148,19 +2167,84 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
 
         op = "~" if node.op.random else "="
 
-        if node in vars_named:
-            id = vars_named[node]
-        else:
-            # find a unique id
-            while util.num2str(count) in id_to_node or util.num2str(count) in named_vars:
-                count += 1
-            id = util.num2str(count)
-
         line = f"{shape_str} | {id} {op} {str(node.op)}"
         if node.parents:
             line += "(" + par_id_str + ")"
 
         print(line)
 
-        node_to_id[node] = id
-        id_to_node[id] = node
+
+def graph_upstream(*vars: PyTree[RV], **named_vars: RV):
+    """
+    Print all upstream variables and shapes as a unicode DAG. In the DAG, edges always go down and to the right. If there are "crossings", edges never change direction at the crossing.
+
+    Examples
+    --------
+    >>> from pangolin import interface as pi
+    >>> a = pi.constant(3.3)
+    >>> b = pi.constant(4.4)
+    >>> c = pi.normal(a,b)
+    >>> d = pi.normal(a,b)
+    >>> e = pi.constant(5)
+    >>> f = pi.add(c,d)
+    >>> graph_upstream(f)
+    ○       () 3.3
+    │
+    │ ○     () 4.4
+    │ │
+    ├─┼─○   () normal
+    │ │ │
+    └─○ │   () normal
+      │ │
+      └─○   () add
+
+    >>> a = pi.constant([-3.0, 0.0, 2.5])
+    >>> b = pi.constant(3.1)
+    >>> c = pi.vfor(lambda i: pi.normal(pi.exp(a[i]), b))
+    >>> graph_upstream(c=c)
+    ○     (3,) [-3.  0.  2.5]
+    │
+    │ ○   ()   3.1
+    │ │
+    ○ │   (3,) vmap(exp, [0], 3)
+    │ │
+    └─○   (3,) vmap(normal, [0, None], 3) ← c
+
+    See Also:
+        `print_upstream`
+
+    """
+
+    node_to_id = upstream_named(*vars, **named_vars)
+
+    if len(node_to_id) == 0:
+        print("[empty vars, nothing to print]")
+        return
+
+    # get maximum # parents
+    max_shape = 2
+    for node in node_to_id:
+        max_shape = max(max_shape, len(str(node.shape)))
+
+    nodes = []
+    parents = {}
+    for node in node_to_id:
+        for p in node.parents:
+            if p not in nodes:
+                nodes.append(p)
+        nodes.append(node)
+        parents[node] = node.parents
+
+    vars_named = util.reverse_dict(named_vars)
+
+    def label_fn(node):
+        shape_str = str(node.shape)
+        shape_str += " " * (max_shape - len(shape_str))
+
+        ret = shape_str + " " + str(node.op)
+
+        if node in vars_named:
+            ret = ret + " ← " + vars_named[node]
+        return ret
+
+    print(util.render_dag(nodes, parents, label_fn=label_fn))
