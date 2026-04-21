@@ -74,6 +74,9 @@ class DeterministicTests(MixinBase):
 
     @pytest.mark.parametrize("pangolin_op, numpy_fun, ranges", testdata)
     def test_deterministic_op(self, pangolin_op, numpy_fun, ranges):
+        if pangolin_op in self._ops_without_eval_support:
+            pytest.skip("Skipping because backend does not support this")
+
         for reps in range(1):
             inputs = rands_from_ranges(ranges)
 
