@@ -4,7 +4,7 @@ version = "0.0.3"
 description = "Probabilistic inference focused on fun"
 requires-python = ">=3.12"
 dependencies = [
-    "jax"<=0.9.2, # numpyro bug for 0.10.0
+    "jax<=0.9.2", # numpyro bug for 0.10.0
     "jaxtyping",
     "numpy",
     "scipy",
