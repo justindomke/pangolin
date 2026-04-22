@@ -8,7 +8,7 @@ dependencies = [
     "jaxtyping",
     "numpy",
     "scipy",
-    "numpyro",
+    "numpyro>=0.20.0",
     "makefun",
     "blackjax>=1.2.5",
 ]
