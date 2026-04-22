@@ -10,7 +10,7 @@ dependencies = [
     "scipy",
     "numpyro",
     "makefun",
-    "blackjax",
+    "blackjax>=1.2.5",
 ]
 readme = "README.md" 
 
