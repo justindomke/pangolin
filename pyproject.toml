@@ -4,13 +4,13 @@ version = "0.0.3"
 description = "Probabilistic inference focused on fun"
 requires-python = ">=3.12"
 dependencies = [
-    "jax",
+    "jax"<=0.9.2, # numpyro bug for 0.10.0
     "jaxtyping",
     "numpy",
     "scipy",
-    "numpyro>=0.20.0",
+    "numpyro",
     "makefun",
-    "blackjax>=1.2.5",
+    "blackjax",
 ]
 readme = "README.md" 
 
