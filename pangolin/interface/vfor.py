@@ -437,7 +437,7 @@ def index_if_necessary(base, *indices):
 
 def popout_axis(rv: InfixRV[ir.Index], ax: InfixRV[Axis]):
     """
-    - rv is some rv that's been indexed with some number of axes
+    - rv is some RV that's been indexed with some number of axes
     - we want to "recover" one of those axes, i.e. remove that axis from the indexing statement
     - and we want to know where to find it
     """
