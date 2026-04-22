@@ -534,7 +534,7 @@ def vfor[P: PyTree[InfixRV]](
     fun: Callable[..., P] | None = None, /, **kwargs: int
 ) -> P | Callable[[Callable[..., P]], P]:
     """
-    `vfor` is an alternative (hopefully more natural) interface for vmapping, where you align dimensions by name instead of through `in_axes` arguments. (Inspired by `Dex <https://github.com/google-research/dex-lang>`_.)
+    ``vfor`` is an alternative (hopefully more natural) interface for vmapping, where you align dimensions by name instead of through ``in_axes`` arguments. (Inspired by `Dex <https://github.com/google-research/dex-lang>`_.)
 
     Say you wanted to write a function to compute ``c[i,j] = sqrt(a[i]*b[j])``. Using vmap, this would be:
 
@@ -556,7 +556,7 @@ def vfor[P: PyTree[InfixRV]](
     ()     | d = 0.5
     (3, 3) | e = vmap(vmap(pow, [0, None], 3), [0, None], 3)(c, d)
 
-    Using `vfor` you can simply write
+    Using ``vfor`` you can simply write
 
     >>> a = constant([1., 2., 3,])
     >>> b = constant([4., 5., 6.])
@@ -576,11 +576,11 @@ def vfor[P: PyTree[InfixRV]](
     * ``vfor(i=3, j=4)(fun)`` is equivalent to ``vfor(fun, i=3, j=4)``.
 
     Args:
-        fun: A function that takes "indices" and produces an output or `None` to create a decorator. (Default: None)
+        fun: A function that takes "indices" and produces an output or ``None`` to create a decorator. (Default: None)
         **kwargs: names of indices declaring sizes. (Optional.)
 
     Returns:
-        A pytree of RVs representing `fun` mapped over all the indices. Or, if `fun` is `None`, returns a Callable that will create said pytree when passed a function.
+        A pytree of RVs representing ``fun`` mapped over all the indices. Or, if ``fun`` is ``None``, returns a Callable that will create said pytree when passed a function.
 
     Examples
     --------
@@ -606,7 +606,7 @@ def vfor[P: PyTree[InfixRV]](
     >>> print(y)
     vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
 
-    Or, you can use `vfor` as a decorator.
+    Or, you can use ``vfor`` as a decorator.
 
     >>> x = constant([1.1, 2.2, 3.3])
     >>> @vfor
@@ -615,7 +615,7 @@ def vfor[P: PyTree[InfixRV]](
     >>> print(y)
     vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
 
-    Or, you can use `vfor` as a decorator with an axis size for safety.
+    Or, you can use ``vfor`` as a decorator with an axis size for safety.
 
     >>> x = constant([1.1, 2.2, 3.3])
     >>> @vfor(i=3)
@@ -631,7 +631,7 @@ def vfor[P: PyTree[InfixRV]](
     >>> print(y)
     vmap(vmap(add, [0, None], 2), [1, None], 3)([[1 2 3] [4 5 6]], 2.2)
 
-    Slice the first dimension of a and the first/only dimension of b.
+    Slice the first dimension of ``a`` and the first/only dimension of ``b``.
 
     >>> a = constant([[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]])
     >>> b = constant([7.7, 8.8])
