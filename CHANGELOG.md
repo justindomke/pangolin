@@ -1,3 +1,5 @@
+**2026.04.22:** Update JAX version to compensate for numpyro bug, bump to 0.0.4.
+
 **2026.04.20:** Fix vfor bug, add unicode DAG printing, bump to 0.0.3.
 
 **2026.04.15:** Published to PyPi. Start version numbering at 0.0.1, bump to 0.0.2.
