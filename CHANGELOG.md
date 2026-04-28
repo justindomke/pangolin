@@ -1,3 +1,5 @@
+**2026.04.28:** Fix bug for sampling when upstream variables observed, bump to 0.0.5.
+
 **2026.04.22:** Update JAX version to compensate for numpyro bug, bump to 0.0.4.
 
 **2026.04.20:** Fix vfor bug, add unicode DAG printing, bump to 0.0.3.

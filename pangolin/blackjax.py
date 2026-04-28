@@ -151,8 +151,15 @@ def sample_flat(
 
     if bijector_dict is not None and len(latent_samps) > 0:
 
+        # def constrain(latent_vals):
+        #     return jax_backend.ancestor_constrain(latent_vars, latent_vals, bijector_dict)
+
         def constrain(latent_vals):
-            return jax_backend.ancestor_constrain(latent_vars, latent_vals, bijector_dict)
+            all_unconstrained = jax_backend.ancestor_constrain(
+                latent_vars + given_vars, latent_vals + given_vals, bijector_dict
+            )
+            latent_unconstrained = all_unconstrained[: len(latent_vars)]
+            return latent_unconstrained
 
         latent_samps = jax.vmap(constrain)(latent_samps)
 

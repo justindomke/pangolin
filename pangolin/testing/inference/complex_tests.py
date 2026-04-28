@@ -186,3 +186,17 @@ class ComplexTests(MixinBase):
 
     #     assert y.shape == out.shape == expected.shape == (10, 5)
     #     assert np.allclose(expected, out)
+
+    def test_downstream_sampling(self):
+        """
+        Simple test that you can condition upstream
+        """
+
+        x = pi.normal(0, 1)
+        y = pi.normal(x, 1)
+
+        def testfun(x_samps):
+            E_x = np.mean(x_samps)
+            return np.abs(E_x - 3.1) < 0.01
+
+        test_util.inf_until_match(self.sample_flat, [y], [x], [3.1], testfun)
