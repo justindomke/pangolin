@@ -657,7 +657,7 @@ def flatten_args(vars, given_vars=None, given_vals=None):
 
 def nth_index(lst, item, n):
     # https://stackoverflow.com/questions/22267241/how-to-find-the-index-of-the-nth-time-an-item-appears-in-a-list
-    return [i for i, n in enumerate(lst) if n == item][n]
+    return [i for i, x in enumerate(lst) if x == item][n]
 
 
 def first_index(lst, condition):
