@@ -175,7 +175,7 @@ class SimpleHandler(Handler):
         return l, x
 
     def constrain(self, op, y, parent_values, bijector_dict):
-        if bijector_dict[self.op_class] is None:
+        if op.discrete or bijector_dict[self.op_class] is None:
             x = y
         else:
             bijector = bijector_dict[self.op_class](*parent_values)

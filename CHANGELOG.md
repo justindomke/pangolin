@@ -1,3 +1,5 @@
+**2026.05.05:** Fix missing transformation bug for discrete variables, bump to 0.0.6.
+
 **2026.04.28:** Fix bug for sampling when upstream variables observed, bump to 0.0.5.
 
 **2026.04.22:** Update JAX version to compensate for numpyro bug, bump to 0.0.4.
