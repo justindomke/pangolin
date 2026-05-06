@@ -83,7 +83,7 @@ def _get_scan_length(length: int | None, my_in_axes: Sequence[int | None], args:
 
     for ax, arg in zip(my_in_axes, args, strict=True):
         if ax is not None:
-            if my_length:
+            if my_length is not None:
                 assert my_length == arg.shape[ax]
             else:
                 my_length = arg.shape[ax]

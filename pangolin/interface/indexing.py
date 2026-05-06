@@ -251,7 +251,7 @@ def vindex(var: RVLike, *indices: _IdxType) -> InfixRV[ir.Index] | InfixRV[ir.VM
 
 class VectorIndexProxy:
     """
-    Fascilitates using ``rv.vindex[a,b,c]`` notation.
+    Facilitates using ``rv.vindex[a,b,c]`` notation.
     """
 
     def __init__(self, var: InfixRV):

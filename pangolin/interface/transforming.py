@@ -84,7 +84,7 @@ def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *bijec
     log_det_jac_op, log_det_jac_constants = maybe_make_composite(log_det_jac_fn, x_shape, y_shape, *biject_args_shapes)
 
     if len(forward_constants):
-        raise ValueError("foward_fn cannot capture closure variables")
+        raise ValueError("forward_fn cannot capture closure variables")
     if len(inverse_constants):
         raise ValueError("inverse_fn cannot capture closure variables")
     if len(log_det_jac_constants):

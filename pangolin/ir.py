@@ -1132,7 +1132,6 @@ def split_shape(shape: Shape, i: int | None) -> tuple[Shape, int | None]:
 def get_sliced_shapes(
     shapes: Sequence[Shape], in_axes: tuple[int | None, ...], axis_size: int | None
 ) -> tuple[list[Shape], int]:
-    axis_size = axis_size
     remaining_shapes = []
     for i, shape in zip(in_axes, shapes, strict=True):
         new_shape, new_axis_size = split_shape(shape, i)
