@@ -44,7 +44,7 @@ def rands_from_ranges(ranges):
 
 testdata = [
     (Normal, scipy.stats.norm, ["real", "positive"]),
-    (NormalPrec, lambda a, b: scipy.stats.norm(a, 1 / b**2), ["real", (0.1, 10.0)]),
+    (NormalPrec, lambda a, b: scipy.stats.norm(a, 1 / b**0.5), ["real", (0.1, 10.0)]),
     (Lognormal, lambda a, b: scipy.stats.lognorm(s=b, scale=np.exp(a)), ["real", "positive"]),
     (Cauchy, scipy.stats.cauchy, ["real", "positive"]),
     (Bernoulli, scipy.stats.bernoulli, [(0, 1)]),

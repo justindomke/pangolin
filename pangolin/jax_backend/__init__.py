@@ -71,7 +71,7 @@ simple_funs: dict[Type[Op], Callable] = {
 
 simple_dists: dict[Type[Op], Callable] = {
     ir.Normal: dist.Normal,
-    ir.NormalPrec: lambda loc, prec: dist.Normal(loc, 1 / prec**2),
+    ir.NormalPrec: lambda loc, prec: dist.Normal(loc, 1 / jnp.sqrt(prec)),
     ir.Bernoulli: dist.Bernoulli,
     ir.BernoulliLogit: dist.BernoulliLogits,
     ir.Beta: dist.Beta,
