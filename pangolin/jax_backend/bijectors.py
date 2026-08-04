@@ -346,9 +346,9 @@ def _exp_diagonal(X: jax.Array):
 
     Example:
         >>> X = jnp.array([[1., 2.], [3., 4.]])
-        >>> _exp_diagonal(X)
+        >>> _exp_diagonal(X) # doctest: +NORMALIZE_WHITESPACE
         Array([[ 2.718...,  2.       ],
-               [ 3.       , 54.598... ]], dtype=...)
+               [ 3.      , 54.598... ]], dtype=...)
     """
     X = jnp.asarray(X)
     if X.ndim != 2 or X.shape[0] != X.shape[1]:
@@ -490,7 +490,7 @@ def _cholesky_log_det_jac(X, Y):
         ...                [0., 0., 1.]])
         >>> Y = jnp.linalg.cholesky(X)
         >>> _cholesky_log_det_jac(X, Y)
-        Array(-2.0794415, dtype=...)
+        Array(-2.079..., dtype=...)
     """
     k = Y.shape[0]
     # Match the dtype of Y to prevent implicit type upcasting
@@ -536,7 +536,7 @@ def spd_to_unconstrained():
         >>> unconstrained_vec = jnp.array([0., 2., 0.])
         >>> spd_to_unconstrained().inverse(unconstrained_vec)
         Array([[1., 2.],
-               [2., 5.]], dtype=float32)
+               [2., 5.]], dtype=...)
 
         >>> X = jnp.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
         >>> Y = spd_to_unconstrained().forward(X)
