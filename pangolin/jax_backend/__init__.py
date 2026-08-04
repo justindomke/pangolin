@@ -918,7 +918,7 @@ def ancestor_sampler(vars: PyTree[RV], biject: bool | dict = False) -> Callable[
 
     >>> key = jax.random.PRNGKey(0)
     >>> fun(key)
-    [{'cat': Array(1.5, dtype=float32)}, Array(3., dtype=...)]
+    [{'cat': Array(1.5, dtype=...)}, Array(3., dtype=...)]
 
     You can do normal JAX stuff with it, e.g. vmap it.
 
@@ -975,7 +975,7 @@ def ancestor_log_prob(*vars: PyTree[RV], biject: bool | dict = False, **kwvars: 
     You now have a plain JAX function that's completely independent of pangolin. You can evaluate it.
 
     >>> fun(0.0)
-    Array(-0.9189385, dtype=...)
+    Array(-0.9189..., dtype=...)
 
     Or you can vmap it.
 
