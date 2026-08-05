@@ -18,7 +18,7 @@ class SimplePosteriorTests(MixinBase):
         loc = ir.RV(ir.Constant(0))
         scale = ir.RV(ir.Constant(1))
         x = ir.RV(ir.Normal(), loc, scale)
-        [x_samps] = self.sample_flat([x], [], [], niter=37)
+        [x_samps] = self.sample_flat([x], [], [], num_samples=37)
         assert x_samps.shape == (37,)
 
         def testfun(samps):
@@ -32,7 +32,7 @@ class SimplePosteriorTests(MixinBase):
         scale = ir.RV(ir.Constant(1))
         x = ir.RV(ir.Normal(), loc, scale)
         y = ir.RV(ir.Normal(), x, scale)
-        [x_samps] = self.sample_flat([x], [y], [1], niter=82)
+        [x_samps] = self.sample_flat([x], [y], [1], num_samples=82)
         assert x_samps.shape == (82,)
 
         def testfun(samps):
@@ -46,7 +46,7 @@ class SimplePosteriorTests(MixinBase):
         scale = ir.RV(ir.Constant(1))
         x = ir.RV(ir.Normal(), loc, scale)
         y = ir.RV(ir.Add(), x, x)
-        [x_samps, y_samps] = self.sample_flat([x, y], [], [], niter=103)
+        [x_samps, y_samps] = self.sample_flat([x, y], [], [], num_samples=103)
         assert x_samps.shape == (103,)
         assert y_samps.shape == (103,)
         assert np.allclose(y_samps, x_samps * 2)
@@ -58,7 +58,7 @@ class SimplePosteriorTests(MixinBase):
         z = ir.RV(ir.Normal(), x, scale)
         y1 = ir.RV(ir.Add(), x, x)
         y2 = ir.RV(ir.Mul(), x, x)
-        [x_samps, y1_samps, y2_samps] = self.sample_flat([x, y1, y2], [z], [1.0], niter=49)
+        [x_samps, y1_samps, y2_samps] = self.sample_flat([x, y1, y2], [z], [1.0], num_samples=49)
         assert x_samps.shape == y1_samps.shape == y2_samps.shape == (49,)
 
         def testfun(samps):
@@ -78,7 +78,7 @@ class SimplePosteriorTests(MixinBase):
         x = ir.RV(ir.Normal(), loc, scale)
         z = ir.RV(ir.Normal(), x, scale)
         y = ir.RV(ir.Mul(), z, scale)
-        [x_samps, y_samps] = self.sample_flat([x, y], [z], [1.0], niter=201)
+        [x_samps, y_samps] = self.sample_flat([x, y], [z], [1.0], num_samples=201)
         assert x_samps.shape == y_samps.shape == (201,)
 
         def testfun(samps):
@@ -97,7 +97,7 @@ class SimplePosteriorTests(MixinBase):
         x = ir.RV(ir.Normal(), loc, scale)
         z = ir.RV(ir.Normal(), x, scale)
         y = ir.RV(ir.Mul(), z, scale)
-        [y_samps, z_samps] = self.sample_flat([y, z], [z], [2.3], niter=100)
+        [y_samps, z_samps] = self.sample_flat([y, z], [z], [2.3], num_samples=100)
         assert y_samps.shape == z_samps.shape == (100,)
         assert np.allclose(z_samps, 2.3)
         assert np.allclose(y_samps, 2.3)

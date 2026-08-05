@@ -10,16 +10,7 @@ from __future__ import annotations
 from jax import numpy as jnp
 import jax.tree_util
 import numpy as np
-from typing import (
-    Any,
-    Callable,
-    TypeAlias,
-    TYPE_CHECKING,
-    Type,
-    Sequence,
-    List,
-    Optional,
-)
+from typing import Any, Callable, TypeAlias, TYPE_CHECKING, Type, Sequence, List, Optional, Iterable
 from pangolin import ir
 from pangolin.ir import Op, RV, ArrayLike
 from numpy.typing import ArrayLike
@@ -30,13 +21,21 @@ from pangolin import dag, util
 from pangolin import jax_backend
 import blackjax
 from jaxtyping import PyTree
+import functools
+from pangolin.calculate import Calculate
 
-__all__ = ["sample", "E", "var", "std", "Calculate", "inf_until_match"]
+__all__ = ["sample", "E", "var", "std", "run_nuts", "nuts", "blackjax_calculate"]
+
 
 from pangolin.jax_backend.bijectors import default_bijector_dict
 
 
-def inference_loop(rng_key, kernel, initial_states, num_samples):
+################################################################################
+# NUTS
+################################################################################
+
+
+def nuts_inference_loop(rng_key, kernel, initial_states, num_samples):
     @jax.jit
     def one_step(states, rng_key):
         states, infos = kernel(rng_key, states)
@@ -49,6 +48,11 @@ def inference_loop(rng_key, kernel, initial_states, num_samples):
 
 
 def run_nuts(log_prob, key, initial_state, num_samples):
+    """
+    Given a density, do NUTS inference
+
+    """
+
     # to do hmc instead:
     # adapt = blackjax.window_adaptation(blackjax.hmc, log_prob, num_integration_steps=60)
     # kernel = blackjax.hmc(log_prob, **parameters).step
@@ -59,9 +63,25 @@ def run_nuts(log_prob, key, initial_state, num_samples):
     (last_state, parameters), _ = adapt.run(warmup_key, initial_state, num_samples)  # type: ignore
 
     kernel = blackjax.nuts(log_prob, **parameters).step
-    states, infos = inference_loop(sample_key, kernel, last_state, num_samples)
+    states, infos = nuts_inference_loop(sample_key, kernel, last_state, num_samples)
     return states.position
 
+
+################################################################################
+# Pathfinder
+################################################################################
+
+
+def run_pathfinder(log_prob, key, initial_state, num_samples, elbo_samples=200, **lbfgs_kwargs):
+    approx_key, sample_key = jax.random.split(key)
+    state, _ = blackjax.vi.pathfinder.approximate(approx_key, log_prob, initial_state, elbo_samples, **lbfgs_kwargs)
+    samples, _logq = blackjax.vi.pathfinder.sample(sample_key, state, num_samples)
+    return samples
+
+
+################################################################################
+# Generic sampling method
+################################################################################
 
 # TODO: Raise error if given discrete latent variable
 
@@ -71,8 +91,9 @@ def sample_flat(
     given_vars: list[RV],
     given_vals: list,
     *,
-    niter: int,
+    run_inf: Callable,
     bijector_dict: Optional[dict] = default_bijector_dict,
+    **inf_args,
 ) -> list[jnp.ndarray]:
     """
     Given a "flat" specification of an inference problem, do inference using Numpyro. The basic algorithm is:
@@ -91,6 +112,8 @@ def sample_flat(
         The RVs you want to condition on
     vals
         The values for the conditioned RVs
+    run_inf
+        runner for blackjax inference routine
     niter: int, optional
         The number of iterations / samples to draw
 
@@ -104,7 +127,7 @@ def sample_flat(
     >>> x = ir.RV(ir.Constant(0.5))
     >>> y = ir.RV(ir.Normal(), x, x)
     >>> z = ir.RV(ir.Normal(), y, x)
-    >>> [samps_x, samps_y] = sample_flat([x, y], [z], [3.0], niter=30)
+    >>> [samps_x, samps_y] = sample_flat([x, y], [z], [3.0], run_inf=run_nuts, num_samples=30)
     >>> samps_x.shape
     (30,)
     >>> samps_y.shape
@@ -147,7 +170,7 @@ def sample_flat(
     key = jax.random.PRNGKey(seed)
 
     latent_vals = jax_backend.ancestor_sample_flat(latent_vars, key, bijector_dict=bijector_dict)
-    latent_samps = run_nuts(log_prob, key, latent_vals, niter)
+    latent_samps = run_inf(log_prob, key, latent_vals, **inf_args)
 
     if bijector_dict is not None and len(latent_samps) > 0:
 
@@ -167,200 +190,19 @@ def sample_flat(
         return jax_backend.fill_in(latent_vars + given_vars, latent_vals + given_vals, vars)
 
     # include niter in case latent_samps is empty
-    return jax.vmap(fill, axis_size=niter)(latent_samps)
+    # return jax.vmap(fill, axis_size=niter)(latent_samps)
+
+    # TODO: extracting num_samples like this is not elegant
+    return jax.vmap(fill, axis_size=inf_args["num_samples"])(latent_samps)
 
 
-class Calculate:
-    """
-    A `Calculate` object just remembers a set of options and then offers inference
-    methods.
-
-    Parameters
-    ----------
-    default
-        represents a set of options for the inference engine that can be overriden later
-    frozen
-        represents a set of options for the inference engine that cannot be overridden
-
-    """
-
-    def __init__(self, default: Optional[dict] = None, frozen: Optional[dict] = None):
-
-        if default is None:
-            default = {}
-        if frozen is None:
-            frozen = {}
-
-        if util.intersects(default, frozen):
-            raise ValueError(f"default {default} intersects with frozen {frozen}")
-
-        self.default = default
-        self.frozen = frozen  # options for that engine
-
-    def sample(
-        self,
-        vars: PyTree[RV],
-        given_vars: PyTree[RV] = None,
-        given_vals: PyTree[ArrayLike] = None,
-        reduce_fn: Optional[Callable] = None,
-        **options,
-    ):
-        """
-        Draw samples!
-
-        Args:
-            vars: A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
-            given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-                ``None`` indicates no conditioning variables.
-            given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
-                ``ArrayLike`` representing observed values. Must match the structure and
-                shape of ``given_vars``.
-            reduce_fn:  Function to apply to each leaf node in samples before returning.
-                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
-            options: extra options to pass to sampler
-
-        Returns:
-            Pytree of JAX arrays matching structure and shape of ``vars`` but with one
-            extra dimension at the start, containing the samples.
-
-        Examples
-        --------
-        >>> zero    = ir.RV(ir.Constant(0))
-        >>> one     = ir.RV(ir.Constant(1))
-        >>> x       = ir.RV(ir.Normal(), zero, one)
-        >>> y       = ir.RV(ir.Normal(), x, one)
-        >>> calc    = Calculate({'niter': 529})
-        >>> x_samps = calc.sample(x,y,2)
-        >>> x_samps.shape
-        (529,)
-        >>> np.mean(x_samps) # something close to 1.0
-        Array(...)
-        """
-
-        if util.intersects(options, self.frozen):
-            raise ValueError(f"options intersects frozen")
-
-        options = self.default | options  # overrides defaults
-
-        (
-            flat_vars,
-            flat_given_vars,
-            flat_given_vals,
-            unflatten,
-            unflatten_given,
-        ) = util.flatten_args(vars, given_vars, given_vals)
-
-        flat_samps = sample_flat(
-            flat_vars,
-            flat_given_vars,
-            flat_given_vals,
-            **options,
-            **self.frozen,
-        )
-
-        if reduce_fn is not None:
-            flat_samps = map(reduce_fn, flat_samps)
-
-        return unflatten(flat_samps)
-
-    def E(
-        self,
-        vars: PyTree[RV],
-        given_vars: PyTree[RV] = None,
-        given_vals: PyTree[ArrayLike] = None,
-        **options,
-    ):
-        """
-        Compute (conditional) expected values. This is just a thin wrapper that calls
-        `sample` and then reduces by taking the mean.
-
-        Args:
-            vars: A `RV` or list/tuple of `RV` or pytree of `RV` to sample.
-            given_vars:  A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-                ``None`` indicates no conditioning variables.
-            given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
-                ``ArrayLike`` representing observed values. Must match the structure and
-                shape of ``given_vars``.
-            reduce_fn:  Function to apply to each leaf node in samples before returning.
-                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
-            options: extra options to pass to sampler
-
-        Returns:
-            Pytree of JAX arrays matching structure and shape of ``vars``, containing
-                the expectations.
+# sample_nuts = functools.partial(sample_flat, run_inf=run_nuts)
+# sample_pathfinder = functools.partial(sample_flat, run_inf=run_pathfinder)
 
 
-        Examples
-        --------
-        >>> zero    = ir.RV(ir.Constant(0))
-        >>> one     = ir.RV(ir.Constant(1))
-        >>> x       = ir.RV(ir.Normal(), zero, one)
-        >>> y       = ir.RV(ir.Normal(), x, one)
-        >>> calc    = Calculate({'niter': 529})
-        >>> calc.E(x,y,2) # something close to 1.0
-        Array(...)
-        """
+default = {"num_samples": 1000}
 
-        return self.sample(vars, given_vars, given_vals, lambda x: np.mean(x, axis=0), **options)
-
-    def var(
-        self,
-        vars: PyTree[RV],
-        given_vars: PyTree[RV] = None,
-        given_vals: PyTree[ArrayLike] = None,
-        **options,
-    ):
-        return self.sample(vars, given_vars, given_vals, lambda x: np.var(x, axis=0), **options)
-
-    def std(
-        self,
-        vars: PyTree[RV],
-        given_vars: PyTree[RV] = None,
-        given_vals: PyTree[ArrayLike] = None,
-        **options,
-    ):
-        return self.sample(vars, given_vars, given_vals, lambda x: np.std(x, axis=0), **options)
-
-    def sample_arviz(
-        self,
-        vars: dict[str, RV],
-        given_vars: PyTree[RV] = None,
-        given_vals: PyTree[ArrayLike] = None,
-        **options,
-    ):
-        """This is an **experimental** function to draw samples in
-        `ArviZ <https://www.arviz.org/en/latest/>`__ format.
-
-        Note: ArviZ is not installed with pangolin by default: You must install it
-        manually.
-
-        Args:
-            vars: dictionary mapping names to individual random variables
-                given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-                ``None`` indicates no conditioning variables.
-            given_vars: A `RV` or list/tuple of `RV` or pytree of `RV` to condition on.
-                given_vals: An ``ArrayLike`` or list/tuple of ``ArrayLike`` or pytree of
-                ``ArrayLike`` representing observed values. Must match the structure and
-                shape of ``given_vars``.
-            reduce_fn:  Function to apply to each leaf node in samples before returning.
-                This is used to create `E`, `var`, etc. (If ``None``, does nothing.)
-            options: extra options to pass to sampler
-        """
-
-        try:
-            from arviz import convert_to_inference_data
-        except ImportError:
-            raise ImportError("To use this method you must install arviz manually")
-
-        samps = self.sample(vars, given_vars, given_vals, **options)
-        samps_with_none = {key: samps[key][None, ...] for key in samps}
-        dataset = convert_to_inference_data(samps_with_none)
-        return dataset
-
-
-default = {"niter": 1000}
-
-calc = Calculate(default)
+calc = Calculate(sample_flat, **default)
 sample = calc.sample
 """
 Default version of `Calculate.sample` that draws 1000 samples.
@@ -384,28 +226,63 @@ Default version of `Calculate.sample_arviz` that uses 1000 samples.
 """
 
 
-def inf_until_match(inf, vars, given, vals, testfun, niter_start=1000, niter_max=100000):
-    from time import time
+# def inf_until_match(inf, vars, given, vals, testfun, niter_start=1000, niter_max=100000):
+#     from time import time
 
-    niter = niter_start
-    while niter <= niter_max:
-        t0 = time()
-        out = inf(vars, given, vals, niter=niter)
-        t1 = time()
-        print(f"{niter=} {t1 - t0}")
-        if testfun(out):
-            assert True
-            return
-        else:
-            niter *= 2
-    assert False
-
-
-import functools
-
-sample_until_match = functools.partial(inf_until_match, sample)
+#     niter = niter_start
+#     while niter <= niter_max:
+#         t0 = time()
+#         out = inf(vars, given, vals, niter=niter)
+#         t1 = time()
+#         print(f"{niter=} {t1 - t0}")
+#         if testfun(out):
+#             assert True
+#             return
+#         else:
+#             niter *= 2
+#     assert False
 
 
-def sample_flat_until_match(vars, given, vals, testfun, niter_start=1000, niter_max=100000):
-    new_testfun = lambda stuff: testfun(stuff[0])
-    return inf_until_match(sample_flat, vars, given, vals, new_testfun, niter_start, niter_max)
+# import functools
+
+# sample_until_match = functools.partial(inf_until_match, sample)
+
+
+# def sample_flat_until_match(vars, given, vals, testfun, niter_start=1000, niter_max=100000):
+#     new_testfun = lambda stuff: testfun(stuff[0])
+#     return inf_until_match(sample_flat, vars, given, vals, new_testfun, niter_start, niter_max)
+
+import textwrap, inspect
+
+
+def blackjax_calculate(run_inf, frozen: Iterable[str] = (), **options) -> Calculate:
+    """Given a function that calls blackjax, wrap it into a convenient `Calculate` object.
+
+    Parameters
+    ----------
+    run_inf
+        inference routine that calls blackjax. Should have signature ``run_inf(log_prob, key, initial_state, **options) -> samples`` where ``log_prob`` is a jax function that evaluates the log probability, ``key`` is a Jax PRNGKey, and ``initial_state`` is a latent state from which to initialize inference.
+    frozen
+        parameters that cannot be overriden from `options`
+    options
+        default options
+
+
+
+    Examples
+    --------
+    >>> nuts = blackjax_calculate(run_nuts)
+
+    """
+
+    calc = Calculate(sample_flat, run_inf=run_inf, frozen=frozenset(frozen) | {"run_inf"}, **options)
+    calc.__doc__ = (
+        f"Inference engine using {run_inf.__name__}.\n\n"
+        f"Options are forwarded to {run_inf.__name__}:\n\n"
+        + textwrap.indent(inspect.getdoc(run_inf) or "(undocumented)", "    ")
+    )
+    return calc
+
+
+nuts = blackjax_calculate(run_nuts)
+"Engine bound to NUTS. Options forwarded to `run_nuts`."

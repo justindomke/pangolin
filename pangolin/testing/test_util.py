@@ -10,15 +10,16 @@ def inf_until_match(inf, vars, given, vals, testfun, niter_start=1000, niter_max
     niter = niter_start
     while niter <= niter_max:
         t0 = time()
-        out = inf(vars, given, vals, niter=niter)
+        out = inf(vars, given, vals, num_samples=niter)
         t1 = time()
-        #print(f"{niter=} {t1 - t0}")
+        # print(f"{niter=} {t1 - t0}")
         if testfun(out):
             assert True
             return
         else:
             niter *= 2
     assert False
+
 
 def ancestor_sample_until_match(ancestor_sample, vars, testfun, niter_start=1000, niter_max=100_000_000):
     from time import time
@@ -36,6 +37,7 @@ def ancestor_sample_until_match(ancestor_sample, vars, testfun, niter_start=1000
         else:
             niter *= 2
     assert False
+
 
 # import functools
 

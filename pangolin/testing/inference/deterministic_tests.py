@@ -83,6 +83,6 @@ class DeterministicTests(MixinBase):
             input_rvs = [RV(Constant(x)) for x in inputs]
             output_rv = RV(pangolin_op(), *input_rvs)
 
-            output_pangolin = self.sample_flat([output_rv], [], [], niter=1)
+            output_pangolin = self.sample_flat([output_rv], [], [], num_samples=1)
             output_numpy = numpy_fun(*inputs)
             assert np.allclose(output_pangolin, output_numpy, atol=1e-4, rtol=1e-4)

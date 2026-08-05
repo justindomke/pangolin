@@ -17,4 +17,5 @@ Subpackages
    interface
    jax_backend
    torch_backend
+   calculate
    blackjax

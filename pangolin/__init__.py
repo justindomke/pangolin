@@ -23,7 +23,7 @@ with warnings.catch_warnings():
     import numpyro
 
 
-from pangolin import dag, util, ir, interface, jax_backend, blackjax
+from pangolin import dag, util, ir, interface, jax_backend, calculate, blackjax
 
 __all__ = ["dag", "util", "ir", "interface", "jax_backend"]
 
@@ -34,4 +34,5 @@ try:
 except ImportError:
     pass
 
+__all__.append("calculate")
 __all__.append("blackjax")

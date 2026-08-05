@@ -79,7 +79,7 @@ class CompositeTests(MixinBase):
         assert isinstance(y.op, ir.Composite)
 
         expected = 3.0
-        [samps] = self.sample_flat([y], [], [], niter=1)
+        [samps] = self.sample_flat([y], [], [], num_samples=1)
 
         assert np.allclose(expected, samps[0])
 
@@ -93,6 +93,6 @@ class CompositeTests(MixinBase):
         assert isinstance(z.op, ir.Composite)
 
         expected = (3.3 + 3.3) * 4.4
-        [samps] = self.sample_flat([z], [], [], niter=1)
+        [samps] = self.sample_flat([z], [], [], num_samples=1)
 
         assert np.allclose(expected, samps[0])

@@ -22,7 +22,7 @@ class ComplexTests(MixinBase):
 
         expected = np.arange(1, 11)
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+        [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
         out = y_samps[0]
 
         assert out.shape == expected.shape
@@ -36,7 +36,7 @@ class ComplexTests(MixinBase):
 
         expected = np.cumsum(a)
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+        [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
         out = y_samps[0]
 
         assert out.shape == expected.shape
@@ -48,7 +48,7 @@ class ComplexTests(MixinBase):
 
         expected = np.array([1, 2, 3, 4, 5])[:, None] + np.arange(1, 11)[None, :]
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+        [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
         out = y_samps[0]
 
         assert out.shape == expected.shape
@@ -68,7 +68,7 @@ class ComplexTests(MixinBase):
 
             expected = np.array([1, 2, 3, 4, 5])[:, None] + np.cumsum(a)[None, :]
 
-            [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+            [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
             out = y_samps[0]
 
             assert out.shape == expected.shape
@@ -91,7 +91,7 @@ class ComplexTests(MixinBase):
             ]:
                 expected = np.array([1, 2, 3, 4, 5])[:, None] + np.cumsum(a, axis=1)
 
-                [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+                [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
                 out = y_samps[0]
 
                 assert out.shape == expected.shape
@@ -107,7 +107,7 @@ class ComplexTests(MixinBase):
 
         expected = b[None, :] + np.cumsum(a[None, :] + np.zeros(10)[:, None], axis=0)
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)  # type:ignore
+        [y_samps] = self.sample_flat([y], [], [], num_samples=1)  # type:ignore
         out = y_samps[0]
 
         assert y.shape == out.shape == expected.shape == (10, 5)
@@ -142,7 +142,7 @@ class ComplexTests(MixinBase):
 
         expected = b[None, :] + np.cumsum(a, axis=0)
 
-        [y_samps] = self.sample_flat([y], [], [], niter=1)
+        [y_samps] = self.sample_flat([y], [], [], num_samples=1)
         out = y_samps[0]
 
         assert y.shape == out.shape == expected.shape == (10, 5)

@@ -34,7 +34,7 @@ class ScanTests(MixinBase):
         x = ir.RV(ir.Constant(0.1))
         y = ir.RV(op, x)
 
-        out = self.sample_flat([y], [], [], niter=1)
+        out = self.sample_flat([y], [], [], num_samples=1)
         assert np.allclose(expected, out[0])
 
     def test_repeated_exp_with_dummy(self):
@@ -184,7 +184,7 @@ class ScanTests(MixinBase):
 
         z = randwalk(0.0, np.arange(10))
         assert z.shape == (10,)
-        [zs] = self.sample_flat([z], [], [], niter=1)
+        [zs] = self.sample_flat([z], [], [], num_samples=1)
         assert zs.shape == (1, 10)
 
         vecwalk = pi.scan(lambda last: randwalk(0.0, last), 5)
@@ -192,7 +192,7 @@ class ScanTests(MixinBase):
 
         u = vecwalk(np.zeros(10))
         assert u.shape == (5, 10)
-        [us] = self.sample_flat([u], [], [], niter=1)
+        [us] = self.sample_flat([u], [], [], num_samples=1)
         assert us.shape == (1, 5, 10)
 
 
