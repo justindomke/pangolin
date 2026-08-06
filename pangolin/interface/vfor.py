@@ -517,6 +517,94 @@ def extract_from_rvs_single_axis(dummy_index: InfixRV[Axis], output: PyTree[Infi
     return indexed_rvs, indexed_dims, replay
 
 
+def live_axis(dim, idx):
+    """
+    Compute the vmap in_axis for one array at one step of vfor's loop.
+
+    vfor builds the mapped computation as NESTED vmaps: the loop runs from
+    the last dummy index to the first, wrapping each new vmap around the
+    previous one, so dummy index 0 ends up OUTERMOST. At call time the
+    outer maps slice first, and each inner map receives only the slice the
+    outer maps produced.
+
+    Consequently, when the map for dummy ``idx`` runs:
+      * axes of dummies at positions ``p < idx`` (outer maps) are already
+        SLICED AWAY;
+      * axes of dummies at positions ``p > idx`` (inner maps) are STILL
+        PRESENT (they get sliced deeper inside);
+      * slicing removes an axis but never reorders the survivors.
+
+    ``dims[k][idx]`` records the slot dummy ``idx`` occupied in the ORIGINAL
+    array. Its live position is that slot minus the number of already-sliced
+    axes (``p < idx``) that were AHEAD of it. Removed axes behind the slot
+    do not move it.
+
+    Parameters
+    ----------
+    dim : list
+        One entry of ``dims``: for a single array, the original slot (int)
+        of each dummy index, or ``None`` where that dummy does not index
+        this array.
+    idx : int
+        Position of the dummy index being mapped at this loop step.
+
+    Returns
+    -------
+    int or None
+        The in_axis for vmap at this step, or ``None`` if dummy ``idx``
+        does not index this array.
+
+    Examples
+    --------
+    Single dummy: x[i] -> map its only axis.
+
+    >>> live_axis([0], 0)
+    0
+
+    trouble2 pattern: b[j] with dummies [i, j]; b not indexed by i.
+
+    >>> live_axis([None, 0], 1)
+    0
+    >>> live_axis([None, 0], 0) is None
+    True
+
+    Ascending pattern: x[i, j], dims [0, 1]. Mapping j (idx=1): the outer
+    i-map sliced away slot 0, which was ahead of j's slot 1 -> shift to 0.
+
+    >>> live_axis([0, 1], 1)
+    0
+
+    Mapping i (idx=0): i is outermost and sees the original array, raw slot.
+
+    >>> live_axis([0, 1], 0)
+    0
+
+    Transposed pattern: x[j, i] with x of shape (2, 3), so dims [1, 0]
+    (i's slot is 1, j's slot is 0). Mapping j (idx=1): the outer i-map
+    sliced slot 1, which was BEHIND j's slot 0, so j does not move.
+
+    >>> live_axis([1, 0], 1)
+    0
+
+    Mapping i (idx=0): outermost, sees the original array, raw slot 1.
+
+    >>> live_axis([1, 0], 0)
+    1
+
+    That pair (j over axis 0 of each x[:, i] slice, i over axis 1 of x)
+    stacks j inner and i outer, giving y.shape == (3, 2) for
+    vfor(lambda i, j: x[j, i] + 2.2) -- dummy order determines output axes.
+
+    Array not indexed by this dummy -> None (leave unmapped).
+
+    >>> live_axis([0, None], 1) is None
+    True
+    """
+    if dim[idx] is None:
+        return None
+    return dim[idx] - sum(1 for p in range(idx) if dim[p] is not None and dim[p] < dim[idx])
+
+
 from typing import overload, Any
 
 
@@ -627,7 +715,11 @@ def vfor[P: PyTree[InfixRV]](
     An example passing two indices with a single parent RV:
 
     >>> x = constant([[1,2,3],[4,5,6]])
+    >>> x.shape
+    (2, 3)
     >>> y = vfor(lambda i, j: x[j,i] + 2.2)
+    >>> y.shape
+    (3, 2)
     >>> print(y)
     vmap(vmap(add, [0, None], 2), [1, None], 3)([[1 2 3] [4 5 6]], 2.2)
 
@@ -715,7 +807,8 @@ def vfor[P: PyTree[InfixRV]](
     new_fun = replay
 
     for idx in range(num_indices - 1, -1, -1):
-        in_axes = tuple(dim[idx] for dim in dims)
+        in_axes = tuple(live_axis(dim, idx) for dim in dims)
+
         arg_name = arg_names[idx]
 
         if arg_name in kwargs:
