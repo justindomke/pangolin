@@ -7,28 +7,6 @@ import pytest
 import sys
 
 
-@pytest.fixture(autouse=True)
-def reset_module_imports():
-    """Ensure fresh module imports for each test in this file only."""
-
-    PROJECT_ROOT = "pangolin"
-
-    modules_to_clear = [
-        key for key in list(sys.modules.keys()) if key == PROJECT_ROOT or key.startswith(f"{PROJECT_ROOT}.")
-    ]
-
-    for module in modules_to_clear:
-        if module in sys.modules:
-            del sys.modules[module]
-
-    yield  # Test runs here
-
-    # Optional: Clean up after test too
-    for module in modules_to_clear:
-        if module in sys.modules:
-            del sys.modules[module]
-
-
 def test_unary_op_off():
     from pangolin.interface import exp, constant, bernoulli
     from pangolin import ir, interface
