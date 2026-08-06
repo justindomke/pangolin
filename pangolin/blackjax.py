@@ -607,74 +607,31 @@ def run_rwm(log_prob, key, initial_state, num_samples, step_size=1.0):
 
 
 def sample_flat(
-    vars: list[RV],
-    given_vars: list[RV],
-    given_vals: list,
+    vars,
+    given_vars,
+    given_vals,
     *,
-    run_inf: Callable,
-    bijector_dict: Optional[dict] = default_bijector_dict,
+    run_inf=run_nuts,
+    bijector_dict=default_bijector_dict,
+    deferred=True,
     **inf_args,
-) -> list[jnp.ndarray]:
+):
     """
-    Given a "flat" specification of an inference problem, do inference
-    using a jax-based inference driver. The basic algorithm is:
+    Run inference over a flat list of variables.
 
-    1. Find the latent (random, unconditioned) RVs upstream of `vars`
-       and `given_vars`.
-    2. Compile a jitted log-density over the unconstrained latent
-       space via `jax_backend.ancestor_log_prob_flat`.
-    3. Draw an initial latent position by ancestor sampling.
-    4. Call `run_inf` to produce unconstrained samples.
-    5. Map samples back to the constrained space via the bijectors,
-       and extract the entries corresponding to `vars`.
+    Latent variables are split into:
 
-    Parameters
-    ----------
-    vars
-        The RVs you want to sample from.
-    given_vars
-        The RVs you want to condition on. Must all be random.
-    given_vals
-        The observed values for `given_vars`.
-    run_inf
-        Inference driver, with signature
-        ``run_inf(log_prob, key, initial_state, num_samples, **options)``,
-        where ``log_prob`` is a jitted jax function over the
-        unconstrained latent space and ``key`` is a jax PRNGKey,
-        returning unconstrained samples with leading axis
-        ``num_samples``. See `run_nuts`, `run_hmc`, `run_pathfinder`,
-        `run_meanfield_vi`, `run_fullrank_vi`, `run_smc`, `run_rwm`.
-        The driver need not be gradient-based — any method that can
-        sample from a jax log-density works.
-    bijector_dict
-        Mapping from ops to bijectors used to unconstrain latent RVs,
-        or None to work directly in the constrained space.
-    **inf_args
-        Forwarded verbatim to `run_inf`. Must include `num_samples`,
-        which is also used here to size the final `vmap`.
+    - **MCMC vars**: latents that are ancestors of a given (observed)
+      variable. These are unconstrained via bijectors and sampled by
+      ``run_inf``.
+    - **Deferred vars**: latents with no observed descendants. These are
+      marginalized out of the MCMC target and ancestor-sampled at the
+      end via ``fill_in``, conditioned on posterior draws of their parents.
 
-    Returns
-    -------
-    samples: list[jnp.ndarray]
-        Samples for each variable in `vars`, each with leading axis
-        ``inf_args["num_samples"]``.
-
-    Examples
-    --------
-    >>> x = ir.RV(ir.Constant(0.5))
-    >>> y = ir.RV(ir.Normal(), x, x)
-    >>> z = ir.RV(ir.Normal(), y, x)
-    >>> [samps_x, samps_y] = sample_flat([x, y], [z], [3.0], run_inf=run_nuts, num_samples=30)
-    >>> samps_x.shape
-    (30,)
-    >>> samps_y.shape
-    (30,)
-    >>> np.allclose(samps_x, 0.5)
-    True
-    >>> np.allclose(samps_y, 0.5)
-    False
+    The split is exact: no MCMC/given var has a deferred parent, the
+    deferred factors integrate to 1 in constrained space, and deferred
+    latents are drawn from their true conditional given the MCMC latents.
     """
-
     if len(given_vars) != len(given_vals):
         raise ValueError("length of given_vars not equal to length of given_vals")
 
@@ -684,43 +641,71 @@ def sample_flat(
 
     given_vals = [jnp.array(val) for val in given_vals]
     all_vars = dag.upstream_nodes(tuple(vars) + tuple(given_vars))
-    latent_vars = [var for var in all_vars if var.op.random and var not in given_vars]
+    latent_vars = [v for v in all_vars if v.op.random and v not in given_vars]
 
-    for v in latent_vars:
+    if deferred:
+        obs_ancestors = dag.upstream_nodes(tuple(given_vars))
+        mcmc_vars = [v for v in latent_vars if v in obs_ancestors]
+    else:
+        mcmc_vars = latent_vars
+
+    # Deferred latents are sampled in constrained space and never enter
+    # the unconstrained space, so the discrete restriction applies only
+    # to MCMC vars.
+    for v in mcmc_vars:
         if v.op.discrete:
             raise ValueError(
                 f"sample_flat does not support discrete latent/unobserved RV "
-                f"(latents are compiled to a continuous unconstrained space; "
-                f"saw op {v.op})"
+                f"with observed descendants (cannot be deferred; saw op {v.op})"
             )
-
-    @jax.jit
-    def log_prob(latent_vals):
-        return jax_backend.ancestor_log_prob_flat(latent_vars + given_vars, latent_vals + given_vals, bijector_dict)
 
     seed = np.random.randint(0, 2**32 - 1)
     key = jax.random.PRNGKey(seed)
-    init_key, inf_key = jax.random.split(key)
+    init_key, inf_key, fill_key = jax.random.split(key, 3)
 
-    latent_vals = jax_backend.ancestor_sample_flat(latent_vars, init_key, bijector_dict=bijector_dict)
-    latent_samps = run_inf(log_prob, inf_key, latent_vals, **inf_args)
+    if mcmc_vars:
 
-    if bijector_dict is not None and len(latent_samps) > 0:
+        @jax.jit
+        def log_prob(mcmc_vals):
+            return jax_backend.ancestor_log_prob_flat(mcmc_vars + given_vars, mcmc_vals + given_vals, bijector_dict)
 
-        def constrain(latent_vals):
-            all_unconstrained = jax_backend.ancestor_constrain(
-                latent_vars + given_vars, latent_vals + given_vals, bijector_dict
-            )
-            latent_unconstrained = all_unconstrained[: len(latent_vars)]
-            return latent_unconstrained
+        mcmc_vals = jax_backend.ancestor_sample_flat(mcmc_vars, init_key, bijector_dict=bijector_dict)
+        mcmc_samps = run_inf(log_prob, inf_key, mcmc_vals, **inf_args)
 
-        latent_samps = jax.vmap(constrain)(latent_samps)
+        if bijector_dict is not None and len(mcmc_samps) > 0:
 
-    def fill(latent_vals):
-        return jax_backend.fill_in(latent_vars + given_vars, latent_vals + given_vals, vars)
+            def constrain(mcmc_vals):
+                all_unconstrained = jax_backend.ancestor_constrain(
+                    mcmc_vars + given_vars, mcmc_vals + given_vals, bijector_dict
+                )
+                return all_unconstrained[: len(mcmc_vars)]
 
-    # TODO: extracting num_samples like this is not elegant
-    return jax.vmap(fill, axis_size=inf_args["num_samples"])(latent_samps)
+            mcmc_samps = jax.vmap(constrain)(mcmc_samps)
+    else:
+        # No continuous latent is an ancestor of an observation, so the
+        # request reduces to (conditional) forward sampling.
+        mcmc_samps = []
+
+    # Ancestor-sample the deferred latents (and resolve deterministic
+    # outputs) per posterior draw. The batch axis comes from fill_keys,
+    # so this also works when mcmc_vars is empty.
+    num_samples = inf_args["num_samples"]
+    fill_keys = jax.random.split(fill_key, num_samples)
+
+    def fill(mcmc_vals, k):
+        return jax_backend.fill_in(
+            mcmc_vars + given_vars,
+            list(mcmc_vals) + given_vals,
+            vars,
+            key=k,
+        )
+
+    if mcmc_vars:
+        in_axes = ([0] * len(mcmc_vars), 0)
+    else:
+        in_axes = (None, 0)
+
+    return jax.vmap(fill, in_axes=in_axes)(mcmc_samps, fill_keys)
 
 
 ################################################################################

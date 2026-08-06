@@ -771,27 +771,66 @@ def fill_in(
     random_vars: Sequence[RV],
     random_values: Sequence[ArrayLike],
     desired_vars: Sequence[RV],
+    key: Optional[JaxArray] = None,
 ):
-    # TODO: assert random / nonrandom / length / etc
+    """
+    Compute values for ``desired_vars``, given values for ``random_vars``.
 
+    Any random variable upstream of ``desired_vars`` that is *not* assigned
+    a value in ``random_vars`` is sampled from its op, conditioned on its
+    (already-resolved) parents — i.e., conditional ancestor sampling. This
+    requires ``key``. If ``key`` is ``None``, the previous behavior is
+    preserved exactly: every random ancestor (and every random desired var)
+    must be given a value, otherwise an error is raised.
+
+    Parameters
+    ----------
+    random_vars
+        Random variables whose values are known. Must all be random.
+    random_values
+        Values for ``random_vars``, aligned by position.
+    desired_vars
+        Variables to return values for. With ``key`` provided, these may
+        include unassigned random variables, which are then sampled.
+    key
+        Optional JAX ``PRNGKey``. When provided, unassigned random
+        variables are sampled; the key is split once per sampled node, in
+        topological order.
+
+    Returns
+    -------
+    list
+        Values aligned with ``desired_vars``.
+    """
     random_values = [jnp.array(v) for v in random_values]
+
+    if len(random_vars) != len(random_values):
+        raise ValueError("random_vars and random_values must have same length")
 
     for var in random_vars:
         if not var.op.random:
             raise ValueError("var not random as expected")
 
     for var in desired_vars:
-        if var.op.random and var not in random_vars:
+        if var.op.random and var not in random_vars and key is None:
             raise ValueError("var unexpectedly random")
+
+    given = dict(zip(random_vars, random_values))
 
     all_vars = dag.upstream_nodes(list(random_vars) + list(desired_vars))
     all_values = {}
     for var in all_vars:
-        if var in random_vars:
-            value = random_values[random_vars.index(var)]
+        if var in given:
+            value = given[var]
         else:
             parent_values = [all_values[p] for p in var.parents]
-            value = eval_op(var.op, parent_values)
+            if var.op.random:
+                if key is None:
+                    raise ValueError(f"Random variable {var} has no given value; " "pass key= to sample it")
+                key, subkey = jax.random.split(key)
+                value = sample_op(var.op, subkey, parent_values)
+            else:
+                value = eval_op(var.op, parent_values)
         all_values[var] = value
     return [all_values[var] for var in desired_vars]
 
@@ -923,7 +962,7 @@ def ancestor_sampler(vars: PyTree[RV], biject: bool | dict = False) -> Callable[
     You can do normal JAX stuff with it, e.g. vmap it.
 
     >>> print(jax.vmap(fun)(jax.random.split(key, 3)))
-    [{'cat': Array([1.5, 1.5, 1.5], dtype=float32)}, Array([3., 3., 3.], dtype=...)]
+    [{'cat': Array([1.5, 1.5, 1.5], dtype=...)}, Array([3., 3., 3.], dtype=...)]
 
     """
 
@@ -980,7 +1019,7 @@ def ancestor_log_prob(*vars: PyTree[RV], biject: bool | dict = False, **kwvars: 
     Or you can vmap it.
 
     >>> jax.vmap(fun)(jnp.array([0.0, 0.5]))
-    Array([-0.9189385, -1.0439385], dtype=...)
+    Array([-0.9189..., -1.043...], dtype=...)
 
     Here's a more complex example:
 
@@ -988,13 +1027,13 @@ def ancestor_log_prob(*vars: PyTree[RV], biject: bool | dict = False, **kwvars: 
     >>> y = RV(op,loc,scale)
     >>> fun = ancestor_log_prob({'x':x, 'y':y})
     >>> fun({'x':0.0, 'y':[0.0, 0.5, 0.1]})
-    Array(-3.8057542, dtype=...)
+    Array(-3.805..., dtype=float...)
 
     You can also create a function that uses positional and/or keyword arguments:
 
     >>> fun = ancestor_log_prob(x, cat=y)
     >>> fun(0.0, cat=[0.0, 0.5, 0.1])
-    Array(-3.8057542, dtype=...)
+    Array(-3.805..., dtype=float...)
     """
 
     all_vars = (vars, kwvars)

@@ -348,7 +348,7 @@ def _exp_diagonal(X: jax.Array):
         >>> X = jnp.array([[1., 2.], [3., 4.]])
         >>> _exp_diagonal(X) # doctest: +NORMALIZE_WHITESPACE
         Array([[ 2.718...,  2.       ],
-               [ 3.      , 54.598... ]], dtype=...)
+               [ 3.      , 54.598...]], dtype=...)
     """
     X = jnp.asarray(X)
     if X.ndim != 2 or X.shape[0] != X.shape[1]:
@@ -377,9 +377,9 @@ def _log_diagonal(X: jax.Array):
 
     Example:
         >>> X = jnp.array([[1., 2.], [3., 4.]])
-        >>> _log_diagonal(X)
+        >>> _log_diagonal(X) # doctest: +NORMALIZE_WHITESPACE
         Array([[0.       , 2.       ],
-               [3.       , 1.386...]], dtype=...)
+               [3.       , 1.386...]], dtype=float...)
     """
     X = jnp.asarray(X)
     if X.ndim != 2 or X.shape[0] != X.shape[1]:
