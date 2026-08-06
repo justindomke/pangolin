@@ -392,6 +392,9 @@ class InfixRV[O: Op](ir.RV[O]):
 
         return VectorIndexProxy(self)
 
+    def __array__(self, *args, **kwargs):
+        raise TypeError(f"Cannot convert {self!r} to a numpy array")
+
 
 ########################################################################################
 # constants
