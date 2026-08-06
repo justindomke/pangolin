@@ -129,7 +129,7 @@ def not_implemented(*args):
 
 simple_dists: dict[Type[Op], Callable] = {
     ir.Normal: wrap(dist.Normal),
-    ir.NormalPrec: lambda loc, prec: wrap(dist.Normal)(loc, 1 / prec**2),
+    ir.NormalPrec: lambda loc, prec: wrap(dist.Normal)(loc, 1 / prec**0.5),
     ir.Bernoulli: wrap(dist.Bernoulli),
     ir.BernoulliLogit: lambda logits: wrap(dist.Bernoulli)(logits=logits),
     ir.Beta: wrap(dist.Beta),
