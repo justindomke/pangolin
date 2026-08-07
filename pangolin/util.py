@@ -1080,7 +1080,26 @@ def get_positional_args(target_func: Callable, *args: Any, **kwargs: Any):
 #     return "\n".join(lines)
 
 
-def render_dag(nodes, parents, label_fn=str):
+"""Unicode rendering of small DAGs.
+
+Public API:
+    render_dag(nodes, parents, label_fn=str, number_parents=False) -> None
+    dag_lines(nodes, parents, label_fn=str, number_parents=False)  -> list[str]
+"""
+
+CIRCLE = "○"  # a node
+VERT = "│"  # a line passing vertically
+HORIZ = "─"  # a line passing horizontally
+TURN_CONT = "├"  # leftmost parent, line continues below
+TURN_END = "└"  # leftmost parent, this row is its last child
+MERGE_CONT = "╄"  # interior parent, line continues below   (U+2544)
+MERGE_END = "┴"  # interior parent, this row is its last child
+CROSS = "┼"  # pure crossing: unrelated vertical
+
+MAX_NUMBERED_PARENTS = 9  # one digit per parent slot
+
+
+def render_dag(nodes, parents, label_fn: Callable[..., str] = str, number_parents=False):
     """
     Print a Unicode rendering of a DAG.
 
@@ -1088,7 +1107,8 @@ def render_dag(nodes, parents, label_fn=str):
     consecutive node rows. Each node occupies a text column, with one character
     of separation between columns.
 
-    **Characters used:** `○ │ ─ └ ├ ┴ ╄ ┼` and the space.
+    **Characters used:** `○ │ ─ └ ├ ┴ ╄ ┼`, the space, and the digits `0`-`9`
+    when `number_parents` is set.
 
     **Invariants:**
     - Lines only travel down and to the right, so no arrowheads are needed.
@@ -1116,6 +1136,9 @@ def render_dag(nodes, parents, label_fn=str):
       2. no node already in column k has an un-plotted child other than N.
     A new column at the far right satisfies both conditions, so placement
     never fails.
+
+    Condition 2 also guarantees that no two parents of N share a column: the
+    earlier of them would have had N un-plotted when the later was placed.
 
     ### Rendering
 
@@ -1151,6 +1174,33 @@ def render_dag(nodes, parents, label_fn=str):
     That is why the "live, not a parent" case never ends, and why `┼` can
     never conceal a merge.
 
+    ### Parent order
+
+    With `number_parents`, each edge is annotated with the position its parent
+    occupies in the child's `parents` entry. On the connector row directly
+    above node N's row, position 2k+1 carries that digit for every column k
+    holding a parent of N.
+
+    The annotation is unambiguous and free:
+    - Separator positions on connector rows are otherwise always blank, so a
+      digit never displaces a glyph, and the drawing never grows wider than
+      the label column (the rightmost possible digit sits at 2W+1, one short
+      of the label at 2W+2).
+    - At most one parent of N occupies any column, so at most one digit lands
+      in each slot.
+    - A parent's line is live at the row of every one of its children, so a
+      digit always sits immediately right of the `│` it annotates.
+    - Digits appear only on connector rows and labels only on node rows, so
+      the two never collide.
+
+    Digits therefore read left to right in *column* order, which need not be
+    parent order: `│1│0` means the column-0 parent is listed second. This is
+    exactly the information the unnumbered drawing loses.
+
+    Numbering makes `╄` redundant — a digit above a column already asserts
+    that the column is a parent — but both are emitted, so a drawing reads the
+    same way with the option on or off.
+
     ### Labels
 
     Let W be the largest column index used. Every node row is padded with
@@ -1168,11 +1218,16 @@ def render_dag(nodes, parents, label_fn=str):
     parents : sequence of sequences
         One entry per node: the parents of that node, given as nodes.
         `len(parents)` must equal `len(nodes)`, and every parent must appear
-        earlier in `nodes` than the node it parents. Order within an entry is
-        ignored, and repeated entries are treated as a single edge.
+        earlier in `nodes` than the node it parents. Position within an entry
+        is ignored unless `number_parents` is set. Repeated entries are
+        treated as a single edge, and are rejected under `number_parents`.
     label_fn : callable, optional
         Maps a node to its label, which must be a single-line string
         (default: `str`).
+    number_parents : bool, optional
+        Annotate each edge with its parent's position in the child's `parents`
+        entry (default: False). Requires every node to have at most
+        `MAX_NUMBERED_PARENTS` parents, all distinct.
 
     Returns
     -------
@@ -1184,6 +1239,12 @@ def render_dag(nodes, parents, label_fn=str):
     ValueError
         If `len(parents) != len(nodes)`, if `nodes` contains duplicates, or if
         a parent is missing from `nodes` or does not precede its child.
+        Additionally, under `number_parents`, if any node has more than
+        `MAX_NUMBERED_PARENTS` parents or lists a parent more than once.
+
+    See Also
+    --------
+    dag_lines : the same drawing returned as a list of lines.
 
     Notes
     -----
@@ -1306,4 +1367,253 @@ def render_dag(nodes, parents, label_fn=str):
     │ │ ○ C
     │ │ │
     └─┴─○ D
+
+    The empty DAG prints nothing.
+
+    >>> render_dag([], [])
+
+    Labels come from `label_fn`, and alignment follows the widest column.
+
+    >>> render_dag([1, 2, 3], [[], [1], [1]], "node {}".format)
+    ○   node 1
+    │
+    ├─○ node 2
+    │
+    ○   node 3
+
+    With `number_parents`, every edge carries its position in the child's
+    parent list, including the sole edge of a single-parent node.
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], ["A"], ["B"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○ A
+    │0
+    ○ B
+    │0
+    ○ C
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], [], ["A", "B"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○   A
+    │
+    │ ○ B
+    │0│1
+    └─○ C
+
+    The two drawings below are identical without numbering; the digits are
+    what distinguishes them. D's parents are listed B-then-C in the first and
+    C-then-B in the second, and B sits in the right-hand column.
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], ["A"], ["A"], ["B", "C"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○   A
+    │0
+    ├─○ B
+    │0│
+    ○ │ C
+    │1│0
+    └─○ D
+
+    >>> parents = [[], ["A"], ["A"], ["C", "B"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○   A
+    │0
+    ├─○ B
+    │0│
+    ○ │ C
+    │0│1
+    └─○ D
+
+    Numbering the all-glyph example:
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], ["A"], ["A", "B"], ["A", "B", "C"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○     A
+    │0
+    ├─○   B
+    │0│1
+    ├─╄─○ C
+    │0│1│2
+    └─┴─○ D
+
+    A crossed column gets no digit, since it is not a parent:
+
+    >>> nodes = ["A", "B", "C", "D", "E"]
+    >>> parents = [[], [], ["A"], ["A"], ["B"]]
+    >>> render_dag(nodes, parents, number_parents=True)
+    ○     A
+    │
+    │ ○   B
+    │0│
+    ├─┼─○ C
+    │0│
+    ○ │   D
+      │0
+      ○   E
+
+    Too many parents to number, though the DAG draws fine without the option:
+
+    >>> nodes = list(range(11))
+    >>> parents = [[] for _ in range(10)] + [list(range(10))]
+    >>> render_dag(nodes, parents, number_parents=True)
+    Traceback (most recent call last):
+        ...
+    ValueError: node 10 has 10 parents; number_parents allows at most 9
+
+    A repeated parent has no well-defined position:
+
+    >>> render_dag(["A", "B"], [[], ["A", "A"]], number_parents=True)
+    Traceback (most recent call last):
+        ...
+    ValueError: node 'B' lists parent 'A' more than once
     """
+    for line in dag_lines(nodes, parents, label_fn, number_parents):
+        print(line)
+
+
+def dag_lines(nodes, parents, label_fn: Callable[..., str] = str, number_parents=False):
+    """Return the drawing produced by `render_dag` as a list of lines."""
+    parent_idx = _validate(nodes, parents, number_parents)
+    children = _children(parent_idx)
+    col_of, ncols = _assign_columns(parent_idx, children)
+    return _draw(nodes, parent_idx, children, col_of, ncols, label_fn, number_parents)
+
+
+def _validate(nodes, parents, number_parents=False):
+    """Check the inputs and return parents as deduplicated node indices."""
+    if len(parents) != len(nodes):
+        raise ValueError(f"len(parents) == {len(parents)} != {len(nodes)} == len(nodes)")
+
+    index = {}
+    for i, node in enumerate(nodes):
+        if node in index:
+            raise ValueError(f"duplicate node: {node!r}")
+        index[node] = i
+
+    parent_idx = []
+    for i, raw in enumerate(parents):
+        if number_parents and len(raw) > MAX_NUMBERED_PARENTS:
+            raise ValueError(
+                f"node {nodes[i]!r} has {len(raw)} parents; number_parents " f"allows at most {MAX_NUMBERED_PARENTS}"
+            )
+        seen = []
+        for p in raw:
+            if p not in index:
+                raise ValueError(f"unknown parent {p!r} of node {nodes[i]!r}")
+            j = index[p]
+            if j >= i:
+                raise ValueError(f"parent {p!r} does not precede its child {nodes[i]!r}")
+            if j in seen:
+                # One edge, but two positions: nothing sensible to print.
+                if number_parents:
+                    raise ValueError(f"node {nodes[i]!r} lists parent {p!r} more than once")
+                continue  # repeated entries are a single edge
+            seen.append(j)
+        parent_idx.append(seen)
+    return parent_idx
+
+
+def _children(parent_idx):
+    """Invert the parent lists; each child list is in increasing index order."""
+    children = [[] for _ in parent_idx]
+    for i, ps in enumerate(parent_idx):
+        for j in ps:
+            children[j].append(i)
+    return children
+
+
+def _assign_columns(parent_idx, children):
+    """Place every node, returning its column and the number of columns used.
+
+    `pending[k]` holds the un-plotted children of the nodes in column k, so
+    the two placement conditions read directly off it.
+    """
+    pending = []
+    col_of = [0] * len(parent_idx)
+
+    for i in range(len(parent_idx)):
+        for waiting in pending:  # node i is being plotted now
+            waiting.discard(i)
+
+        # 1. at or right of every parent
+        first = max((col_of[j] for j in parent_idx[i]), default=0)
+        # 2. nothing else in the column is still waiting for a child
+        k = next(
+            (k for k in range(first, len(pending)) if not pending[k]),
+            len(pending),
+        )
+        if k == len(pending):
+            pending.append(set())
+
+        col_of[i] = k
+        pending[k].update(children[i])
+
+    return col_of, len(pending)
+
+
+def _draw(nodes, parent_idx, children, col_of, ncols, label_fn, number_parents=False):
+    """Render the placed nodes row by row."""
+    if not nodes:
+        return []
+
+    last_child = [c[-1] if c else -1 for c in children]
+    # column -> that parent's position in this node's parent list; at most one
+    # parent per column, so the mapping is well defined
+    parent_slot = [{col_of[j]: slot for slot, j in enumerate(ps)} for ps in parent_idx]
+    # reach[k]: the last row column k's live line extends to (-1 if dead)
+    reach = [-1] * ncols
+    width = 2 * ncols - 1
+    label_at = 2 * ncols  # == 2*W + 2
+
+    lines = []
+    for i, node in enumerate(nodes):
+        c = col_of[i]
+        slots = parent_slot[i]
+        m = min(slots, default=c)
+
+        row = [" "] * width
+        for pos in range(2 * m + 1, 2 * c):  # the horizontal run
+            row[pos] = HORIZ
+
+        for k in range(ncols):
+            if k == c:
+                glyph = CIRCLE
+            elif m <= k < c:
+                if k in slots:
+                    continues = reach[k] > i
+                    if k == m:
+                        glyph = TURN_CONT if continues else TURN_END
+                    else:
+                        glyph = MERGE_CONT if continues else MERGE_END
+                elif reach[k] >= i:
+                    glyph = CROSS
+                else:
+                    glyph = HORIZ  # dead column under the horizontal
+            else:
+                glyph = VERT if reach[k] >= i else " "
+            row[2 * k] = glyph
+
+        label = label_fn(node)
+        lines.append(("".join(row).ljust(label_at) + label).rstrip())
+
+        reach[c] = max(reach[c], last_child[i])
+
+        if i + 1 < len(nodes):
+            # one longer than a node row's glyphs: column ncols-1 may carry a
+            # digit at 2*ncols-1, still left of the label column at 2*ncols
+            conn = [" "] * label_at
+            for k in range(ncols):
+                if reach[k] > i:
+                    conn[2 * k] = VERT
+            if number_parents:
+                # separator cells are blank on connector rows, so these never
+                # displace a glyph; each sits right of a live │ by construction
+                for k, slot in parent_slot[i + 1].items():
+                    conn[2 * k + 1] = str(slot)
+            lines.append("".join(conn).rstrip())
+
+    return lines

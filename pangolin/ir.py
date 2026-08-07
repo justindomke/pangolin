@@ -2174,7 +2174,7 @@ def print_upstream(*vars: PyTree[RV], **named_vars: RV):
         print(line)
 
 
-def graph_upstream(*vars: PyTree[RV], **named_vars: RV):
+def graph_upstream(*vars: PyTree[RV], number_parents: bool = False, **named_vars: RV):
     """
     Print all upstream variables and shapes as a unicode DAG. In the DAG, edges always go down and to the right. If there are "crossings", edges never change direction at the crossing.
 
@@ -2188,27 +2188,27 @@ def graph_upstream(*vars: PyTree[RV], **named_vars: RV):
     >>> e = pi.constant(5)
     >>> f = pi.add(c,d)
     >>> graph_upstream(f)
-    ○       () 3.3
+    ○     () 3.3
     │
-    │ ○     () 4.4
+    │ ○   () 4.4
     │ │
-    ├─┼─○   () normal
+    ├─╄─○ () normal
     │ │ │
-    └─○ │   () normal
+    └─○ │ () normal
       │ │
-      └─○   () add
+      └─○ () add
 
     >>> a = pi.constant([-3.0, 0.0, 2.5])
     >>> b = pi.constant(3.1)
     >>> c = pi.vfor(lambda i: pi.normal(pi.exp(a[i]), b))
     >>> graph_upstream(c=c)
-    ○     (3,) [-3.  0.  2.5]
+    ○   (3,) [-3.  0.  2.5]
     │
-    │ ○   ()   3.1
+    ○   (3,) vmap(exp, [0], 3)
+    │
+    │ ○ ()   3.1
     │ │
-    ○ │   (3,) vmap(exp, [0], 3)
-    │ │
-    └─○   (3,) vmap(normal, [0, None], 3) ← c
+    └─○ (3,) vmap(normal, [0, None], 3) ← c
 
     See Also:
         `print_upstream`
@@ -2226,14 +2226,23 @@ def graph_upstream(*vars: PyTree[RV], **named_vars: RV):
     for node in node_to_id:
         max_shape = max(max_shape, len(str(node.shape)))
 
+    # nodes = []
+    # parents = {}
+    # for node in node_to_id:
+    #     for p in node.parents:
+    #         if p not in nodes:
+    #             nodes.append(p)
+    #     nodes.append(node)
+    #     parents[node] = node.parents
+
     nodes = []
-    parents = {}
+    parents = []
     for node in node_to_id:
         for p in node.parents:
             if p not in nodes:
                 nodes.append(p)
         nodes.append(node)
-        parents[node] = node.parents
+        parents.append(node.parents)
 
     vars_named = util.reverse_dict(named_vars)
 
@@ -2247,4 +2256,4 @@ def graph_upstream(*vars: PyTree[RV], **named_vars: RV):
             ret = ret + " ← " + vars_named[node]
         return ret
 
-    print(util.render_dag(nodes, parents, label_fn=label_fn))
+    util.render_dag(nodes, parents, label_fn=label_fn, number_parents=number_parents)
