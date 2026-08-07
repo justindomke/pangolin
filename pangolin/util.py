@@ -1082,46 +1082,121 @@ def get_positional_args(target_func: Callable, *args: Any, **kwargs: Any):
 
 def render_dag(nodes, parents, label_fn=str):
     """
-    Draws a Unicode rendering of a DAG.
+    Print a Unicode rendering of a DAG.
 
-    Each node is plotted on a text row, with one text line between rows.
+    Each node is plotted on its own text row, with one connector line between
+    consecutive node rows. Each node occupies a text column, with one character
+    of separation between columns.
 
-    Columns are plotted as text columns, with one character between columns.
-
-    **Characters used:** `○ │ ─ └ ┴ ├ ┼`
+    **Characters used:** `○ │ ─ └ ├ ┴ ╄ ┼` and the space.
 
     **Invariants:**
-    - Lines only travel down and to the right (no arrowheads needed).
-    - A node is never placed in a column to the left of a parent, so a child's connector line can always be reached by horizontal lines coming from the left or possibly a vertical line from above
-    - `┴` always means "merge" (two or more parent lines converge here).
-    - `├` always means "branch" (this node has a child below, so the vertical line continues).
-    - `└` always means "terminal turn" (this node's last child, so the vertical line stops).
-    - `┼` always means "crossing" (a horizontal line crosses a vertical line that continues independently).
+    - Lines only travel down and to the right, so no arrowheads are needed.
+    - A node is never placed in a column left of any parent. Every edge is
+      therefore drawn as a vertical segment down the parent's column followed
+      by a horizontal segment rightward along the child's row (the horizontal
+      is empty when parent and child share a column).
+    - `├` and `└` are the turn at the *leftmost* parent's column: `├` if that
+      parent has further children below, `└` if this is its last child.
+    - `┴` and `╄` are the same turn at an *interior* parent's column, where a
+      horizontal from further left passes through: `┴` if this is that
+      parent's last child, `╄` if its line continues below.
+    - `┼` always means a pure crossing: the horizontal passes a vertical
+      belonging to a node unrelated to this row.
+    - Mnemonic: `└`:`├` :: `┴`:`╄` — the first of each pair ends the line, the
+      second continues it.
     - `┌ ┐ ┘ ┤ ┬` are never needed.
 
-    ### Algorithm
+    ### Placement
 
-    Maintain a list of columns. Each column tracks the nodes placed in it, in order. Place nodes one at a time:
+    Columns are created on demand and numbered from 0. Nodes are placed one at
+    a time in the given order. Place each node N in the lowest-numbered column
+    k such that:
+      1. k is at or right of the column of every parent of N;
+      2. no node already in column k has an un-plotted child other than N.
+    A new column at the far right satisfies both conditions, so placement
+    never fails.
 
-    Always place a node in the leftmost free column. A column C is *dead* at a given  if its most recently placed node has no un-plotted children. Otherwise it is live. A column C is *free* for node N if
-    1. C is below or to the right of every parent of N (lines only go to the right)
-    2. C is dead or N is the only un-plotted child of C's most recent node
-    3. Nothing live to the right of C is a parent of N or shares and un-plotted child with N
+    ### Rendering
 
-    After all nodes are plotted, determine the horizontal position of the right-most node. Position the labels so that they are all vertically aligned one character to the right of that position.
+    Node i is drawn on row 2i; odd rows are connectors. Column k occupies
+    character position 2k, and position 2k+1 separates columns k and k+1.
 
+    A column is *live* from the row of its most recent node until the row of
+    that node's last un-plotted child, inclusive; otherwise it is *dead*.
+    Rule 2 guarantees a live column's pending line belongs to its most recent
+    node and that only that node's sole remaining child may reuse the column.
+    Hence a `│` entering a `○` from directly above is always an edge, and its
+    absence is always the absence of one.
+
+    Connector rows: `│` at position 2k for every live column k, spaces
+    elsewhere.
+
+    Node rows: let N sit at column c, and let m be the lowest column holding a
+    parent of N. If N has no parents, or m == c, no horizontal is drawn;
+    otherwise fill positions 2m+1 .. 2c-1 with `─`. Then position 2k of each
+    column k is:
+
+        k == c                           ○
+        k == m                           ├   line continues below
+                                         └   this row is its last child
+        m < k < c, parent of N           ╄   line continues below
+                                         ┴   this row is its last child
+        m < k < c, live, not a parent    ┼
+        m < k < c, dead                  ─
+        k < m or k > c                   │ if live, else space
+
+    A line ends only at the row of its node's last child, so any column
+    between m and c whose line ends on this row is necessarily a parent of N.
+    That is why the "live, not a parent" case never ends, and why `┼` can
+    never conceal a merge.
+
+    ### Labels
+
+    Let W be the largest column index used. Every node row is padded with
+    spaces to position 2W + 2 and the label follows, so all labels are
+    vertically aligned one space right of the rightmost possible `○`.
+    Connector rows carry no trailing whitespace, node rows none after the
+    label, and the output ends with a single newline.
 
     Parameters
     ----------
     nodes : sequence
-        The nodes of the DAG, in topological order (each node appears after
-        all of its parents). `len(nodes)` nodes total.
+        The nodes of the DAG in topological order (each node appears after all
+        of its parents). Nodes must be distinct and hashable; they are
+        compared by equality.
     parents : sequence of sequences
-        One entry per node: the parents of each node.
-        Must satisfy `len(parents) == len(nodes)`. All parents must appear in `nodes`
-        before they appear as a parent, so this represents a topological order
+        One entry per node: the parents of that node, given as nodes.
+        `len(parents)` must equal `len(nodes)`, and every parent must appear
+        earlier in `nodes` than the node it parents. Order within an entry is
+        ignored, and repeated entries are treated as a single edge.
     label_fn : callable, optional
-        Function mapping a node to its label string (default: `str`).
+        Maps a node to its label, which must be a single-line string
+        (default: `str`).
+
+    Returns
+    -------
+    None
+        The drawing is written to stdout. An empty `nodes` prints nothing.
+
+    Raises
+    ------
+    ValueError
+        If `len(parents) != len(nodes)`, if `nodes` contains duplicates, or if
+        a parent is missing from `nodes` or does not precede its child.
+
+    Notes
+    -----
+    Width is `O(n)` in the worst case (n mutually unrelated chains need n
+    columns), and because labels are globally aligned, one wide drawing pushes
+    every label right.
+
+    `╄` is U+2544 RIGHT UP HEAVY AND LEFT DOWN LIGHT. The heavy arms are the
+    parent's incoming vertical and its turn into this row; the passing
+    horizontal is light. The onward descent is also light, which is a
+    concession to the available glyphs. Confirm your terminal font renders
+    heavy and light box-drawing strokes distinguishably — some monospace fonts
+    flatten them, which would silently merge `╄` back into `┼`.
 
     Examples
     --------
@@ -1158,7 +1233,6 @@ def render_dag(nodes, parents, label_fn=str):
     │ │
     └─○ C
 
-
     >>> nodes = ["A", "B", "C"]
     >>> parents = [[], ["A"], ["A", "B"]]
     >>> render_dag(nodes, parents)
@@ -1171,28 +1245,47 @@ def render_dag(nodes, parents, label_fn=str):
     >>> nodes = ["A", "B", "C", "D"]
     >>> parents = [[], ["A"], ["A"], ["B", "C"]]
     >>> render_dag(nodes, parents)
-    ○     A
+    ○   A
     │
-    ├─○   B
+    ├─○ B
     │ │
-    └─┼─○ C
-      │ │
-      └─○ D
+    ○ │ C
+    │ │
+    └─○ D
+
+    A fan-in whose parents all continue: exercises ├, ╄, ┴ and └ together.
 
     >>> nodes = ["A", "B", "C", "D"]
     >>> parents = [[], ["A"], ["A", "B"], ["A", "B", "C"]]
     >>> render_dag(nodes, parents)
     ○     A
     │
-    │ ○   B
+    ├─○   B
     │ │
-    │ │ ○ C
+    ├─╄─○ C
     │ │ │
     └─┴─○ D
 
-    >>> nodes = ["A","B","C","D"]
-    >>> parents = [[], [], ["A","B"], ["B"]]
-    >>> render_dag
+    A pure crossing: B's line passes under C's row without touching it.
+
+    >>> nodes = ["A", "B", "C", "D", "E"]
+    >>> parents = [[], [], ["A"], ["A"], ["B"]]
+    >>> render_dag(nodes, parents)
+    ○     A
+    │
+    │ ○   B
+    │ │
+    ├─┼─○ C
+    │ │
+    ○ │   D
+      │
+      ○   E
+
+    The contrasting case: B is a parent of C and continues on to D.
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], [], ["A", "B"], ["B"]]
+    >>> render_dag(nodes, parents)
     ○     A
     │
     │ ○   B
@@ -1201,4 +1294,16 @@ def render_dag(nodes, parents, label_fn=str):
       │
       ○   D
 
+    A fan-in from three roots, where every parent's line ends.
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], [], [], ["A", "B", "C"]]
+    >>> render_dag(nodes, parents)
+    ○     A
+    │
+    │ ○   B
+    │ │
+    │ │ ○ C
+    │ │ │
+    └─┴─○ D
     """
