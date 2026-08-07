@@ -31,12 +31,12 @@ def test_flatten_fun():
         return (x, (y,), {"x": x, "x2": x, "x+y": x + y})
 
     stuff = {"x": 2, "y": 3}
-    #print(f"{stuff=}")
+    # print(f"{stuff=}")
     flat_f, flatten_input, unflatten_output = util.flatten_fun(f, stuff)
     flat_stuff = flatten_input(stuff)
-    #print(f"{flat_stuff=}")
+    # print(f"{flat_stuff=}")
     flat_out = flat_f(*flat_stuff)
-    #print(f"{flat_out=}")
+    # print(f"{flat_out=}")
     out = unflatten_output(flat_out)
 
     expected = f(stuff)
@@ -168,7 +168,7 @@ def test_more_specific_class1():
 
 
 def test_write_once_defalt_dict():
-    d = util.WriteOnceDefaultDict(lambda p: 2*p)
+    d = util.WriteOnceDefaultDict(lambda p: 2 * p)
     d[2] = 5
     assert d[2] == 5
     assert 2 in d

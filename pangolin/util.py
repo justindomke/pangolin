@@ -903,178 +903,302 @@ def get_positional_args(target_func: Callable, *args: Any, **kwargs: Any):
 # Render DAG into unicode
 ################################################################################
 
-from collections import defaultdict
+# from collections import defaultdict
 
 
-def _topo(nodes, parents):
-    indeg = {n: 0 for n in nodes}
-    kids = defaultdict(list)
-    for n in nodes:
-        for p in parents.get(n, []):
-            indeg[n] += 1
-            kids[p].append(n)
-    q = [n for n in nodes if indeg[n] == 0]
-    order, seen = [], set()
-    while q:
-        n = q.pop(0)
-        if n in seen:
-            continue
-        seen.add(n)
-        order.append(n)
-        for c in kids[n]:
-            indeg[c] -= 1
-            if indeg[c] == 0:
-                q.append(c)
-    for n in nodes:
-        if n not in seen:
-            order.append(n)
-    return order, kids
+# def _topo(nodes, parents):
+#     indeg = {n: 0 for n in nodes}
+#     kids = defaultdict(list)
+#     for n in nodes:
+#         for p in parents.get(n, []):
+#             indeg[n] += 1
+#             kids[p].append(n)
+#     q = [n for n in nodes if indeg[n] == 0]
+#     order, seen = [], set()
+#     while q:
+#         n = q.pop(0)
+#         if n in seen:
+#             continue
+#         seen.add(n)
+#         order.append(n)
+#         for c in kids[n]:
+#             indeg[c] -= 1
+#             if indeg[c] == 0:
+#                 q.append(c)
+#     for n in nodes:
+#         if n not in seen:
+#             order.append(n)
+#     return order, kids
 
 
-def _assign_lanes(order, parents, kids):
-    lane_of = {}
-    lane_owner = []
-    remaining = {node: len(kids[node]) for node in order}
-    for node in order:
-        par_lanes = [lane_of[p] for p in parents.get(node, []) if p in lane_of]
-        min_lane = max(par_lanes) if par_lanes else 0
-        chosen = None
-        reusable = sorted(
-            (lane_of[p] for p in parents.get(node, []) if p in lane_of and remaining[p] == 1), reverse=True
-        )
-        for pl in reusable:
-            if pl >= min_lane:
-                chosen = pl
-                break
-        if chosen is None:
-            for lane in range(min_lane, len(lane_owner)):
-                if lane_owner[lane] is None:
-                    chosen = lane
-                    break
-            if chosen is None:
-                chosen = max(min_lane, len(lane_owner))
-                while len(lane_owner) <= chosen:
-                    lane_owner.append(None)
-        lane_of[node] = chosen
-        lane_owner[chosen] = node
-        for p in parents.get(node, []):
-            if p not in lane_of:
-                continue
-            remaining[p] -= 1
-            if remaining[p] == 0 and lane_owner[lane_of[p]] is p:
-                lane_owner[lane_of[p]] = None
-        if remaining[node] == 0 and lane_owner[chosen] is node:
-            lane_owner[chosen] = None
-    return lane_of
+# def _assign_lanes(order, parents, kids):
+#     lane_of = {}
+#     lane_owner = []
+#     remaining = {node: len(kids[node]) for node in order}
+#     for node in order:
+#         par_lanes = [lane_of[p] for p in parents.get(node, []) if p in lane_of]
+#         min_lane = max(par_lanes) if par_lanes else 0
+#         chosen = None
+#         reusable = sorted(
+#             (lane_of[p] for p in parents.get(node, []) if p in lane_of and remaining[p] == 1), reverse=True
+#         )
+#         for pl in reusable:
+#             if pl >= min_lane:
+#                 chosen = pl
+#                 break
+#         if chosen is None:
+#             for lane in range(min_lane, len(lane_owner)):
+#                 if lane_owner[lane] is None:
+#                     chosen = lane
+#                     break
+#             if chosen is None:
+#                 chosen = max(min_lane, len(lane_owner))
+#                 while len(lane_owner) <= chosen:
+#                     lane_owner.append(None)
+#         lane_of[node] = chosen
+#         lane_owner[chosen] = node
+#         for p in parents.get(node, []):
+#             if p not in lane_of:
+#                 continue
+#             remaining[p] -= 1
+#             if remaining[p] == 0 and lane_owner[lane_of[p]] is p:
+#                 lane_owner[lane_of[p]] = None
+#         if remaining[node] == 0 and lane_owner[chosen] is node:
+#             lane_owner[chosen] = None
+#     return lane_of
 
 
-def render_dag(nodes, parents, label_fn, col_width=2):
-    # Direction bits — local so test code can freely use U/D/L/R as globals.
-    _NODE = "○"
-    _SP = " "
-    UP, DN, LT, RT = 1, 2, 4, 8
-    glyph = {
-        0: _SP,
-        UP | DN: "│",
-        LT | RT: "─",
-        UP | RT: "└",
-        UP | LT: "┘",
-        DN | RT: "┌",
-        DN | LT: "┐",
-        UP | LT | RT: "┴",
-        DN | LT | RT: "┬",
-        UP | DN | RT: "├",
-        UP | DN | LT: "┤",
-        UP | DN | LT | RT: "┼",
-        UP: "│",
-        DN: "│",
-        LT: "─",
-        RT: "─",
-    }
+# def render_dag(nodes, parents, label_fn, col_width=2):
+#     # Direction bits — local so test code can freely use U/D/L/R as globals.
+#     _NODE = "○"
+#     _SP = " "
+#     UP, DN, LT, RT = 1, 2, 4, 8
+#     glyph = {
+#         0: _SP,
+#         UP | DN: "│",
+#         LT | RT: "─",
+#         UP | RT: "└",
+#         UP | LT: "┘",
+#         DN | RT: "┌",
+#         DN | LT: "┐",
+#         UP | LT | RT: "┴",
+#         DN | LT | RT: "┬",
+#         UP | DN | RT: "├",
+#         UP | DN | LT: "┤",
+#         UP | DN | LT | RT: "┼",
+#         UP: "│",
+#         DN: "│",
+#         LT: "─",
+#         RT: "─",
+#     }
 
-    order, kids = _topo(list(nodes), parents)
-    count = len(order)
-    if count == 0:
-        return ""
-    lane_of = _assign_lanes(order, parents, kids)
-    max_lane = max(lane_of.values())
-    height = 2 * count - 1
-    width = (max_lane + 1) * col_width
-    mask = [[0] * width for _ in range(height)]
-    is_node = [[False] * width for _ in range(height)]
+#     order, kids = _topo(list(nodes), parents)
+#     count = len(order)
+#     if count == 0:
+#         return ""
+#     lane_of = _assign_lanes(order, parents, kids)
+#     max_lane = max(lane_of.values())
+#     height = 2 * count - 1
+#     width = (max_lane + 1) * col_width
+#     mask = [[0] * width for _ in range(height)]
+#     is_node = [[False] * width for _ in range(height)]
 
-    def row_of(i):
-        return 2 * i
+#     def row_of(i):
+#         return 2 * i
 
-    def col_of(node):
-        return lane_of[node] * col_width
+#     def col_of(node):
+#         return lane_of[node] * col_width
 
-    for i, node in enumerate(order):
-        is_node[row_of(i)][col_of(node)] = True
+#     for i, node in enumerate(order):
+#         is_node[row_of(i)][col_of(node)] = True
 
-    idx = {node: i for i, node in enumerate(order)}
+#     idx = {node: i for i, node in enumerate(order)}
 
-    for child in order:
-        ci = idx[child]
-        cr = row_of(ci)
-        cc = col_of(child)
-        for p in parents.get(child, []):
-            if p not in idx:
-                continue
-            pi = idx[p]
-            if pi >= ci:
-                continue
-            pr = row_of(pi)
-            pc = col_of(p)
-            for r in range(pr + 1, cr):
-                if not is_node[r][pc]:
-                    mask[r][pc] |= UP | DN
-            if pc != cc:
-                if not is_node[cr][pc]:
-                    mask[cr][pc] |= UP | RT
-                for c in range(pc + 1, cc):
-                    if not is_node[cr][c]:
-                        mask[cr][c] |= LT | RT
+#     for child in order:
+#         ci = idx[child]
+#         cr = row_of(ci)
+#         cc = col_of(child)
+#         for p in parents.get(child, []):
+#             if p not in idx:
+#                 continue
+#             pi = idx[p]
+#             if pi >= ci:
+#                 continue
+#             pr = row_of(pi)
+#             pc = col_of(p)
+#             for r in range(pr + 1, cr):
+#                 if not is_node[r][pc]:
+#                     mask[r][pc] |= UP | DN
+#             if pc != cc:
+#                 if not is_node[cr][pc]:
+#                     mask[cr][pc] |= UP | RT
+#                 for c in range(pc + 1, cc):
+#                     if not is_node[cr][c]:
+#                         mask[cr][c] |= LT | RT
 
-    # lines = []
-    # for r in range(height):
-    #     chars = []
-    #     for c in range(width):
-    #         if is_node[r][c]:
-    #             chars.append(_NODE)
-    #         else:
-    #             chars.append(glyph.get(mask[r][c], _SP))
-    #     s = "".join(chars).rstrip()
-    #     if r % 2 == 0:
-    #         node = order[r // 2]
-    #         pad_to = col_of(node) + 1
-    #         if len(s) < pad_to:
-    #             s += _SP * (pad_to - len(s))
-    #         s += "  " + label_fn(node)
-    #     lines.append(s)
-    # return "\n".join(lines)
+#     # lines = []
+#     # for r in range(height):
+#     #     chars = []
+#     #     for c in range(width):
+#     #         if is_node[r][c]:
+#     #             chars.append(_NODE)
+#     #         else:
+#     #             chars.append(glyph.get(mask[r][c], _SP))
+#     #     s = "".join(chars).rstrip()
+#     #     if r % 2 == 0:
+#     #         node = order[r // 2]
+#     #         pad_to = col_of(node) + 1
+#     #         if len(s) < pad_to:
+#     #             s += _SP * (pad_to - len(s))
+#     #         s += "  " + label_fn(node)
+#     #     lines.append(s)
+#     # return "\n".join(lines)
 
-    # First pass: build the graph-only portion of each line.
-    graph_lines = []
-    graph_width = width  # in cells; each cell is one char
-    for r in range(height):
-        chars = []
-        for c in range(width):
-            if is_node[r][c]:
-                chars.append(_NODE)
-            else:
-                chars.append(glyph.get(mask[r][c], _SP))
-        graph_lines.append("".join(chars))
+#     # First pass: build the graph-only portion of each line.
+#     graph_lines = []
+#     graph_width = width  # in cells; each cell is one char
+#     for r in range(height):
+#         chars = []
+#         for c in range(width):
+#             if is_node[r][c]:
+#                 chars.append(_NODE)
+#             else:
+#                 chars.append(glyph.get(mask[r][c], _SP))
+#         graph_lines.append("".join(chars))
 
-    # Second pass: attach labels, aligned to a common column.
-    label_col = graph_width + 2  # 2 spaces of gutter
-    lines = []
-    for r, s in enumerate(graph_lines):
-        # Don't rstrip — we want fixed width for label alignment.
-        if r % 2 == 0:
-            node = order[r // 2]
-            s = s + "  " + label_fn(node)
-        else:
-            s = s.rstrip()
-        lines.append(s)
-    return "\n".join(lines)
+#     # Second pass: attach labels, aligned to a common column.
+#     label_col = graph_width + 2  # 2 spaces of gutter
+#     lines = []
+#     for r, s in enumerate(graph_lines):
+#         # Don't rstrip — we want fixed width for label alignment.
+#         if r % 2 == 0:
+#             node = order[r // 2]
+#             s = s + "  " + label_fn(node)
+#         else:
+#             s = s.rstrip()
+#         lines.append(s)
+#     return "\n".join(lines)
+
+
+def render_dag(nodes, parents, label_fn=str):
+    """
+    Draws a Unicode rendering of a DAG.
+
+    Each node is plotted on a text row, with one text line between rows.
+
+    Columns are plotted as text columns, with one character between columns.
+
+    **Characters used:** `○ │ ─ └ ┴ ├ ┼`
+
+    **Invariants:**
+    - Lines only travel down and to the right (no arrowheads needed).
+    - A node is never placed in a column to the left of a parent, so a child's connector line can always be reached by horizontal lines coming from the left or possibly a vertical line from above
+    - `┴` always means "merge" (two or more parent lines converge here).
+    - `├` always means "branch" (this node has a child below, so the vertical line continues).
+    - `└` always means "terminal turn" (this node's last child, so the vertical line stops).
+    - `┼` always means "crossing" (a horizontal line crosses a vertical line that continues independently).
+    - `┌ ┐ ┘ ┤ ┬` are never needed.
+
+    ### Algorithm
+
+    Maintain a list of columns. Each column tracks the nodes placed in it, in order. Place nodes one at a time:
+
+    Always place a node in the leftmost free column. A column C is *dead* at a given  if its most recently placed node has no un-plotted children. Otherwise it is live. A column C is *free* for node N if
+    1. C is below or to the right of every parent of N (lines only go to the right)
+    2. C is dead or N is the only un-plotted child of C's most recent node
+    3. Nothing live to the right of C is a parent of N or shares and un-plotted child with N
+
+    After all nodes are plotted, determine the horizontal position of the right-most node. Position the labels so that they are all vertically aligned one character to the right of that position.
+
+
+    Parameters
+    ----------
+    nodes : sequence
+        The nodes of the DAG, in topological order (each node appears after
+        all of its parents). `len(nodes)` nodes total.
+    parents : sequence of sequences
+        One entry per node: the parents of each node.
+        Must satisfy `len(parents) == len(nodes)`. All parents must appear in `nodes`
+        before they appear as a parent, so this represents a topological order
+    label_fn : callable, optional
+        Function mapping a node to its label string (default: `str`).
+
+    Examples
+    --------
+
+    >>> nodes = ["A"]
+    >>> parents = [[]]
+    >>> render_dag(nodes, parents)
+    ○ A
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], ["A"], ["B"]]
+    >>> render_dag(nodes, parents)
+    ○ A
+    │
+    ○ B
+    │
+    ○ C
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], ["A"], ["A"]]
+    >>> render_dag(nodes, parents)
+    ○   A
+    │
+    ├─○ B
+    │
+    ○   C
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], [], ["A", "B"]]
+    >>> render_dag(nodes, parents)
+    ○   A
+    │
+    │ ○ B
+    │ │
+    └─○ C
+
+
+    >>> nodes = ["A", "B", "C"]
+    >>> parents = [[], ["A"], ["A", "B"]]
+    >>> render_dag(nodes, parents)
+    ○   A
+    │
+    ├─○ B
+    │ │
+    └─○ C
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], ["A"], ["A"], ["B", "C"]]
+    >>> render_dag(nodes, parents)
+    ○     A
+    │
+    ├─○   B
+    │ │
+    └─┼─○ C
+      │ │
+      └─○ D
+
+    >>> nodes = ["A", "B", "C", "D"]
+    >>> parents = [[], ["A"], ["A", "B"], ["A", "B", "C"]]
+    >>> render_dag(nodes, parents)
+    ○     A
+    │
+    │ ○   B
+    │ │
+    │ │ ○ C
+    │ │ │
+    └─┴─○ D
+
+    >>> nodes = ["A","B","C","D"]
+    >>> parents = [[], [], ["A","B"], ["B"]]
+    >>> render_dag
+    ○     A
+    │
+    │ ○   B
+    │ │
+    └─╄─○ C
+      │
+      ○   D
+
+    """
