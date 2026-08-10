@@ -2256,4 +2256,4 @@ def graph_upstream(*vars: PyTree[RV], number_parents: bool = False, **named_vars
             ret = ret + " ← " + vars_named[node]
         return ret
 
-    util.render_dag(nodes, parents, label_fn=label_fn, number_parents=number_parents)
+    util.render_dag(nodes, parents, label_fn=label_fn)

@@ -234,3 +234,20 @@ def test_trouble5():
     c = pi.vfor(lambda i, j: pi.normal(a[i], b[j, i]), i=I, j=J)
     assert c.shape == (I, J)
     assert c.op == ir.VMap(ir.VMap(ir.Normal(), [None, 0], J), [0, 1], I)
+
+
+def test_raw_indexing_control():
+    a = pi.constant([0, 1, 2])
+    x = pi.vfor(lambda i, j: pi.exp(a[i]), i=3, j=4)
+    assert x.op == ir.VMap(ir.VMap(ir.Exp(), [None], 4), [0], 3)
+    assert x.parents == (a,)
+
+
+def test_raw_indexing_trouble():
+    x = pi.vfor(lambda i, j: pi.exp(i), i=3, j=4)
+    assert x.op == ir.VMap(ir.VMap(ir.Exp(), [None], 4), [0], 3)
+    assert x.parents[0].op == ir.Constant([0, 1, 2])
+
+def test_raw_index_simple():
+    x = pi.vfor(lambda i: i, i=3)
+    assert x.op == pi.Constant([0,1,2])

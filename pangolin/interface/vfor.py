@@ -161,14 +161,12 @@ from pangolin import interface as pi
 
 
 class Axis(ir.Op):
-    """
-    A scalar value but "special"
-    """
+    """A scalar, but 'special'. Never legal in a backend."""
 
     _random = False
     _get_shape = lambda *args: ()
 
-    def __init__(self, size: int):
+    def __init__(self, size: int | None = None):
         self.size = size
         super().__init__()
 
@@ -833,3 +831,123 @@ def test():
     C = B
 
     # B = vfor(lambda i: A[i] * 2)
+
+
+def count_positional(func):
+    """Returns the number of positional parameters of func.
+
+    Errors if func has any:
+      - keyword-only parameters
+      - *args / **kwargs
+      - parameters with default values
+    """
+    sig = inspect.signature(func)
+
+    bad = [
+        p.name
+        for p in sig.parameters.values()
+        if (
+            p.default is not inspect.Parameter.empty  # has a default
+            or p.kind
+            in (
+                inspect.Parameter.KEYWORD_ONLY,  # keyword-only
+                inspect.Parameter.VAR_POSITIONAL,  # *args
+                inspect.Parameter.VAR_KEYWORD,
+            )
+        )
+    ]  # **kwargs
+
+    if bad:
+        raise ValueError(f"Function has disallowed parameters: {bad}")
+
+    # Only POSITIONAL_ONLY and POSITIONAL_OR_KEYWORD remain
+    return len(sig.parameters)
+
+
+def vfor_simple(fun, *sizes: int):
+    """
+
+    Examples
+    --------
+    Mutiply raw input by two.
+
+    >>> x = vfor_simple(lambda i: i * 4.4, 3)
+    >>> print(x)
+    vmap(mul, [0, None], 3)([0 1 2], 4.4)
+
+    iid bernoulli
+
+    >>> x = vfor_simple(lambda i: pi.bernoulli(0.5), 3)
+    >>> print(x)
+    vmap(bernoulli, [None], 3)(0.5)
+
+    multiply array by 2
+
+    >>> x = constant([1.1, 2.2, 3.3])
+    >>> y = vfor_simple(lambda i: x[i]*2, 3)
+    >>> print(y)
+    vmap(mul, [0, None], 3)(vmap(index, [None, 0], 3)([1.1 2.2 3.3], [0 1 2]), 2)
+
+    outer product
+
+    >>> x = vfor_simple(lambda i,j : i*j, 2, 3)
+    >>> print(x)
+    vmap(vmap(mul, [None, 0], 3), [0, None], 2)([0 1], [0 1 2])
+
+    an index returned unchanged is not (yet) supported
+
+    two outputs
+
+    >>> x = vfor_simple(lambda i: (i+2, i*3), 3)
+    >>> print(x[0])
+    vmap(add, [0, None], 3)([0 1 2], 2)
+    >>> print(x[1])
+    vmap(mul, [0, None], 3)([0 1 2], 3)
+
+    multiply 2d array by 2
+
+    >>> x = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+    >>> y = vfor_simple(lambda i, j: x[i,j]*2, 2, 3)
+    >>> print(y)
+    vmap(mul, [0, None], 3)(vmap(index, [None, 0], 3)([1.1 2.2 3.3], [0 1 2]), 2)
+
+
+    >>> x = vfor_simple(lambda i:i, 3)
+    Traceback (most recent call last):
+    ...
+    ValueError: fun passed to generated_nodes cannot return input values
+    """
+
+    num_indices = len(sizes)
+    num_args = count_positional(fun)
+    if num_indices != num_args:
+        raise ValueError(f"Number of sizes {num_indices} not equal to number of args {num_args}")
+
+    # takes a list to simplify in_axes
+    mapped = lambda idx: fun(*idx)
+
+    for idx in range(num_indices - 1, -1, -1):
+        in_axes = [0 if k == idx else None for k in range(num_indices)]
+
+        mapped = vmap(mapped, in_axes, axis_size=sizes[idx])
+
+    iotas = [pi.constant(pi.np.arange(size)) for size in sizes]
+
+    return mapped(iotas)
+
+
+# def simplify_vmap(x: InfixRV):
+#     """
+#     if a RV is a vmap
+
+#     """
+
+#     pars = [simplify_vmap(x.parents(p)
+
+#     if not isinstance(x.op, ir.VMap):
+#         return x
+
+#     assert isinstance(x.op, ir.VMap)
+
+#     base_op = x.op.base_op
+#     if isinstance(x.op, ir.Index):
