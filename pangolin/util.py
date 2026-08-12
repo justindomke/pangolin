@@ -525,13 +525,55 @@ def tree_map_recurse_at_leaf_with_none_as_leaf(f: Callable, tree: PyTree, *remai
 
 
 def flatten_fun(f: Callable, *args: Any, is_leaf: Callable[[Any], bool] | None = None):
-    "get a new function that takes a single input (which is a list)"
+    """
+    get a new function that takes a single input (which is a list)
+
+        Examples:
+        >>> # --- Example 1: Simple arguments ---
+        >>> def add(a, b):
+        ...     return a + b
+        >>>
+        >>> flat_add, flat_in, unflat_out = flatten_fun(add, 1.0, 2.0)
+        >>>
+        >>> flat_inputs = flat_in(10.0, 20.0)
+        >>> flat_inputs
+        [10.0, 20.0]
+        >>>
+        >>> flat_output = flat_add(flat_inputs)
+        >>> flat_output
+        [30.0]
+        >>>
+        >>> unflat_out(flat_output)
+        30.0
+
+        >>> # --- Example 2: PyTree arguments (Dictionaries & Lists) ---
+        >>> def process_state(state, scale):
+        ...     return {"x": state["x"] * scale, "y": state["y"] * scale}
+        >>>
+        >>> sample_state = {"x": 1.0, "y": 2.0}
+        >>> flat_proc, flat_in, unflat_out = flatten_fun(process_state, sample_state, 5.0)
+        >>>
+        >>> # Flattening takes a dict + a float and turns it into a list of 3 leaves
+        >>> flat_inputs = flat_in({"x": 10.0, "y": 20.0}, 2.0)
+        >>> flat_inputs
+        [10.0, 20.0, 2.0]
+        >>>
+        >>> # The flat function takes the 3 leaves, runs the math, and returns 2 leaves
+        >>> flat_output = flat_proc(flat_inputs)
+        >>> flat_output
+        [20.0, 40.0]
+        >>>
+        >>> # Unflattening rebuilds the output dictionary
+        >>> unflat_out(flat_output)
+        {'x': 20.0, 'y': 40.0}
+
+    """
 
     out = f(*args)
     args_treedef = jax.tree_util.tree_structure(args, is_leaf=is_leaf)
     out_treedef = jax.tree_util.tree_structure(out, is_leaf=is_leaf)
 
-    def flat_f(*flat_args):
+    def flat_f(flat_args):
         args = jax.tree_util.tree_unflatten(args_treedef, flat_args)
         out = f(*args)
         flat_out, out_treedef2 = jax.tree_util.tree_flatten(out, is_leaf=is_leaf)

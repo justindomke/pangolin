@@ -28,7 +28,7 @@ from typing import Sequence
 from typing import Any, Self
 from jaxtyping import PyTree
 from .compositing import make_composite, generated_nodes, Composite
-from .base import AbstractOp
+from .tracing import AbstractOp, FlatCallable, FlatCallableSingle
 from . import base
 from .util import fill_tril, extract_tril
 import jax.tree_util
@@ -37,34 +37,51 @@ from .compositing import uncomposite_flat, composite
 
 Shape = ir.Shape
 
+# TODO: use flatness correctly
+
 
 def maybe_make_composite[LastOp: Op](
     flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape
 ) -> tuple[LastOp | Composite[LastOp] | Composite[ir.Identity], list[InfixRV]]:
     """
-    Given a flat function
+
+    Examples
+    --------
+    >>> flat_fun = lambda x: exp(x)
+    >>> maybe_make_composite(flat_fun, ())
+    (Exp(), [])
+
+    >>> flat_fun = lambda x: normal(x, 1)
+    >>> maybe_make_composite(flat_fun, ())
+    (Composite(1, (Constant(1), Normal()), [[], [0, 1]]), [])
     """
 
-    dummy_args = tuple(InfixRV(AbstractOp(shape)) for shape in input_shapes)
+    dummy_args = [InfixRV(AbstractOp(shape)) for shape in input_shapes]
 
     # generated_nodes runs on "flat" functions that return arrays, not single RVs
-    test_out = flat_fun(*dummy_args)
+    test_out: InfixRV = flat_fun(*dummy_args)
     if test_out in dummy_args:
         where_out = dummy_args.index(test_out)
         num_inputs = len(dummy_args)
         return Composite(num_inputs, (ir.Identity(),), [[where_out]]), []
 
-    f = lambda *args: [flat_fun(*args)]
-    all_vars, [out] = generated_nodes(f, *dummy_args)
+    f: FlatCallable = lambda args: [flat_fun(*args)]
+    all_vars, [out] = generated_nodes(f, dummy_args)
     assert isinstance(out, InfixRV), "output of function must be a single InfixRV"
 
     single_op = all(a in dummy_args for a in out.parents)
-    same_parents = out.parents == dummy_args
+    same_parents = out.parents == tuple(dummy_args)
+    # print(f"{single_op=}")
+    # print(f"{out.parents=}")
+    # print(f"{dummy_args=}")
+    # print(f"{same_parents=}")
     if single_op and same_parents:
         assert all_vars == [out]
         return out.op, []
 
-    return make_composite(flat_fun, *input_shapes)
+    normalized_flat_fun = lambda args: flat_fun(*args)
+
+    return make_composite(normalized_flat_fun, *input_shapes)
 
 
 def make_bijector(forward_fn, inverse_fn, log_det_jac_fn, x_shape: Shape, *biject_args_shapes: Shape) -> Bijector:

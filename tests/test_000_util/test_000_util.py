@@ -35,7 +35,7 @@ def test_flatten_fun():
     flat_f, flatten_input, unflatten_output = util.flatten_fun(f, stuff)
     flat_stuff = flatten_input(stuff)
     # print(f"{flat_stuff=}")
-    flat_out = flat_f(*flat_stuff)
+    flat_out = flat_f(flat_stuff)
     # print(f"{flat_out=}")
     out = unflatten_output(flat_out)
 

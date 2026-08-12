@@ -14,11 +14,73 @@ from typing import Protocol, TypeVar, Any, TYPE_CHECKING
 from numpy.typing import ArrayLike
 import numpy as np
 from jax import numpy as jnp
-from typing import Protocol
+from typing import overload
 from jaxtyping import PyTree
+import inspect
+import functools
+
+type FlatCallable = Callable[[list[InfixRV]], list[InfixRV]]
+type FlatCallableSingle[O: Op] = Callable[[list[InfixRV]], InfixRV[O]]
 
 
-FlatCallable = Callable[..., list[InfixRV]]  # don't know how to enforce that inputs are RV
+@overload
+def pack(func: Callable[[], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV, InfixRV], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV, InfixRV, InfixRV], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], list[InfixRV]]) -> FlatCallable: ...
+@overload
+def pack(func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], list[InfixRV]]) -> FlatCallable: ...
+
+
+def pack(func: Callable[..., list[InfixRV]]) -> FlatCallable:
+    sig = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(args: list[InfixRV]) -> list[InfixRV]:
+        if len(args) != len(sig.parameters):
+            raise TypeError(f"Expected {len(sig.parameters)} args, got {len(args)}")
+        return func(*args)
+
+    return wrapper
+
+
+@overload
+def pack_single[O: Op](func: Callable[[], InfixRV[O]]) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](func: Callable[[InfixRV], InfixRV[O]]) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](func: Callable[[InfixRV, InfixRV], InfixRV[O]]) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](func: Callable[[InfixRV, InfixRV, InfixRV], InfixRV[O]]) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](
+    func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]],
+) -> FlatCallableSingle[O]: ...
+@overload
+def pack_single[O: Op](
+    func: Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]],
+) -> FlatCallableSingle[O]: ...
+
+
+def pack_single[O: Op](func: Callable[..., InfixRV[O]]) -> FlatCallableSingle[O]:
+    sig = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(args: list[InfixRV]) -> InfixRV[O]:
+        if len(args) != len(sig.parameters):
+            raise TypeError(f"Expected {len(sig.parameters)} args, got {len(args)}")
+        return func(*args)
+
+    return wrapper
 
 
 class AbstractOp(Op):
@@ -62,7 +124,7 @@ class AbstractOp(Op):
             return f"abstract_op({self.shape})"
 
 
-def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], list[InfixRV]]:
+def generated_nodes(fun: FlatCallable, args: list[InfixRV]) -> tuple[list[InfixRV], list[InfixRV]]:
     """
     Given a "flat" function and some number of RV arguments, get all the nodes that the function
     creates. This *includes* nodes that do not depend on the inputs.
@@ -83,13 +145,14 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
 
     Examples
     --------
-    >>> def fun(x,y):
+    >>> @pack
+    ... def fun(x,y):
     ...     a = InfixRV(ir.Exp(), x)
     ...     b = InfixRV(ir.Add(), a, y)
     ...     return [b]
     >>> x = InfixRV(ir.Constant(0))
     >>> y = InfixRV(ir.Constant(1))
-    >>> all_vars, out = generated_nodes(fun, x, y)
+    >>> all_vars, out = generated_nodes(fun, [x, y])
     >>> len(all_vars)
     2
     >>> all_vars[0]
@@ -111,7 +174,7 @@ def generated_nodes(fun: FlatCallable, *args: InfixRV) -> tuple[list[InfixRV], l
     def not_abstract(var: InfixRV):
         return not is_abstract(var)
 
-    abstract_out: list[InfixRV[AbstractOp]] = fun(*args)
+    abstract_out: list[InfixRV[AbstractOp]] = fun(args)
 
     if not isinstance(abstract_out, list):
         raise ValueError("generated_nodes must take a function that returns a list")

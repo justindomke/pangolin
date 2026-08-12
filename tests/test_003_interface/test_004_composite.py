@@ -3,15 +3,18 @@ from pangolin.ir import Composite
 from pangolin.interface.compositing import composite
 from pangolin import ir
 from pangolin.interface.compositing import composite_flat, make_composite
+from pangolin.interface.tracing import pack_single
 
 
 def test_make_composite_plain_normal():
-    op, consts = make_composite(normal, (), ())
+    fun = pack_single(normal)
+    op, consts = make_composite(fun, (), ())
     assert op == Composite(2, (ir.Normal(),), ((0, 1),))
     assert consts == []
 
 
 def test_make_composite1():
+    @pack_single
     def f(a):
         b = a * a
         c = exponential(b)
@@ -27,6 +30,7 @@ def test_make_composite1():
 
 
 def test_make_composite2():
+    @pack_single
     def f(a, b):
         c = a * b
         d = a + c
@@ -44,6 +48,7 @@ def test_make_composite2():
 def test_make_composite_closure1():
     x = normal(0, 1)
 
+    @pack_single
     def f(a):
         return normal(x, a)
 
@@ -59,6 +64,7 @@ def test_make_composite_closure2():
     x = normal(0, 1)
     y = normal(0, 1)
 
+    @pack_single
     def f():
         z = x * y
         return normal(y, z)
@@ -75,6 +81,7 @@ def test_make_composite_closure3():
     # x = normal(0, 1)
     y = normal(0, 1)
 
+    @pack_single
     def f(x):
         z = x * y
         return normal(y, z)
@@ -91,6 +98,7 @@ def test_make_composite_closure4():
     x = normal(0, 1)
     # y = normal(0, 1)
 
+    @pack_single
     def f(y):
         z = x * y
         return normal(y, z)
@@ -106,6 +114,7 @@ def test_make_composite_closure4():
 def test_make_composite_normal_const_rv():
     scale = constant(3.3)
 
+    @pack_single
     def fun(x):
         return normal(x, scale)
 
@@ -118,13 +127,14 @@ def test_make_composite_normal_const_rv():
 
 
 def test_composite_flat_mul_exponential():
+    @pack_single
     def f(a):
         b = a * a
         c = exponential(b)
         return c
 
     x = normal(0, 1)
-    z = composite_flat(f)(x)
+    z = composite_flat(f)([x])
     assert z.shape == ()
     assert z.parents == (x,)
     num_inputs = 1
@@ -134,11 +144,12 @@ def test_composite_flat_mul_exponential():
 
 
 def test_composite_flat_inside_vmap():
+    @pack_single
     def f(a):
         return normal(a, a * a)
 
     x = normal(0, 1)
-    z = vmap(composite_flat(f), None, 3)(x)
+    z = vmap(composite_flat(f), [None], 3)([x])
 
     composite_op = ir.Composite(1, (ir.Mul(), ir.Normal()), ((0, 0), (0, 1)))
     vmap_op = ir.VMap(composite_op, (None,), 3)
@@ -146,12 +157,13 @@ def test_composite_flat_inside_vmap():
 
 
 def test_vmap_inside_composite_flat():
+    @pack_single
     def f(a):
         b = a * a
         return vmap(normal, None, 3)(a, b)
 
     x = normal(0, 1)
-    z = composite_flat(f)(x)
+    z = composite_flat(f)([x])
 
     vmap_op = ir.VMap(ir.Normal(), (None, None), 3)
     composite_op = ir.Composite(1, (ir.Mul(), vmap_op), ((0, 0), (0, 1)))
@@ -301,6 +313,19 @@ def test_composite_mul_exponential():
     assert z.op == Composite(num_inputs, ops, par_nums)
 
 
+def test_composite_flat_inside_vmap():
+    @pack_single
+    def f(a):
+        return normal(a, a * a)
+
+    x = normal(0, 1)
+    z = vmap(composite_flat(f), None, 3)([x])
+
+    composite_op = ir.Composite(1, (ir.Mul(), ir.Normal()), ((0, 0), (0, 1)))
+    vmap_op = ir.VMap(composite_op, (None,), 3)
+    assert z.op == vmap_op
+
+
 def test_composite_inside_vmap():
     def f(a):
         return normal(a, a * a)
@@ -313,13 +338,27 @@ def test_composite_inside_vmap():
     assert z.op == vmap_op
 
 
+def test_vmap_inside_composite_flat():
+    @pack_single
+    def f(a):
+        b = a * a
+        return vmap(normal, None, 3)(a, b)
+
+    x = normal(0, 1)
+    z = composite_flat(f)([x])
+
+    vmap_op = ir.VMap(ir.Normal(), (None, None), 3)
+    composite_op = ir.Composite(1, (ir.Mul(), vmap_op), ((0, 0), (0, 1)))
+    assert z.op == composite_op
+
+
 def test_vmap_inside_composite():
     def f(a):
         b = a * a
         return vmap(normal, None, 3)(a, b)
 
     x = normal(0, 1)
-    z = composite_flat(f)(x)
+    z = composite(f)(x)
 
     vmap_op = ir.VMap(ir.Normal(), (None, None), 3)
     composite_op = ir.Composite(1, (ir.Mul(), vmap_op), ((0, 0), (0, 1)))

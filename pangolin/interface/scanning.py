@@ -11,7 +11,7 @@ from pangolin.interface import (
     exponential,
 )
 from pangolin.interface.compositing import composite_flat, make_composite
-from .base import generated_nodes, AbstractOp, get_dummy_args
+from .vmapping import get_dummy_args
 from pangolin import util
 import jax.tree_util
 from pangolin.interface.base import RVLike
@@ -21,23 +21,29 @@ from typing import Callable, Sequence, Any, Protocol, TypeAlias
 from jaxtyping import PyTree
 import numpy as np
 
+from .tracing import FlatCallableSingle
+
 # would like to insist that the function takes RV args but type system not up to the task
 
 
-type FlatScannable[O: Op] = (
-    Callable[[InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV, InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
-    | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
-)
+# type FlatScannable[O: Op] = (
+#     Callable[[InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV, InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
+#     | Callable[[InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV, InfixRV], InfixRV[O]]
+# )
+# type FlatScannable[O: Op] = Callable[[list[InfixRV]], InfixRV[O]]
 """
 A type alias for a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single `InfixRV` output. Because of Python's wonderfully limited type system, this is implemented as a union of functions with arity up to 6.
 """
 
-type FlatScanned[O: Op] = Callable[..., InfixRV[Scan[Composite[O]]]]
+# type FlatScanned[O: Op] = Callable[..., InfixRV[Scan[Composite[O]]]]
+
+type FlatScanned[O: Op] = FlatCallableSingle[Scan[Composite[O]]]
+
 """
 A type alias intended to indicate a function that takes one `InfixRV` input plus any number of additional `InfixRV` and returns a single scan InfixRV output. Because of Python's wonderfully limited type system, this does not actually check the inputs.
 """
@@ -94,14 +100,14 @@ def _get_scan_length(length: int | None, my_in_axes: Sequence[int | None], args:
     return my_length
 
 
-def scan_flat[O: Op](flat_fun: FlatScannable[O], length: int, in_axes: tuple[int | None, ...]) -> FlatScanned[O]:
+def scan_flat[O: Op](flat_fun: FlatCallableSingle[O], length: int, in_axes: tuple[int | None, ...]) -> FlatScanned[O]:
     """
     Given a "flat" function, create a function to generate an RV with an `Scan` Op.
 
     Doing
 
     ```python
-    z = scan_flat(fun, length=5, in_axes=(0,None))(start, A, B)
+    z = scan_flat(fun, length=5, in_axes=(0,None))(start, [A, B])
     ```
 
     is semantically similar to
@@ -110,7 +116,7 @@ def scan_flat[O: Op](flat_fun: FlatScannable[O], length: int, in_axes: tuple[int
     carry = start
     values = []
     for i in range(5):
-        carry = fun(carry, A[i], B)
+        carry = fun([carry, A[i], B])
         values.append(carry)
     z = concatenate(values)
     ```
@@ -126,7 +132,7 @@ def scan_flat[O: Op](flat_fun: FlatScannable[O], length: int, in_axes: tuple[int
 
     Examples
     --------
-    >>> x = scan_flat(exp, length=5, in_axes=())(constant(7.7))
+    >>> x = scan_flat(lambda args: exp(args[0]), length=5, in_axes=())(constant(7.7))
     >>> x.op
     Scan(Composite(1, (Exp(),), [[0]]), 5, (), 0)
     >>> x.op.base_op
@@ -142,7 +148,7 @@ def scan_flat[O: Op](flat_fun: FlatScannable[O], length: int, in_axes: tuple[int
 
     >>> a = makerv(7.7)
     >>> b = makerv([1,2,3,4,5])
-    >>> x = scan_flat(add, length=5, in_axes=(0,))(a, b)
+    >>> x = scan_flat(lambda args: add(args[0],args[1]), length=5, in_axes=(0,))(a, b)
     >>> x.op
     Scan(Composite(2, (Add(),), [[0, 1]]), 5, (0,), 0)
     >>> x.op.base_op

@@ -1,41 +1,41 @@
 """
 This module defines a friendly interface for creating models in the Pangolin IR.
 
-Example
--------
+# Example
+# -------
 
-Take the following model:
+# Take the following model:
 
-.. code-block:: text
+# .. code-block:: text
 
-    x    ~ normal(0,1)
-    y[i] ~ exponential(d[i])
-    z[i] ~ normal(x, y[i])
+#     x    ~ normal(0,1)
+#     y[i] ~ exponential(d[i])
+#     z[i] ~ normal(x, y[i])
 
-In Pangolin, you can declare this model like so:
+# In Pangolin, you can declare this model like so:
 
-.. code-block:: python
+# .. code-block:: python
 
-    >>> from pangolin import interface as pi
-    >>>
-    >>> x = pi.normal(0,1)
-    >>> y = pi.vmap(pi.exponential)(pi.constant([2,3,4]))
-    >>> z = pi.vmap(pi.normal, [None, 0])(x, y)
+#     >>> from pangolin import interface as pi
+#     >>>
+#     >>> x = pi.normal(0,1)
+#     >>> y = pi.vmap(pi.exponential)(pi.constant([2,3,4]))
+#     >>> z = pi.vmap(pi.normal, [None, 0])(x, y)
 
-This produces the following internal representation.
+# This produces the following internal representation.
 
 
-.. code-block:: python
+# .. code-block:: python
 
-    >>> pi.print_upstream(z)
-    shape | statement
-    ----- | ---------
-    ()    | a = 0
-    ()    | b = 1
-    ()    | c ~ normal(a, b)
-    (3,)  | d = [2 3 4]
-    (3,)  | e ~ vmap(exponential, [0], 3)(d)
-    (3,)  | f ~ vmap(normal, [None, 0], 3)(c, e)
+#     >>> pi.print_upstream(z)
+#     shape | statement
+#     ----- | ---------
+#     ()    | a = 0
+#     ()    | b = 1
+#     ()    | c ~ normal(a, b)
+#     (3,)  | d = [2 3 4]
+#     (3,)  | e ~ vmap(exponential, [0], 3)(d)
+#     (3,)  | f ~ vmap(normal, [None, 0], 3)(c, e)
 
 Reference card
 --------------
@@ -94,15 +94,17 @@ from __future__ import annotations
 from .base import *
 from .base import RVLike
 
-# from . import vmap
-# from . import vmap
+
 from .compositing import composite
 from .scanning import Scannable, Scanned, scan, repeat
 from .indexing import index, vindex
 from .transforming import Transform, tforms, compose_transforms
 from .util import fill_tril, extract_tril
 from pangolin.ir import print_upstream
-from .vfor import vfor
+
+from .vmapping import vmap
+
+# from .vfor import vfor
 
 RVLike = RVLike  # no-op assignment so it can be documented
 """A type class indicating either:

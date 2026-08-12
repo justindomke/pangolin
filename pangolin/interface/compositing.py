@@ -1,13 +1,14 @@
 from pangolin.ir import Composite, Shape, Op
 from pangolin.interface import InfixRV, makerv, normal, create_rv
-from .base import generated_nodes, AbstractOp, exp
+from .base import exp
+from .tracing import generated_nodes, AbstractOp, FlatCallable, FlatCallableSingle, pack, pack_single
 from pangolin import util, ir
 import jax.tree_util
 from typing import Callable
 
 
 def make_composite[LastOp: Op](
-    flat_fun: Callable[..., InfixRV[LastOp]], *input_shapes: Shape
+    flat_fun: FlatCallableSingle[LastOp], *input_shapes: Shape
 ) -> tuple[Composite[LastOp], list[InfixRV]]:
     """
     Given a function and input shapes, create a composite Op representing that function.
@@ -36,7 +37,8 @@ def make_composite[LastOp: Op](
 
     Examples
     --------
-    >>> def fun(x, y):
+    >>> @pack_single
+    ... def fun(x, y):
     ...     a = x+y
     ...     return normal(a, y)
     >>> op, consts = make_composite(fun, (), ())
@@ -46,7 +48,8 @@ def make_composite[LastOp: Op](
     []
 
     >>> x = makerv(3)
-    >>> def fun(y):
+    >>> @pack_single
+    ... def fun(y):
     ...     a = x+y
     ...     return normal(a, y)
     >>> op, consts = make_composite(fun, ())
@@ -59,8 +62,8 @@ def make_composite[LastOp: Op](
     dummy_args = [InfixRV(AbstractOp(shape)) for shape in input_shapes]
 
     # generated_nodes runs on "flat" functions that return arrays, not single RVs
-    f = lambda *args: [flat_fun(*args)]
-    all_vars, [out] = generated_nodes(f, *dummy_args)
+    f = lambda args: [flat_fun(args)]
+    all_vars, [out] = generated_nodes(f, dummy_args)
     assert isinstance(out, InfixRV), "output of function must be a single InfixRV"
 
     ops = []
@@ -151,7 +154,8 @@ def uncomposite_flat(op: Composite) -> Callable:
     return fun
 
 
-def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Composite]]:
+# def composite_flat(flat_fun: FlatCallableSingleOutput) -> Callable[[list[InfixRV]], InfixRV[Composite]]:
+def composite_flat(flat_fun: FlatCallableSingle) -> FlatCallableSingle[Composite]:
     """Turn a function into a new function that returns a single Composite RV
 
     Parameters
@@ -161,31 +165,33 @@ def composite_flat(flat_fun: Callable[..., InfixRV]) -> Callable[..., InfixRV[Co
 
     Examples
     --------
-    >>> def f(x, y):
+    >>> @pack_single
+    ... def f(x, y):
     ...     a = x+y
     ...     return normal(a, y)
     >>> composite_flat(f)
     <function composite_flat.<locals>.myfun at ...>
     >>> x = makerv(1)
     >>> y = makerv(2)
-    >>> z = composite_flat(f)(x, y)
+    >>> z = composite_flat(f)([x, y])
     >>> z.op
     Composite(2, (Add(), Normal()), [[0, 1], [2, 1]])
     >>> z.parents == (x, y)
     True
 
     >>> # Example where x is not explicitly passed
-    >>> def f(y):
+    >>> @pack_single
+    ... def f(y):
     ...     a = x+y
     ...     return normal(a, y)
-    >>> z = composite_flat(f)(y)
+    >>> z = composite_flat(f)([y])
     >>> z.op
     Composite(2, (Add(), Normal()), [[1, 0], [2, 0]])
     >>> z.parents == (x, y)
     True
     """
 
-    def myfun(*inputs):
+    def myfun(inputs):
         input_shapes = [x.shape for x in inputs]
         op, consts = make_composite(flat_fun, *input_shapes)
         return create_rv(op, *consts, *inputs)
@@ -236,8 +242,8 @@ def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
         inputs = jax.tree_util.tree_map(makerv, inputs)
         flat_fun, flatten_input, unflatten_output = util.flatten_fun(fun, *inputs)
 
-        # remove first output, not list
-        new_flat_fun = lambda *args: flat_fun(*args)[0]
+        # return first output, not list
+        flat_fun_single: FlatCallableSingle = lambda args: flat_fun(args)[0]
 
         flat_inputs = flatten_input(*inputs)
 
@@ -245,7 +251,7 @@ def composite(fun: Callable) -> Callable[..., InfixRV[Composite]]:
         # print(f"{test_out=}")
 
         flat_input_shapes = [x.shape for x in flat_inputs]
-        op, consts = make_composite(new_flat_fun, *flat_input_shapes)
+        op, consts = make_composite(flat_fun_single, *flat_input_shapes)
         return create_rv(op, *flat_inputs, *consts)
 
     return myfun

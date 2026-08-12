@@ -149,7 +149,9 @@ z, u = vmap_axis([zi, ui], i)
 """
 
 # from jax._src.core import pp_toplevel_jaxpr
-from .base import InfixRV, AbstractOp, generated_nodes, constant, vmap_subgraph, vmap, print_upstream
+from .base import InfixRV, constant
+from .tracing import AbstractOp
+from .vmapping import vmap
 from pangolin import ir
 from typing import Sequence, Callable
 import warnings
@@ -158,6 +160,7 @@ from pangolin import dag, util
 from jaxtyping import PyTree
 import jax.tree_util
 from pangolin import interface as pi
+from pangolin.interface import print_upstream
 
 
 class Axis(ir.Op):
@@ -886,7 +889,7 @@ def vfor_simple(fun, *sizes: int):
     >>> x = constant([1.1, 2.2, 3.3])
     >>> y = vfor_simple(lambda i: x[i]*2, 3)
     >>> print(y)
-    vmap(mul, [0, None], 3)(vmap(index, [None, 0], 3)([1.1 2.2 3.3], [0 1 2]), 2)
+    vmap(mul, [0, None], 3)([1.1 2.2 3.3], 2)
 
     outer product
 

@@ -1,6 +1,6 @@
 from pangolin import interface as pi
 from pangolin import ir
-from pangolin.interface.vfor import extract_from_rvs
+from pangolin.interface.vfor import extract_from_rvs, vfor
 
 
 def test_simple():

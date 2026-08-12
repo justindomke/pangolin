@@ -12,22 +12,136 @@ import numpy as np
 from jax import numpy as jnp
 from typing import Protocol
 from jaxtyping import PyTree
-from .tracing import AbstractOp, generated_nodes, FlatCallable
+from .tracing import AbstractOp, generated_nodes, FlatCallable, pack
 
 
 Shape = ir.Shape
 
 
-# class FlatCallable(Protocol):
-#     def __call__(self, *args: RV) -> list[InfixRV]: ...
+def is_full_slice(x: InfixRV, len: int) -> int | None:
+    """
+
+    Examples
+    --------
+    >>> x = ir.RV(ir.Constant([0,1,2]))
+    >>> is_full_slice(x, 3)
+    True
+    >>> x = ir.RV(ir.Constant([0,1,2]))
+    >>> is_full_slice(x, 5)
+    False
+    >>> x = ir.RV(ir.Constant(1))
+    >>> y = ir.RV(ir.Exp(),x)
+    >>> is_full_slice(y, 5)
+    False
+    """
+    return isinstance(x.op, ir.Constant) and (x.op == ir.Constant(range(len)))
+
+
+def is_vmap_over_scalar_index(x: InfixRV) -> int | None:
+    """
+
+    Examples
+    --------
+    >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
+    >>> b = ir.RV(ir.Constant([0, 1, 2]))
+    >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
+    >>> is_vmap_over_scalar_index(c)
+    0
+
+    >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
+    >>> b = ir.RV(ir.Constant([0, 1]))
+    >>> c = ir.RV(ir.Constant([0, 1, 2]))
+    >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
+    >>> is_vmap_over_scalar_index(d)
+    0
+    >>> e = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
+    >>> is_vmap_over_scalar_index(e)
+    1
+
+    """
+
+    if isinstance(x.op, ir.VMap):
+        if isinstance(x.op.base_op, ir.Index):
+            indexed_rv = x.parents[0]
+            index_rvs = x.parents[1:]
+
+            indexed_axis = x.op.in_axes[0]
+            index_axes = x.op.in_axes[1:]
+
+            if indexed_axis is None:
+                all_full_slices = all(is_full_slice(p, i) for (p, i) in zip(index_rvs, indexed_rv.shape, strict=True))
+                if all_full_slices:
+                    num_0 = sum(1 for ax in index_axes if ax == 0)
+                    num_None = sum(1 for ax in index_axes if ax is None)
+                    only_one_mapped = (num_0 == 1) and (num_None == indexed_rv.ndim - 1)
+                    if only_one_mapped:
+                        mapped_axis = index_axes.index(0)
+                        return mapped_axis
+    return None
+
+
+def reduce_vmap_parent(p: InfixRV, axis: int | None) -> tuple[InfixRV, int | None]:
+    """
+    Given an RV and an axis it will be vmapped over, give another RV and another axis that yields equivalent results
+    but is (possibly) simpler
+
+    Parameters
+    ----------
+    p
+        Random variable that will be mapped over
+    axis
+        axis to be mapped over
+
+    Examples
+    --------
+    >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
+    >>> b = ir.RV(ir.Constant([0, 1, 2]))
+    >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
+    >>> d, axis = reduce_vmap_parent(c, 0)
+    >>> d == a
+    True
+    >>> axis
+    0
+
+    >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
+    >>> b = ir.RV(ir.Constant([0, 1]))
+    >>> c = ir.RV(ir.Constant([0, 1, 2]))
+    >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
+    >>> e, axis = reduce_vmap_parent(d, 0)
+    >>> e == a
+    True
+    >>> axis
+    0
+
+    >>> f = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
+    >>> g, axis = reduce_vmap_parent(f, 0)
+    >>> g == a
+    True
+    >>> axis
+    1
+
+    """
+
+    if axis != 0:
+        return p, axis
+
+    new_axis = is_vmap_over_scalar_index(p)
+    if new_axis is None:
+        return p, axis
+
+    return p.parents[0], new_axis
+
+
+def reduce_vmap_parents(parents, in_axes):
+    return util.unzip([reduce_vmap_parent(p, i) for (p, i) in zip(parents, in_axes, strict=True)])
 
 
 def vmap_subgraph(
-    dummy_roots: Sequence[InfixRV],
-    dummy_nodes: Sequence[InfixRV],
-    dummy_outputs: Sequence[InfixRV],
-    roots: Sequence[InfixRV],
-    roots_axes: Sequence[int | None],
+    dummy_roots: list[InfixRV],
+    dummy_nodes: list[InfixRV],
+    dummy_outputs: list[InfixRV],
+    roots: list[InfixRV],
+    roots_axes: list[int | None],
     axis_size: int | None,
 ) -> list[InfixRV]:
     """
@@ -104,31 +218,49 @@ def vmap_subgraph(
 
     for dummy_node in dummy_nodes:
         dummy_parents = dummy_node.parents
-        parents = tuple(dummy_to_real[p] for p in dummy_parents)
-        my_in_axes = tuple(dummy_mapped_axis[p] for p in dummy_parents)
+        parents = [dummy_to_real[p] for p in dummy_parents]
+        my_in_axes = [dummy_mapped_axis[p] for p in dummy_parents]
 
         no_mapped_axes = all(axis is None for axis in my_in_axes)
+
         # if no mapped axes AND non-random AND not in output, no need to map
-        if no_mapped_axes and not dummy_node.op.random and dummy_node not in dummy_outputs:
+        no_vmap_needed = no_mapped_axes and not dummy_node.op.random and dummy_node not in dummy_outputs
+        if no_vmap_needed:
             new_op = dummy_node.op
             new_axis = None
+
+            dummy_to_real[dummy_node] = create_rv(new_op, *parents)
+            dummy_mapped_axis[dummy_node] = new_axis
+
         else:
+            # print("")
+            # print(f"A {parents=}")
+            # print(f"A {my_in_axes=}")
+            parents, my_in_axes = reduce_vmap_parents(parents, my_in_axes)
+            # print(f"B {parents=}")
+            # print(f"B {my_in_axes=}")
+
             new_op = VMap(dummy_node.op, in_axes=my_in_axes, axis_size=axis_size)
             new_axis = 0
 
-        dummy_to_real[dummy_node] = create_rv(new_op, *parents)
-        dummy_mapped_axis[dummy_node] = new_axis
+            new_rv = create_rv(new_op, *parents)
+            simple_rv, axis = reduce_vmap_parent(new_rv, 0)
+            if axis == 0:
+                new_rv = simple_rv
 
-    # if any(dummy_mapped_axis[a] is None for a in dummy_outputs):
-    #    raise ValueError("Output not vmapped")
+            dummy_to_real[dummy_node] = new_rv
+            dummy_mapped_axis[dummy_node] = 0
+
+            # dummy_to_real[dummy_node] = create_rv(new_op, *parents)
+            # dummy_mapped_axis[dummy_node] = new_axis
 
     real_nodes = [dummy_to_real[dummy_node] for dummy_node in dummy_outputs]
     return real_nodes
 
 
 def vmap_dummy_args(
-    args: Sequence[InfixRV], in_axes: Sequence[int | None], axis_size: int | None
-) -> tuple[tuple[InfixRV[AbstractOp], ...], int]:
+    args: list[InfixRV], in_axes: Sequence[int | None], axis_size: int | None
+) -> tuple[list[InfixRV[AbstractOp]], int]:
     """
     Given a "full" arguments, get a list of dummy/sliced arguments.
 
@@ -144,7 +276,7 @@ def vmap_dummy_args(
     Returns
     -------
     dummy_args
-        tuple of abstract RVs with sliced shapes
+        abstract RVs with sliced shapes
     axis_size
         inferred axis_size (or arg if provided)
 
@@ -154,11 +286,14 @@ def vmap_dummy_args(
     >>> B = InfixRV(Constant([7,8,9]))
     >>> dummy_args, axis_size = vmap_dummy_args([A, B], [1, 0], None)
     >>> dummy_args
-    (InfixRV(AbstractOp((2,))), InfixRV(AbstractOp()))
+    [InfixRV(AbstractOp((2,))), InfixRV(AbstractOp())]
     """
 
-    if not util.all_unique(args):
-        raise ValueError("vmap_dummy_args requires all unique arguments")
+    in_axes = list(in_axes)
+
+    # TODO: this formerly existed. why??
+    # if not util.all_unique(args):
+    #    raise ValueError("vmap_dummy_args requires all unique arguments")
 
     dummy_args = []
     for i, a in zip(in_axes, args, strict=True):
@@ -181,14 +316,14 @@ def vmap_dummy_args(
     if axis_size is None:
         raise ValueError("axis_size could not be inferred")
 
-    return tuple(dummy_args), axis_size
+    return dummy_args, axis_size
 
 
 def vmap_eval_flat(
     f: FlatCallable,
     in_axes: Sequence[int | None],
     axis_size: int | None,
-    *args: RVLike,
+    args: list[RVLike],
 ) -> list[InfixRV]:
     """
     This function (but not vmap itself) works on "flat" function f, meaning that each
@@ -199,12 +334,12 @@ def vmap_eval_flat(
     ----------
     f: FlatCallable
         The function to be vmapped. Must be "flat"
-    in_axes: Sequence[int | None]
+    in_axes
         axes to vmap for each argument
-    axis_size: int | None
+    axis_size
         length of vmap.
-    args: RV_or_ArrayLike
-        arguments. unlike most functions
+    args
+        arguments
 
     Returns
     -------
@@ -213,19 +348,21 @@ def vmap_eval_flat(
 
     Examples
     --------
-    >>> def f(a,b):
+    >>> @pack
+    ... def f(a, b):
     ...     return [a+b]
     >>> A = constant([0,1])
     >>> B = constant([2,3])
-    >>> [C] = vmap_eval_flat(f, (0,0), 2, A, B)
+    >>> [C] = vmap_eval_flat(f, (0,0), 2, [A, B])
     >>> print(repr(C))
     InfixRV(VMap(Add(), [0, 0], 2), InfixRV(Constant([0,1])), InfixRV(Constant([2,3])))
     """
 
     # make sure inputs are RVs
-    rv_args = tuple(makerv(a) for a in args)
+    in_axes = list(in_axes)
+    rv_args = [makerv(a) for a in args]
     dummy_args, axis_size = vmap_dummy_args(rv_args, in_axes, axis_size)
-    dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
+    dummy_nodes, dummy_outputs = generated_nodes(f, dummy_args)
 
     return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size)
 
@@ -424,51 +561,52 @@ def vmap[*Args](
 
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(f, *dummy_args, is_leaf=util._is_leaf_with_none)
         flat_args = flatten_inputs(*args)
-        flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, *flat_args)
+        flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, flat_args)
         output = unflatten_output(flat_output)
         return output
 
     return call
 
 
-
-
-
-def vmap_flat(f: FlatCallable, in_axes: tuple[int | None, ...], axis_size: int | None):
+def vmap_flat(f: FlatCallable, in_axes: Sequence[int | None], axis_size: int | None):
     """
     vmap a flat function (one that takes some number of RV arguments and returns a list of RV
     arguments)
     """
+    in_axes = list(in_axes)
 
-    def vec_f(*args):
-        args = list(makerv(a) for a in args)
-        dummy_args, my_axis_size = vmap_dummy_args(args, in_axes, axis_size)
-        dummy_nodes, dummy_outputs = generated_nodes(f, *dummy_args)
-        return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, args, in_axes, my_axis_size)
+    def vec_f(args: list[RVLike]):
+        rv_args: list[InfixRV] = list(makerv(a) for a in args)
+        dummy_args, my_axis_size = vmap_dummy_args(rv_args, in_axes, axis_size)
+        dummy_nodes, dummy_outputs = generated_nodes(f, dummy_args)
+        return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, my_axis_size)
 
     return vec_f
 
 
-# def convert_args(rv_type: Type[InfixRV], *args: InfixRV):
-#     """
-#     Given some set of (interdependent) RVs, get a new set where all are converted to a new type
-#     but all inter-RV parent links are preserved.
+# TODO: delete?
 
-#     Parameters
-#     ----------
-#     rv_type
-#         Some subclass of `RV`
-#     args:RV
-#         arguments, all of type RV
 
-#     Returns
-#     -------
-#     new_args:tuple[rv_type]
-#         converted args
-#     """
-#     abstract_args = {}
-#     for a in args:
-#         new_parents: list[InfixRV] = [abstract_args[p] if p in abstract_args else p for p in a.parents]
-#         abstract_a = rv_type(a.op, *new_parents)
-#         abstract_args[a] = abstract_a
-#     return tuple(abstract_args[a] for a in args)
+def convert_args(rv_type: Type[InfixRV], *args: InfixRV):
+    """
+    Given some set of (interdependent) RVs, get a new set where all are converted to a new type
+    but all inter-RV parent links are preserved.
+
+    Parameters
+    ----------
+    rv_type
+        Some subclass of `RV`
+    args:RV
+        arguments, all of type RV
+
+    Returns
+    -------
+    new_args:tuple[rv_type]
+        converted args
+    """
+    abstract_args = {}
+    for a in args:
+        new_parents: list[InfixRV] = [abstract_args[p] if p in abstract_args else p for p in a.parents]
+        abstract_a = rv_type(a.op, *new_parents)
+        abstract_args[a] = abstract_a
+    return tuple(abstract_args[a] for a in args)

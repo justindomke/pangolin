@@ -2,13 +2,8 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.base import (
+from pangolin.interface.vmapping import (
     convert_args,
-    generated_nodes,
-    vmap_dummy_args,
-    AbstractOp,
-    vmap_eval_flat,
-    vmap,
 )
 import numpy as np
 

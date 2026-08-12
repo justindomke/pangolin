@@ -2,7 +2,7 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.base import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
@@ -12,23 +12,26 @@ from pangolin.interface.base import (
 )
 import numpy as np
 from pangolin import interface as pi
+from pangolin.interface.tracing import pack
 
 
 def test_vmap_eval_simple():
+    @pack
     def flat_fun(x, y):
         return [x * y]
 
-    in_axes = (0, 0)
+    in_axes = [0, 0]
     axis_size = 3
     x = constant([1, 2, 3])
     y = constant([4, 5, 6])
-    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
+    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x, y])
 
     assert z.op == ir.VMap(ir.Mul(), (0, 0), 3)
     assert z.parents == (x, y)
 
 
 def test_vmap_eval_more():
+    @pack
     def flat_fun(x, y):
         tmp1 = x * x
         tmp2 = y + y
@@ -38,7 +41,7 @@ def test_vmap_eval_more():
     axis_size = 3
     x = constant([1, 2, 3])
     y = constant([4, 5, 6])
-    [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
+    [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x, y])
     assert z.op == ir.VMap(ir.Pow(), (0, 0), 3)
     assert z.parents == (tmp1, tmp2)
     assert tmp1.op == ir.VMap(ir.Mul(), (0, 0), 3)
@@ -48,6 +51,7 @@ def test_vmap_eval_more():
 
 
 def test_vmap_eval_half_mapped():
+    @pack
     def flat_fun(x, y):
         tmp1 = x * x
         tmp2 = y + y
@@ -57,7 +61,7 @@ def test_vmap_eval_half_mapped():
     axis_size = 3
     x = constant([1, 2, 3])
     y = constant(4)
-    [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, x, y)
+    [z, tmp1, tmp2] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x, y])
     assert z.op == ir.VMap(ir.Pow(), (0, 0), 3)
     assert z.parents == (tmp1, tmp2)
     assert tmp1.op == ir.VMap(ir.Mul(), (0, 0), 3)
@@ -69,6 +73,7 @@ def test_vmap_eval_half_mapped():
 def test_vmap_eval_closure():
     z = normal(0, 1)
 
+    @pack
     def flat_fun(xi):
         y = z * z
         return [y]
@@ -76,13 +81,14 @@ def test_vmap_eval_closure():
     in_axes = (0,)
     axis_size = 3
     x = constant([1, 2, 3])
-    [y] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
+    [y] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x])
     assert y.op == ir.VMap(ir.Mul(), (None, None), 3)
     assert y.parents == (z, z)
 
 
 def test_vmap_eval_constant():
     # test that constant is not vmapped (used to require a special case)
+    @pack
     def flat_fun(xi):
         yi = constant(2)
         return [xi * yi]
@@ -90,13 +96,14 @@ def test_vmap_eval_constant():
     in_axes = (0,)
     axis_size = 3
     x = constant([1, 2, 3])
-    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
+    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x])
     assert z.op == ir.VMap(ir.Mul(), (0, None), 3)
     assert z.parents[0] == x
     assert z.parents[1].op == ir.Constant(2)
 
 
 def test_no_redundant_deterministic():
+    @pack
     def flat_fun(xi):
         yi = xi * 2
         zi = yi + 3
@@ -105,7 +112,7 @@ def test_no_redundant_deterministic():
     in_axes = (None,)
     axis_size = 3
     x = constant(1)
-    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, x)
+    [z] = vmap_eval_flat(flat_fun, in_axes, axis_size, [x])
     assert z.op == ir.VMap(ir.Add(), (None, None), 3)
     assert z.parents[0].op == ir.Mul()
     assert z.parents[1].op == ir.Constant(3)
@@ -114,27 +121,30 @@ def test_no_redundant_deterministic():
 
 
 def test_double_vmap_eval():
+    @pack
     def flat_fun1(xij):
         return [exp(xij)]
 
     xij = constant(2)
-    [yij] = flat_fun1(xij)
+    [yij] = flat_fun1([xij])
     assert yij.op == ir.Exp()
 
+    @pack
     def vec_fun1(xi):
-        [yi] = vmap_eval_flat(flat_fun1, (0,), None, xi)
+        [yi] = vmap_eval_flat(flat_fun1, (0,), None, [xi])
         return [yi]
 
     xi = constant([1, 2, 3])
-    [yi] = vec_fun1(xi)
+    [yi] = vec_fun1([xi])
     assert yi.op == ir.VMap(ir.Exp(), (0,), 3)
 
+    @pack
     def vec_fun2(x):
-        [y] = vmap_eval_flat(vec_fun1, (0,), None, x)
+        [y] = vmap_eval_flat(vec_fun1, (0,), None, [x])
         return [y]
 
     x = constant([[1, 2, 3], [4, 5, 6]])
-    [y] = vec_fun2(x)
+    [y] = vec_fun2([x])
     assert y.op == ir.VMap(ir.VMap(ir.Exp(), (0,), 3), (0,), 2)
 
 
@@ -143,11 +153,10 @@ def test_vmap_eval1():
     with pi.override(broadcasting="off"):
         try:
             y = vmap_eval_flat(
-                lambda loc, scale: [normal(loc, scale)],
+                pack(lambda loc, scale: [normal(loc, scale)]),
                 [None, None],
                 5,
-                np.zeros(3),
-                np.ones(3),
+                [np.zeros(3), np.ones(3)],
             )
             assert False
         except ValueError as e:
@@ -155,39 +164,42 @@ def test_vmap_eval1():
 
 
 def test_vmap_eval2():
-    y = vmap_eval_flat(
-        lambda loc, scale: [normal(loc, scale)], [0, None], 3, np.zeros(3), 1
-    )[0]
+    fun = pack(lambda loc, scale: [normal(loc, scale)])
+    y = vmap_eval_flat(fun, [0, None], 3, [np.zeros(3), 1])[0]
     assert y.shape == (3,)
 
 
 def test_vmap_eval3():
+    @pack
     def f(x):
         return [normal(x, x)]
 
-    y = vmap_eval_flat(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
+    y = vmap_eval_flat(f, [0], None, [np.array([3.3, 4.4, 5.5])])[0]
     assert y.shape == (3,)
 
 
 def test_vmap_eval4():
+    @pack
     def f(x):
         loc = x * 1.1
         scale = x**2.2
         return [normal(loc, scale)]
 
-    y = vmap_eval_flat(f, [0], None, np.array([3.3, 4.4, 5.5]))[0]
+    y = vmap_eval_flat(f, [0], None, [np.array([3.3, 4.4, 5.5])])[0]
     assert y.shape == (3,)
 
 
 def test_vmap_eval6():
+    @pack
     def f():
         return [normal(0, 1)]
 
-    x = vmap_eval_flat(f, [], 3)[0]
+    x = vmap_eval_flat(f, [], 3, [])[0]
     assert x.shape == (3,)
 
 
 def test_vmap_eval7():
+    @pack
     def f(x):
         loc = x * 1.1
         scale = x**2.2
@@ -196,13 +208,14 @@ def test_vmap_eval7():
         z = normal(1, 2)
         return [y, x, z]
 
-    y, x, z = vmap_eval_flat(f, [0], 3, np.array([3.3, 4.4, 5.5]))
+    y, x, z = vmap_eval_flat(f, [0], 3, [np.array([3.3, 4.4, 5.5])])
     assert y.shape == (3,)
     assert x.shape == (3,)
     assert z.shape == (3,)
 
 
 def test_vmap_eval8():
+    @pack
     def f(x):
         loc = x * 1.1
         scale = x**2.2
@@ -211,7 +224,7 @@ def test_vmap_eval8():
         z = normal(1, 2)
         return [y, x, z]
 
-    y, x, z = vmap_eval_flat(f, [0], None, np.array([3.3, 4.4, 5.5]))
+    y, x, z = vmap_eval_flat(f, [0], None, [np.array([3.3, 4.4, 5.5])])
     assert y.shape == (3,)
     assert x.shape == (3,)
     assert z.shape == (3,)

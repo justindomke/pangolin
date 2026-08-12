@@ -2,7 +2,7 @@ from pangolin.interface import *
 from pangolin import ir
 from collections.abc import Callable
 
-from pangolin.interface.base import (
+from pangolin.interface.vmapping import (
     convert_args,
     generated_nodes,
     vmap_dummy_args,
@@ -16,7 +16,7 @@ import numpy as np
 def test_vmap_dummy_args():
     in_axes = (0,)
     axis_size = None
-    args = (constant([1, 2, 3]),)
+    args = [constant([1, 2, 3])]
     dummy_args, axis_size = vmap_dummy_args(args, in_axes, axis_size)
     assert len(dummy_args) == 1
     assert axis_size == 3

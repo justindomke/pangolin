@@ -11,7 +11,8 @@ from pangolin import ir
 
 
 def test_simple_flat():
-    def fun(x):
+    def fun(args):
+        x = args[0]
         return exponential(x)
 
     u = constant(2.2)
@@ -22,8 +23,9 @@ def test_simple_flat():
     assert y.parents == (u,)
 
 
-def test_normal():
-    def fun(x):
+def test_normal_flat():
+    def fun(args):
+        x = args[0]
         return normal(x, 1.1)
 
     u = constant(2.2)
@@ -33,10 +35,11 @@ def test_normal():
     assert y.op == ir.Scan(base_op, 10, [])
 
 
-def test_normal_external_scale():
+def test_normal_external_scale_flat():
     scale = constant(1.1)
 
-    def fun(x):
+    def fun(args):
+        x = args[0]
         return normal(x, scale)
 
     u = constant(2.2)
@@ -47,8 +50,9 @@ def test_normal_external_scale():
     assert y.parents == (u, scale)
 
 
-def test_normal_with_param():
-    def fun(x, scale):
+def test_normal_with_param_flat():
+    def fun(args):
+        x, scale = args
         return normal(x, scale)
 
     u = constant(2.2)
@@ -60,8 +64,9 @@ def test_normal_with_param():
     assert y.parents == (u, scales)
 
 
-def test_pass_constants():
-    def fun(x, scale):
+def test_pass_constants_flat():
+    def fun(args):
+        x, scale = args
         return normal(x, scale)
 
     y = scan_flat(fun, 10, (0,))(2.2, np.arange(1, 11))

@@ -2195,7 +2195,7 @@ def graph_upstream(*vars: PyTree[RV], number_parents: bool = False, **named_vars
     ├─╄─○ () normal
     │ │ │
     └─○ │ () normal
-      │ │
+      │₁│₀
       └─○ () add
 
     >>> a = pi.constant([-3.0, 0.0, 2.5])

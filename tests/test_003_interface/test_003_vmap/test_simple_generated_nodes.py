@@ -4,8 +4,7 @@ from collections.abc import Callable
 
 # from pangolin.simple_interface.base import make_infix_rv
 
-from pangolin.interface.base import (
-    convert_args,
+from pangolin.interface.vmapping import (
     generated_nodes,
     vmap_dummy_args,
     AbstractOp,
@@ -13,15 +12,17 @@ from pangolin.interface.base import (
     vmap,
 )
 import numpy as np
+from pangolin.interface.tracing import pack
 
 
 def test_generated_nodes1():
+    @pack
     def fun(x, y):
         return [x * 2, y + 3]
 
     x0 = constant(1)
     y0 = constant(2)
-    generated, out = generated_nodes(fun, x0, y0)
+    generated, out = generated_nodes(fun, [x0, y0])
     assert len(generated) == 4
     assert generated[0].op == ir.Constant(2)
     assert generated[1].op == ir.Mul()
@@ -33,6 +34,7 @@ def test_generated_nodes1():
 
 
 def test_generated_nodes2():
+    @pack
     def fun(x, y):
         tmp = normal(x, y)
         z = cauchy(tmp, y)
@@ -40,7 +42,7 @@ def test_generated_nodes2():
 
     x0 = constant(1)
     y0 = constant(2)
-    generated, out = generated_nodes(fun, x0, y0)
+    generated, out = generated_nodes(fun, [x0, y0])
     assert len(generated) == 2
     # tmp
     assert generated[0].op == ir.Normal()
@@ -55,13 +57,14 @@ def test_generated_nodes2():
 def test_generated_nodes_closure():
     x = constant(1)
 
+    @pack
     def fun(y):
         tmp = x * 3  # tmp included, 3 not because constant
         z = y + tmp
         return [z]
 
     y0 = constant(2)
-    generated, out = generated_nodes(fun, y0)
+    generated, out = generated_nodes(fun, [y0])
     assert len(generated) == 3
     # c
     c = generated[0]
@@ -81,11 +84,12 @@ def test_generated_nodes_closure():
 def test_generated_nodes_ignored_input():
     x = constant(1)
 
+    @pack
     def fun(y):
         return [2 * x]
 
     y0 = constant(3)
-    generated, out = generated_nodes(fun, y0)
+    generated, out = generated_nodes(fun, [y0])
     c = generated[0]
     assert c.op == ir.Constant(2)
     z = generated[1]
@@ -97,17 +101,19 @@ def test_generated_nodes_ignored_input():
 def test_generated_nodes_passthrough():
     x = constant(1)
 
+    @pack
     def fun(x):
         return [x]
 
     try:
-        generated, out = generated_nodes(fun, x)
+        generated, out = generated_nodes(fun, [x])
         assert False
     except ValueError:
         pass
 
 
 def test_generated_nodes_switcharoo():
+    @pack
     def fun(x, y):
         return [y, x]
 
@@ -115,13 +121,14 @@ def test_generated_nodes_switcharoo():
     y0 = constant(2)
 
     try:
-        generated, out = generated_nodes(fun, x0, y0)
+        generated, out = generated_nodes(fun, [x0, y0])
         assert False
     except ValueError:
         pass
 
 
 def test_non_flat():
+    @pack
     def fun(x, y):
         return x
 
@@ -129,7 +136,7 @@ def test_non_flat():
     y0 = constant(2)
 
     try:
-        generated_nodes(fun, x0, y0)
+        generated_nodes(fun, [x0, y0])
         assert False
     except ValueError:
         pass
@@ -139,8 +146,8 @@ def test_vmap_generated_nodes1():
     # both inputs explicitly given
     a = constant(0)
     b = constant(1)
-    f = lambda a, b: [normal(a, b)]
-    generated, out = generated_nodes(f, a, b)
+    f = pack(lambda a, b: [normal(a, b)])
+    generated, out = generated_nodes(f, [a, b])
     assert len(generated) == 1
     assert generated[0].op == ir.Normal()
 
@@ -149,8 +156,8 @@ def test_vmap_generated_nodes2():
     # b captured as a closure
     a = constant(0)
     b = constant(1)
-    f = lambda a: [normal(a, b)]
-    generated, out = generated_nodes(f, a)
+    f = pack(lambda a: [normal(a, b)])
+    generated, out = generated_nodes(f, [a])
     assert len(generated) == 1
     assert generated[0].op == ir.Normal()
 
@@ -159,8 +166,8 @@ def test_vmap_generated_nodes3():
     # a captured as a closure
     a = constant(0)
     b = constant(1)
-    f = lambda b: [normal(a, b)]
-    generated, out = generated_nodes(f, b)
+    f = pack(lambda b: [normal(a, b)])
+    generated, out = generated_nodes(f, [b])
     assert len(generated) == 1
     assert generated[0].op == ir.Normal()
 
@@ -170,14 +177,15 @@ def test_vmap_generated_nodes4():
     # both a and b captured as a closure
     a = constant(0)
     b = constant(1)
-    f = lambda: [normal(a, b)]
-    generated, out = generated_nodes(f)
+    f = lambda args: [normal(a, b)]
+    generated, out = generated_nodes(f, [])
     assert len(generated) == 1
     assert generated[0].op == ir.Normal()
     assert generated[0].parents == (a, b)
 
 
 def test_vmap_generated_nodes5():
+    @pack
     def fun(a, b):
         loc = a + b
         scale = 1
@@ -187,8 +195,8 @@ def test_vmap_generated_nodes5():
     b = constant(1)
 
     # both a and b given
-    f = lambda a, b: fun(a, b)
-    nodes = list(generated_nodes(f, a, b)[0])
+    f = pack(lambda a, b: fun([a, b]))
+    nodes = list(generated_nodes(f, [a, b])[0])
     assert len(nodes) == 3
     loc, scale, z = nodes
     assert loc.op == ir.Add()
@@ -198,8 +206,8 @@ def test_vmap_generated_nodes5():
     assert z.parents == (loc, scale)
 
     # b captured with closure
-    f = lambda a: fun(a, b)
-    nodes = list(generated_nodes(f, a)[0])
+    f = pack(lambda a: fun([a, b]))
+    nodes = list(generated_nodes(f, [a])[0])
     assert len(nodes) == 3
     loc, scale, z = nodes
     assert loc.op == ir.Add()
@@ -209,8 +217,8 @@ def test_vmap_generated_nodes5():
     assert z.parents == (loc, scale)
 
     # neither a nor b captured
-    f = lambda: fun(a, b)
-    nodes = list(generated_nodes(f)[0])
+    f = pack(lambda: fun([a, b]))
+    nodes = list(generated_nodes(f, [])[0])
     assert len(nodes) == 3
     loc, scale, z = nodes
     assert loc.op == ir.Add()
