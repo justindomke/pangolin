@@ -143,7 +143,7 @@ def test_composite_flat_mul_exponential():
     assert z.op == Composite(num_inputs, ops, par_nums)
 
 
-def test_composite_flat_inside_vmap():
+def test_composite_flat_inside_vmap1():
     @pack_single
     def f(a):
         return normal(a, a * a)
@@ -156,7 +156,7 @@ def test_composite_flat_inside_vmap():
     assert z.op == vmap_op
 
 
-def test_vmap_inside_composite_flat():
+def test_vmap_inside_composite_flat2():
     @pack_single
     def f(a):
         b = a * a

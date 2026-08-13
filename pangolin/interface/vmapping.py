@@ -1,3 +1,4 @@
+from pangolin.interface.simplifying import unpermuted_mapped_axis, permutation_view
 from pangolin.ir import Op, VMap, Constant, print_upstream
 from pangolin import dag, ir, util
 from collections.abc import Callable
@@ -18,122 +19,243 @@ from .tracing import AbstractOp, generated_nodes, FlatCallable, pack
 Shape = ir.Shape
 
 
-def is_full_slice(x: InfixRV, len: int) -> int | None:
-    """
+# def is_full_slice(x: InfixRV, len: int) -> int | None:
+#     """
 
-    Examples
-    --------
-    >>> x = ir.RV(ir.Constant([0,1,2]))
-    >>> is_full_slice(x, 3)
-    True
-    >>> x = ir.RV(ir.Constant([0,1,2]))
-    >>> is_full_slice(x, 5)
-    False
-    >>> x = ir.RV(ir.Constant(1))
-    >>> y = ir.RV(ir.Exp(),x)
-    >>> is_full_slice(y, 5)
-    False
-    """
-    return isinstance(x.op, ir.Constant) and (x.op == ir.Constant(range(len)))
-
-
-def is_vmap_over_scalar_index(x: InfixRV) -> int | None:
-    """
-
-    Examples
-    --------
-    >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
-    >>> b = ir.RV(ir.Constant([0, 1, 2]))
-    >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
-    >>> is_vmap_over_scalar_index(c)
-    0
-
-    >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
-    >>> b = ir.RV(ir.Constant([0, 1]))
-    >>> c = ir.RV(ir.Constant([0, 1, 2]))
-    >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
-    >>> is_vmap_over_scalar_index(d)
-    0
-    >>> e = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
-    >>> is_vmap_over_scalar_index(e)
-    1
-
-    """
-
-    if isinstance(x.op, ir.VMap):
-        if isinstance(x.op.base_op, ir.Index):
-            indexed_rv = x.parents[0]
-            index_rvs = x.parents[1:]
-
-            indexed_axis = x.op.in_axes[0]
-            index_axes = x.op.in_axes[1:]
-
-            if indexed_axis is None:
-                all_full_slices = all(is_full_slice(p, i) for (p, i) in zip(index_rvs, indexed_rv.shape, strict=True))
-                if all_full_slices:
-                    num_0 = sum(1 for ax in index_axes if ax == 0)
-                    num_None = sum(1 for ax in index_axes if ax is None)
-                    only_one_mapped = (num_0 == 1) and (num_None == indexed_rv.ndim - 1)
-                    if only_one_mapped:
-                        mapped_axis = index_axes.index(0)
-                        return mapped_axis
-    return None
+#     Examples
+#     --------
+#     >>> x = ir.RV(ir.Constant([0,1,2]))
+#     >>> is_full_slice(x, 3)
+#     True
+#     >>> x = ir.RV(ir.Constant([0,1,2]))
+#     >>> is_full_slice(x, 5)
+#     False
+#     >>> x = ir.RV(ir.Constant(1))
+#     >>> y = ir.RV(ir.Exp(),x)
+#     >>> is_full_slice(y, 5)
+#     False
+#     """
+#     return isinstance(x.op, ir.Constant) and (x.op == ir.Constant(range(len)))
 
 
-def reduce_vmap_parent(p: InfixRV, axis: int | None) -> tuple[InfixRV, int | None]:
-    """
-    Given an RV and an axis it will be vmapped over, give another RV and another axis that yields equivalent results
-    but is (possibly) simpler
+# def is_transpose_vmap(op: ir.VMap) -> tuple[int, ...] | None:
+#     """
+#     Could this op correspond to a "transpose" that just puts one axis in front
 
-    Parameters
-    ----------
-    p
-        Random variable that will be mapped over
-    axis
-        axis to be mapped over
+#     Parameters
+#     ----------
+#     op
+#         a vmap op
 
-    Examples
-    --------
-    >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
-    >>> b = ir.RV(ir.Constant([0, 1, 2]))
-    >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
-    >>> d, axis = reduce_vmap_parent(c, 0)
-    >>> d == a
-    True
-    >>> axis
-    0
+#     Returns
+#     -------
+#         the axis of the indexed array that could be "transposed" in front (if all parents were flat ranges)
+#         otherwise None
 
-    >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
-    >>> b = ir.RV(ir.Constant([0, 1]))
-    >>> c = ir.RV(ir.Constant([0, 1, 2]))
-    >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
-    >>> e, axis = reduce_vmap_parent(d, 0)
-    >>> e == a
-    True
-    >>> axis
-    0
+#     >>> op = ir.VMap(ir.Index(), in_axes=[None, 0], axis_size=3)
+#     >>> is_transpose_vmap(op)
+#     (0,)
 
-    >>> f = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
-    >>> g, axis = reduce_vmap_parent(f, 0)
-    >>> g == a
-    True
-    >>> axis
-    1
+#     >>> a = constant([1.1, 2.2, 3.3])
+#     >>> x = vmap(lambda i: a[i], optimize=False)(constant(range(3)))
+#     >>> print(x.op)
+#     vmap(index, [None, 0], 3)
+#     >>> is_transpose_vmap(x.op)
+#     (0,)
 
-    """
+#     >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+#     >>> x = vmap(vmap(lambda i,j: a[i,j], [None, 0], optimize=False), [0, None], optimize=False)(constant(range(2)), constant(range(3)))
+#     >>> print(x.op)
+#     vmap(vmap(index, [None, None, 0], 3), [None, 0, None], 2)
+#     >>> is_transpose_vmap(x.op)
+#     (0, 1)
 
-    if axis != 0:
-        return p, axis
+#     >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+#     >>> x = vmap(vmap(lambda i,j: a[j,i], [None, 0], optimize=False), [0, None], optimize=False)(constant(range(2)), constant(range(3)))
+#     >>> print(x.op)
+#     vmap(vmap(index, [None, 0, None], 3), [None, None, 0], 2)
+#     >>> is_transpose_vmap(x.op)
+#     (1, 0)
 
-    new_axis = is_vmap_over_scalar_index(p)
-    if new_axis is None:
-        return p, axis
+#     """
+#     match op:
+#         case ir.VMap(base_op=ir.Index(), in_axes=[None, 0], axis_size=i):
+#             return (0,)
+#         case ir.VMap(
+#             base_op=ir.VMap(base_op=ir.Index(), in_axes=[None, None, 0], axis_size=i),
+#             in_axes=[None, 0, None],
+#             axis_size=j,
+#         ):
+#             return (0, 1)
+#         case ir.VMap(
+#             base_op=ir.VMap(base_op=ir.Index(), in_axes=[None, 0, None], axis_size=i),
+#             in_axes=[None, None, 0],
+#             axis_size=j,
+#         ):
+#             return (1, 0)
 
-    return p.parents[0], new_axis
+
+# def is_reducible_vmap(x: InfixRV) -> int | None:
+#     """
+#     Is x a (recursive) vmap that amounts to just taking some array and putting some axis in front?
+#     """
+
+#     if isinstance(x.op, ir.VMap):
+#         if isinstance(x.op.base_op, ir.Index):
 
 
-def reduce_vmap_parents(parents, in_axes):
-    return util.unzip([reduce_vmap_parent(p, i) for (p, i) in zip(parents, in_axes, strict=True)])
+# def is_vmap_over_scalar_index(x: InfixRV) -> int | None:
+#     """
+
+#     Examples
+#     --------
+#     >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
+#     >>> b = ir.RV(ir.Constant([0, 1, 2]))
+#     >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
+#     >>> is_vmap_over_scalar_index(c)
+#     0
+
+#     >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
+#     >>> b = ir.RV(ir.Constant([0, 1]))
+#     >>> c = ir.RV(ir.Constant([0, 1, 2]))
+#     >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
+#     >>> is_vmap_over_scalar_index(d)
+#     0
+#     >>> e = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
+#     >>> is_vmap_over_scalar_index(e)
+#     1
+
+#     """
+
+#     if isinstance(x.op, ir.VMap):
+#         if isinstance(x.op.base_op, ir.Index):
+#             indexed_rv = x.parents[0]
+#             index_rvs = x.parents[1:]
+
+#             indexed_axis = x.op.in_axes[0]
+#             index_axes = x.op.in_axes[1:]
+
+#             if indexed_axis is None:
+#                 all_full_slices = all(is_full_slice(p, i) for (p, i) in zip(index_rvs, indexed_rv.shape, strict=True))
+#                 if all_full_slices:
+#                     num_0 = sum(1 for ax in index_axes if ax == 0)
+#                     num_None = sum(1 for ax in index_axes if ax is None)
+#                     only_one_mapped = (num_0 == 1) and (num_None == indexed_rv.ndim - 1)
+#                     if only_one_mapped:
+#                         mapped_axis = index_axes.index(0)
+#                         return mapped_axis
+#     return None
+
+
+# def reduce_vmap_parent(p: InfixRV, axis: int | None) -> tuple[InfixRV, int | None]:
+#     """
+#     Given an RV and an axis it will be vmapped over, give another RV and another axis that yields equivalent results
+#     but is (possibly) simpler
+
+#     Parameters
+#     ----------
+#     p
+#         Random variable that will be mapped over
+#     axis
+#         axis to be mapped over
+
+#     Examples
+#     --------
+#     >>> a = ir.RV(ir.Constant([1.1, 2.2, 3.3]))
+#     >>> b = ir.RV(ir.Constant([0, 1, 2]))
+#     >>> c = ir.RV(ir.VMap(ir.Index(), [None, 0], 3), a, b)
+#     >>> d, axis = reduce_vmap_parent(c, 0)
+#     >>> d == a
+#     True
+#     >>> axis
+#     0
+
+#     >>> a = ir.RV(ir.Constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]]))
+#     >>> b = ir.RV(ir.Constant([0, 1]))
+#     >>> c = ir.RV(ir.Constant([0, 1, 2]))
+#     >>> d = ir.RV(ir.VMap(ir.Index(), [None, 0, None], 2), a, b, c)
+#     >>> e, axis = reduce_vmap_parent(d, 0)
+#     >>> e == a
+#     True
+#     >>> axis
+#     0
+
+#     >>> f = ir.RV(ir.VMap(ir.Index(), [None, None, 0], 3), a, b, c)
+#     >>> g, axis = reduce_vmap_parent(f, 0)
+#     >>> g == a
+#     True
+#     >>> axis
+#     1
+
+#     """
+
+#     if axis != 0:
+#         return p, axis
+
+#     new_axis = is_vmap_over_scalar_index(p)
+#     if new_axis is None:
+#         return p, axis
+
+#     return p.parents[0], new_axis
+
+
+# def reduce_vmap_parents(parents, in_axes):
+#     return util.unzip([reduce_vmap_parent(p, i) for (p, i) in zip(parents, in_axes, strict=True)])
+
+
+# def reduce_if_possible(x: InfixRV[VMap]):
+#     """
+
+#     Examples
+#     --------
+
+#     >>> a = constant([1.1, 2.2, 3.3])
+#     >>> x = vmap(lambda i: a[i], optimize=False)(constant(range(3)))
+#     >>> print(x)
+#     vmap(index, [None, 0], 3)([1.1 2.2 3.3], [0 1 2])
+#     >>> y, axis = reduce_if_possible(x)
+#     >>> print(y)
+#     [1.1 2.2 3.3]
+#     >>> print(axis)
+#     0
+
+#     >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+#     >>> x = vmap(vmap(lambda i,j: a[i,j], [None, 0], optimize=False), [0, None], optimize=False)(constant(range(2)), constant(range(3)))
+#     >>> print(x.op)
+#     vmap(vmap(index, [None, None, 0], 3), [None, 0, None], 2)
+#     >>> y, axis = reduce_if_possible(x)
+#     >>> print(y)
+#     [[1.1 2.2 3.3] [4.4 5.5 6.6]]
+#     >>> print(axis)
+#     0
+
+#     >>> a = constant([[1.1, 2.2, 3.3],[4.4, 5.5, 6.6]])
+#     >>> x = vmap(vmap(lambda i,j: a[j,i], [None, 0], optimize=False), [0, None], optimize=False)(constant(range(2)), constant(range(3)))
+#     >>> print(x.op)
+#     vmap(vmap(index, [None, 0, None], 3), [None, None, 0], 2)
+#     >>> y, axis = reduce_if_possible(x)
+#     >>> print(y)
+#     [[1.1 2.2 3.3] [4.4 5.5 6.6]]
+#     >>> print(axis)
+#     1
+#     """
+
+#     axis_perm = is_transpose_vmap(x.op)
+#     print(f"{x=}")
+#     print(f"{axis_perm=}")
+#     if axis_perm is not None:
+#         indexed_rv = x.parents[0]
+#         indices = x.parents[1:]
+#         all_full_slices = all(is_full_slice(indices[n], indexed_rv.shape[axis_perm[n]]) for n in range(len(indices)))
+#         print(f"{all_full_slices=}")
+#         if all_full_slices:
+#             out_axis = axis_perm[0]
+#             return indexed_rv, out_axis
+#     return x, 0
+
+
+# def reduce_vmap_parents(parents, in_axes):
+#     return util.unzip([reduce_if_possible(p, i) for (p, i) in zip(parents, in_axes, strict=True)])
 
 
 def vmap_subgraph(
@@ -143,6 +265,8 @@ def vmap_subgraph(
     roots: list[InfixRV],
     roots_axes: list[int | None],
     axis_size: int | None,
+    *,
+    optimize: bool = True,
 ) -> list[InfixRV]:
     """
     Takes a graph of "dummy" RVs that represent some non-vmapped computation, then creates a parallel graph of "real" RVs that represent a vmapped computation
@@ -162,6 +286,8 @@ def vmap_subgraph(
         the axes along which the roots should be vectorized
     axis_size
         the axis size for all mapped nodes (optional unless no args vmapped)
+    optimize
+        try to simplify vmap expressions when possible
 
     Returns
     -------
@@ -218,41 +344,51 @@ def vmap_subgraph(
 
     for dummy_node in dummy_nodes:
         dummy_parents = dummy_node.parents
-        parents = [dummy_to_real[p] for p in dummy_parents]
-        my_in_axes = [dummy_mapped_axis[p] for p in dummy_parents]
+        parents = tuple(dummy_to_real[parent] for parent in dummy_parents)
+        my_in_axes = tuple(dummy_mapped_axis[parent] for parent in dummy_parents)
 
+        is_output = dummy_node in dummy_outputs
         no_mapped_axes = all(axis is None for axis in my_in_axes)
 
-        # if no mapped axes AND non-random AND not in output, no need to map
-        no_vmap_needed = no_mapped_axes and not dummy_node.op.random and dummy_node not in dummy_outputs
-        if no_vmap_needed:
-            new_op = dummy_node.op
+        if no_mapped_axes and not dummy_node.op.random and not is_output:
+            real_node = create_rv(
+                dummy_node.op,
+                *parents,
+            )
             new_axis = None
 
-            dummy_to_real[dummy_node] = create_rv(new_op, *parents)
-            dummy_mapped_axis[dummy_node] = new_axis
+            if optimize:
+                view = permutation_view(real_node)
+
+                if view is not None:
+                    base, permutation = view
+                    identity = tuple(range(base.ndim))
+
+                    if permutation == identity:
+                        real_node = base
 
         else:
-            # print("")
-            # print(f"A {parents=}")
-            # print(f"A {my_in_axes=}")
-            parents, my_in_axes = reduce_vmap_parents(parents, my_in_axes)
-            # print(f"B {parents=}")
-            # print(f"B {my_in_axes=}")
-
-            new_op = VMap(dummy_node.op, in_axes=my_in_axes, axis_size=axis_size)
+            real_node = create_rv(
+                ir.VMap(
+                    dummy_node.op,
+                    in_axes=my_in_axes,
+                    axis_size=axis_size,
+                ),
+                *parents,
+            )
             new_axis = 0
 
-            new_rv = create_rv(new_op, *parents)
-            simple_rv, axis = reduce_vmap_parent(new_rv, 0)
-            if axis == 0:
-                new_rv = simple_rv
+            if optimize:
+                replacement = unpermuted_mapped_axis(
+                    real_node,
+                    is_output=is_output,
+                )
 
-            dummy_to_real[dummy_node] = new_rv
-            dummy_mapped_axis[dummy_node] = 0
+                if replacement is not None:
+                    real_node, new_axis = replacement
 
-            # dummy_to_real[dummy_node] = create_rv(new_op, *parents)
-            # dummy_mapped_axis[dummy_node] = new_axis
+        dummy_to_real[dummy_node] = real_node
+        dummy_mapped_axis[dummy_node] = new_axis
 
     real_nodes = [dummy_to_real[dummy_node] for dummy_node in dummy_outputs]
     return real_nodes
@@ -299,12 +435,6 @@ def vmap_dummy_args(
     for i, a in zip(in_axes, args, strict=True):
         new_shape, new_axis_size = split_shape(a.shape, i)
 
-        # once upon a time we did this—but don't remember the point of it
-        # if isinstance(a.op, VMap) and i == 0:
-        #     new_op = a.op.base_op  # why do we care?
-        # else:
-        #     new_op = AbstractOp(new_shape, a.op.random)
-
         new_op = AbstractOp(new_shape)
         my_dummy = create_rv(new_op)  # no parents!
 
@@ -320,10 +450,7 @@ def vmap_dummy_args(
 
 
 def vmap_eval_flat(
-    f: FlatCallable,
-    in_axes: Sequence[int | None],
-    axis_size: int | None,
-    args: list[RVLike],
+    f: FlatCallable, in_axes: Sequence[int | None], axis_size: int | None, args: list[RVLike], *, optimize: bool = True
 ) -> list[InfixRV]:
     """
     This function (but not vmap itself) works on "flat" function f, meaning that each
@@ -364,7 +491,7 @@ def vmap_eval_flat(
     dummy_args, axis_size = vmap_dummy_args(rv_args, in_axes, axis_size)
     dummy_nodes, dummy_outputs = generated_nodes(f, dummy_args)
 
-    return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size)
+    return vmap_subgraph(dummy_args, dummy_nodes, dummy_outputs, rv_args, in_axes, axis_size, optimize=optimize)
 
 
 def get_dummy_args(in_axes, args) -> tuple[list[int], list[InfixRV]]:
@@ -430,7 +557,7 @@ def get_dummy_args(in_axes, args) -> tuple[list[int], list[InfixRV]]:
 
 # def vmap(f: Callable, in_axes: Any = 0, axis_size: int | None = None) -> Callable:
 def vmap[*Args](
-    f: Callable[[*Args], PyTree[InfixRV]], in_axes: Any = 0, axis_size: int | None = None
+    f: Callable[[*Args], PyTree[InfixRV]], in_axes: Any = 0, axis_size: int | None = None, *, optimize: bool = True
 ) -> Callable[[*Args], PyTree[InfixRV]]:
     """
     Vectorizing map. Create a function which maps ``f`` over argument axes.
@@ -445,6 +572,8 @@ def vmap[*Args](
         An int, None, or pytree with roots that are int or None. Specifies which axis of each RV should be mapped (if int) or that no axis shuld be mapped (if None). Can be a pytree matching the structure of all arguments to ``f``. Or, can be a pytree that is a prefix to the pytree representing all arguments. By default, in_axes is zero, meaning all RVs are mapped over the first axis.
     axis_size
         An integer indicating the size of the axis to be mapped. This is optional unless all leaves of ``in_axes`` are ``None``.
+    optimize
+        try to simplify vmap expressions
 
     Returns
     -------
@@ -561,7 +690,7 @@ def vmap[*Args](
 
         flat_f, flatten_inputs, unflatten_output = util.flatten_fun(f, *dummy_args, is_leaf=util._is_leaf_with_none)
         flat_args = flatten_inputs(*args)
-        flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, flat_args)
+        flat_output = vmap_eval_flat(flat_f, flat_in_axes, axis_size, flat_args, optimize=optimize)
         output = unflatten_output(flat_output)
         return output
 
