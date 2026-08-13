@@ -255,6 +255,10 @@ class Constant(Op):
 
     def __init__(self, value: ArrayLike):
         self.value = np.array(value)
+
+        if self.value.size == 0:
+            raise ValueError(f"Pangolin does not support empty constants " f"(got shape {self.value.shape}).")
+
         if not np.issubdtype(self.value.dtype, np.number):
             raise ValueError(f"Data {value} does not produce numeric dtype")
 
@@ -1914,6 +1918,12 @@ class RV[O: Op](dag.Node):
     def __init__(self, op: O, *parents: RV):
         parents_shapes = tuple(p.shape for p in parents)
         self._shape = op.get_shape(*parents_shapes)
+
+        if any(size == 0 for size in self._shape):
+            raise ValueError(
+                f"{op.name} produced an RV with an empty shape {self._shape}. Pangolin does not support zero-sized dimensions."
+            )
+
         self._n = RV._n
         RV._n += 1
         self.op = op
