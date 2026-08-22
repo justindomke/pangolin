@@ -3,7 +3,7 @@ The pangolin IR for defining joint distributions over collections of random vari
 
 This IR only *represents* groups of dependent random variables. All actual functionality is left to inference engines.
 
-The two core abstractions in the IR are the `Op` and the `RV`. An `Op` represents a simple function or conditional distribution, while an `RV` consists of a single `Op` and a (possibly empty) tuple of parent `Op`. Thus, the IR is essentially just a directed graph where each node is an `RV` with a single `Op`.
+The two core abstractions in the IR are the `Op` and the `RV`. An `Op` represents a simple function or conditional distribution, while an `RV` consists of a single `Op` and a (possibly empty) tuple of parent `RV`. Thus, the IR is essentially just a directed graph where each node is an `RV` with a single `Op`.
 
 That's the whole IR. Unlike in Pyro / NumPyro / PyMC / Tensorflow Probability, Random variables do not have names, and there is no notion of a "model" class. In Pangolin, you just work with RVs. You can assign those RVs to named variables or put them into tuples or lists or dicts if you want. But that's up to you.
 
