@@ -1,0 +1,9 @@
+.bd-page-width {
+    max-width: 96rem;
+}
+
+@media (min-width: 1200px) {
+    html {
+        --pst-sidebar-secondary: clamp(17rem, 22vw, 25rem);
+    }
+}

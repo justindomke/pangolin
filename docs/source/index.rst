@@ -11,9 +11,10 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   dag
    util
+   dag
    ir
+   functional
    interface
    jax_backend
    torch_backend
