@@ -6,10 +6,10 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing import test_util
-from .base import MixinBase
+from .base import InferenceTestBase
 
 
-class CompositeTests(MixinBase):
+class CompositeTests(InferenceTestBase):
     """
     Intended to be used as a mixin
     """

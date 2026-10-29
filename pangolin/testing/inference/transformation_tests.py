@@ -6,7 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing import test_util
-from .base import MixinBase
+from .base import InferenceTestBase
 from pangolin import interface as pi
 
 
@@ -29,7 +29,7 @@ def wishart_mean_std(nu, S):
     return mean, np.sqrt(variance_matrix)
 
 
-class TransformationTests(MixinBase):
+class TransformationTests(InferenceTestBase):
     """
     Intended to be used as a mixin. Tests if backends can make use of full transforms.
     """

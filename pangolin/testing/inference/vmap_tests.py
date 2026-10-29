@@ -7,16 +7,16 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
-from .base import MixinBase
+from .base import InferenceTestBase
 
 
-class VmapTests(MixinBase):
+class VmapTests(InferenceTestBase):
     """
     Intended to be used as a mixin
     """
 
     def test_vmap_normal1(self):
-        y = pi.vmap(pi.normal, in_axes=None, axis_size=3)(0.5, 1.5)
+        y = pi.vmap(pi.normal, in_axes=None, axis_size=3)(pi.constant(0.5), pi.constant(1.5))
 
         def testfun(samps):
             [y_samps] = samps
@@ -29,7 +29,10 @@ class VmapTests(MixinBase):
     def test_vmap_normal2(self):
         locs = np.array([3, 4, 5])
         std = 1.5
-        y = pi.vmap(pi.normal, in_axes=[0, None], axis_size=3)(locs, std)
+        y = pi.vmap(pi.normal, in_axes=[0, None], axis_size=3)(
+            pi.constant(locs),
+            pi.constant(std),
+        )
 
         def testfun(samps):
             [y_samps] = samps
@@ -42,7 +45,10 @@ class VmapTests(MixinBase):
     def test_vmap_normal3(self):
         loc = 3
         stds = np.array([6, 7, 8])
-        y = pi.vmap(pi.normal, in_axes=[None, 0], axis_size=3)(loc, stds)
+        y = pi.vmap(pi.normal, in_axes=[None, 0], axis_size=3)(
+            pi.constant(loc),
+            pi.constant(stds),
+        )
 
         def testfun(samps):
             [y_samps] = samps
@@ -55,7 +61,10 @@ class VmapTests(MixinBase):
     def test_vmap_normal4(self):
         locs = np.array([3, 4, 5])
         stds = np.array([6, 7, 8])
-        y = pi.vmap(pi.normal, in_axes=[0, 0], axis_size=3)(locs, stds)
+        y = pi.vmap(pi.normal, in_axes=[0, 0], axis_size=3)(
+            pi.constant(locs),
+            pi.constant(stds),
+        )
 
         def testfun(samps):
             [y_samps] = samps
@@ -68,7 +77,7 @@ class VmapTests(MixinBase):
     def test_double_vmap(self):
         locs = np.array([[7, 8, 9], [10, 11, 12]])
         scales = np.array([[1, 2, 3], [4, 5, 6]])
-        y = pi.vmap(pi.vmap(pi.normal))(locs, scales)
+        y = pi.vmap(pi.vmap(pi.normal))(pi.constant(locs), pi.constant(scales))
 
         def testfun(samps):
             [y_samps] = samps
@@ -82,7 +91,7 @@ class VmapTests(MixinBase):
         locs = np.array([[1, 2, 3], [4, 5, 6]])
         scales = np.array([[7, 8, 9], [10, 11, 12]])
         t = np.random.rand()
-        y = pi.vmap(pi.vmap(pi.normal))(locs, scales)
+        y = pi.vmap(pi.vmap(pi.normal))(pi.constant(locs), pi.constant(scales))
         x = pi.vmap(pi.vmap(lambda y_ij: pi.normal(y_ij, t)))(y)
         x_obs = np.random.randn(2, 3)
 

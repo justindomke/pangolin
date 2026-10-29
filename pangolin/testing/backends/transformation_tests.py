@@ -1,18 +1,16 @@
-# from pangolin.interface import *
 from pangolin.ir import *
 import numpyro.handlers
 import numpy as np
 import pytest
 import scipy.special
-from pangolin.jax_backend import ancestor_sample_flat
 import jax
 from pangolin import ir
-from .base import MixinBase
+from .base import BackendTestBase
 from pangolin.testing import test_util
 from pangolin import interface as pi
 
 
-class TransformationTests(MixinBase):
+class TransformationTests(BackendTestBase):
     """
     Intended to be used as a mixin
     """

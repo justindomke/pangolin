@@ -6,7 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing import test_util
-from .base import MixinBase
+from .base import InferenceTestBase
 
 
 def rands_from_ranges(ranges):
@@ -61,7 +61,7 @@ testdata = [
     (Exponential, lambda inv_scale: scipy.stats.expon(scale=1 / inv_scale), ["positive"]),
     (Gamma, lambda a, b: scipy.stats.gamma(a=a, loc=0, scale=1 / b), ["positive", "positive"]),
     (Poisson, scipy.stats.poisson, ["positive"]),
-    (StudentT, scipy.stats.t, [{1.5, 2, 5}, "real", "positive"]),
+    (StudentT, scipy.stats.t, [{3, 5, 10}, "real", "positive"]),
     (Dirichlet, scipy.stats.dirichlet, ["positive-vector"]),
     (Multinomial, scipy.stats.multinomial, [{1, 2, 5, 10}, "simplex"]),
     (MultiNormal, scipy.stats.multivariate_normal, ["vector", "positive-definite"]),
@@ -100,7 +100,7 @@ def get_cov(scipy_rv):
         return None
 
 
-class DistributionTests(MixinBase):
+class DistributionTests(InferenceTestBase):
     """
     Intended to be used as a mixin
     """

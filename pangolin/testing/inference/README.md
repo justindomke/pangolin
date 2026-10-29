@@ -1,1 +1,0 @@
-This module provides tests that are shared between different "inference modules", i.e. differerent modules that provide ``sample_flat`` methods to infer from posteriors.

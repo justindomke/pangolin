@@ -6,7 +6,7 @@ import jax
 from scipy import stats
 import random
 from pangolin.testing.test_util import inf_until_match, ancestor_sample_until_match
-from .base import MixinBase
+from .base import BackendTestBase
 
 
 def rands_from_ranges(ranges):
@@ -100,7 +100,7 @@ def get_cov(scipy_rv):
         return None
 
 
-class DistributionTests(MixinBase):
+class DistributionTests(BackendTestBase):
     """
     Intended to be used as a mixin
     """

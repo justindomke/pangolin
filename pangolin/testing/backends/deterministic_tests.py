@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import scipy.special
 import jax
-from .base import MixinBase
+from .base import BackendTestBase
 
 
 def rands_from_ranges(ranges):
@@ -68,7 +68,7 @@ testdata = [
 ]
 
 
-class DeterministicTests(MixinBase):
+class DeterministicTests(BackendTestBase):
     """
     Intended to be used as a mixin
     """

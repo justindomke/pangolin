@@ -7,11 +7,11 @@ from scipy import stats
 import random
 from pangolin.testing import test_util
 from pangolin import interface as pi
-from .base import MixinBase
+from .base import InferenceTestBase
 from typing import Callable
 
 
-class ScanTests(MixinBase):
+class ScanTests(InferenceTestBase):
     """
     Intended to be used as a mixin
     """
@@ -92,7 +92,7 @@ class ScanTests(MixinBase):
             ),
             [[], [0, 2], [3, 1]],
         )
-        assert y.op == ir.Scan(base_op, length, [None], 0)
+        assert y.op == ir.Scan(base_op, length, [None])
 
         def testfun(samps):
             [ys] = samps
@@ -121,10 +121,13 @@ class ScanTests(MixinBase):
         x = pi.constant(0.0)
         length = 12
         increment = np.random.randn(length)
+        increment_rv = pi.constant(increment)
         for y in [
-            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment),
-            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4))(x, increment),
-            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), in_axes=0)(x, increment),
+            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), length)(x, increment_rv),
+            pi.scan(lambda last, inc: pi.normal(last + inc, 1e-4), length, in_axes=0)(
+                x,
+                increment_rv,
+            ),
         ]:
 
             assert isinstance(y.op, ir.Scan)
@@ -141,9 +144,10 @@ class ScanTests(MixinBase):
         ndim = 5
         length = 3
         x0 = np.random.randn(ndim)
-        x = pi.vmap(pi.normal, [0, None], ndim)(x0, 1e-5)
+        x = pi.vmap(pi.normal, [0, None], ndim)(pi.constant(x0), pi.constant(1e-5))
         A = np.random.randn(ndim, ndim)
-        y = pi.scan(lambda last: A @ last, length)(x)
+        # RV.__array_priority__ makes NumPy defer to RV.__rmatmul__, which returns an RV.
+        y = pi.scan(lambda last: A @ last, length)(x)  # pyright: ignore[reportArgumentType]
 
         def testfun(samps):
             [ys] = samps
@@ -161,7 +165,7 @@ class ScanTests(MixinBase):
         ndim = 5
         length = 3
         x0 = np.random.randn(ndim)
-        x = pi.vmap(pi.normal, [0, None], ndim)(x0, 1e-5)
+        x = pi.vmap(pi.normal, [0, None], ndim)(pi.constant(x0), pi.constant(1e-5))
         A = np.random.randn(ndim, ndim)
         A_rv = pi.constant(A)
         y = pi.scan(lambda last: A_rv @ last, length)(x)
@@ -182,15 +186,15 @@ class ScanTests(MixinBase):
         randwalk = pi.scan(lambda last, input: pi.normal(last + input, 1e-7), 10)
         # randwalk is a function that takes a scalar RV and a length-10 RV and produces a length-10 RV
 
-        z = randwalk(0.0, np.arange(10))
+        z = randwalk(pi.constant(0.0), pi.constant(np.arange(10)))
         assert z.shape == (10,)
         [zs] = self.sample_flat([z], [], [], num_samples=1)
         assert zs.shape == (1, 10)
 
-        vecwalk = pi.scan(lambda last: randwalk(0.0, last), 5)
+        vecwalk = pi.scan(lambda last: randwalk(pi.constant(0.0), last), 5)
         # vecwalk is a fnction that takes a length-10 RV and produces a 5x10 RV
 
-        u = vecwalk(np.zeros(10))
+        u = vecwalk(pi.constant(np.zeros(10)))
         assert u.shape == (5, 10)
         [us] = self.sample_flat([u], [], [], num_samples=1)
         assert us.shape == (1, 5, 10)
@@ -199,19 +203,19 @@ class ScanTests(MixinBase):
 ### belong as an interface test
 
 # def test_autoregressive_const_rv_mapped():
-#     x = makerv(0.5)
+#     x = coerce_to_rv(0.5)
 #     length = 12
-#     noises = makerv(np.random.rand(length))
-#     op = ir.Scan(ir.Normal(), length, (0,), 0)
+#     noises = coerce_to_rv(np.random.rand(length))
+#     op = ir.Scan(ir.Normal(), length, (0,))
 #     y = ir.RV(op, x, noises)
 #     ys = sample(y)
 #     #print(f"{ys=}")
 
 # def test_autoregressive_const_rv_unmapped():
-#     x = makerv(0.5)
+#     x = coerce_to_rv(0.5)
 #     length = 12
-#     noise = makerv(1e-4)
-#     op = ir.Scan(ir.Normal(), length, (None,), 0)
+#     noise = coerce_to_rv(1e-4)
+#     op = ir.Scan(ir.Normal(), length, (None,))
 #     y = ir.RV(op, x, noise)
 
 #     ys = sample(y)

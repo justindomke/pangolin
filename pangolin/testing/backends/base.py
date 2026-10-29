@@ -1,23 +1,14 @@
-from typing import Callable, Protocol
+from typing import Callable
+
+from pangolin import ir
 
 
-class MixinBase:
-    "Prevent the type checker from complaining about the mixins"
+class BackendTestBase:
+    """Shared callback contract and defaults for backend test groups."""
 
-    _ancestor_sample_flat: Callable
-    _ancestor_log_prob_flat: Callable
-    _cast: Callable
-    _ops_without_sampling_support: dict = {}
-    _ops_without_log_prob_support: dict = {}
-
-    @property
-    def ancestor_sample_flat(self) -> Callable:
-        return type(self)._ancestor_sample_flat
-
-    @property
-    def ancestor_log_prob_flat(self) -> Callable:
-        return type(self)._ancestor_log_prob_flat
-
-    @property
-    def cast(self):
-        return type(self)._cast
+    ancestor_sample_flat: Callable
+    ancestor_log_prob_flat: Callable
+    cast = staticmethod(lambda x: x)
+    _ops_without_sampling_support: frozenset[type[ir.Op]] = frozenset()
+    _ops_without_log_prob_support: frozenset[type[ir.Op]] = frozenset()
+    _ops_without_eval_support: frozenset[type[ir.Op]] = frozenset()
