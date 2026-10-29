@@ -1,3 +1,5 @@
+**2026.10.29:** Factor out backend-independent combinators/tracing/transformation/unconstraining. Simplified user interface configuration, including optional full NumPy-style broadcasting. Added new combinators `log_prob`, `cdf`, `quantile`, `vjp`, `grad`. Implemented truncation.  Redesign transformations/bijections. Added `sfor` and more general `loop` combinators. Simplified IR indexing representation. Improved self-inspection via `signature` and improved `print_upstream` and `graph_upstream`. Greatly simplified JAX backend. Expanded documentation, typing, tests. Bump to 0.0.7.
+
 **2026.05.05:** Fix missing transformation bug for discrete variables, bump to 0.0.6.
 
 **2026.04.28:** Fix bug for sampling when upstream variables observed, bump to 0.0.5.

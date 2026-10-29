@@ -1,6 +1,6 @@
 [project]
 name = "pangolin"
-version = "0.0.6"
+version = "0.0.7"
 description = "Probabilistic inference focused on fun"
 requires-python = ">=3.12"
 dependencies = [
@@ -28,12 +28,11 @@ dev = [
     "pytest-clarity",
     "pytest-timeout",
     "arviz",
-    "ty",
+    "pyright",
     "ipykernel",
     "seaborn",
     "ipywidgets",
     "pymc",
-    "pyro-ppl",
     "pyjags-jw",
     "cmdstanpy",
 ]
@@ -64,7 +63,8 @@ norecursedirs = [
     "dist", 
     "build"
 ]
-timeout = 20
+timeout = 30
 
 [tool.black]
-line-length = 120
+line-length = 100
+target-version = ["py312"]

@@ -1,33 +1,13 @@
 ![pangolin](pangolin-logo.png)
 
-Pangolin's goal is to be **the world's friendliest probabilistic programming language** and to make probabilistic inference **fun**. It is now usable, but is still something of a research project.
+Practically, Pangolin aims to be **the world's friendliest probabilistic programming language**. As a
+research project, it is a quest for ultimate perfection in the art of constructing and manipulating expression graphs.
 
-## Changelog
+## Links
 
-See [`CHANGELOG.md`](CHANGELOG.md)
-
-## API Docs
-
-See [justindomke.github.io/pangolin](https://justindomke.github.io/pangolin/).
-
-## Installation / Quickstart
-
-If you have [uv](https://docs.astral.sh/uv/) installed, you can test pangolin in a temporary environment by just using `--with pangolin` at the command line. For example, say `m ~ normal(0,1)` and `s ~ lognormal(0,1)` and `x ~ normal(m, s)` is observed to have value `x=3.5`. Then you can calculate the posterior mean of `m` and `s` like so:
-
-```console
-$ uv run --with pangolin python
-Python 3.14.3 
-Type "help", "copyright", "credits" or "license" for more information.
->>> from pangolin import interface as pi
->>> from pangolin.blackjax import E
->>> m = pi.normal(0,1)
->>> s = pi.lognormal(0,1)
->>> x = pi.normal(m, s)
->>> E([m, s], x, 3.5)
-[Array(0.70249635, dtype=float32), Array(2.8581674, dtype=float32)]
-```
-
-More broadly, pangolin is [on pypi](https://pypi.org/project/pangolin/) so you can install it by using `pip install pangolin` or `uv add pangolin` or whatever. See [`INSTALL.md`](INSTALL.md) for details.
+* [Installation](INSTALL.md) (or `pip install pangolin`)
+* [API docs](https://justindomke.github.io/pangolin/)
+* [Changelog](CHANGELOG.md)
 
 ## Why?
 
@@ -45,7 +25,7 @@ For end-users, Pangolin tries to provide an interface that is simple and explici
 
 * **Small API surface.** The set of abstractions the user needs to learn should be as small as possible. 
 
-* **Explicitness.** Many modern PPLs (e.g. Pyro / NumPyro / PyMC / Orxy) lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by [`jax.vmap`](https://docs.jax.dev/en/latest/_autosummary/jax.vmap.html). If you see `x = vmap(normal, [0, None])(a, b)` or `x = vfor(lambda i: normal(a[i], b))`, that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* be one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.index). If you see `u = z[x,y]` then you know that `z.ndim == 2` and `u.ndim == x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
+* **Explicitness.** Many modern PPLs (e.g. Pyro / NumPyro / PyMC / Orxy) lean heavily on NumPy's broadcasting semantics. This looks very nice in simple cases, but becomes confusing in complex cases. In Pangolin, by default, only a very limited amount of broadcasting is allowed. (Though this is configurable.) Instead of implicit broadcasting, in Pangolin, users should use an explicit [`vmap`](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.vmap) transformation, inspired by [`jax.vmap`](https://docs.jax.dev/en/latest/_autosummary/jax.vmap.html). If you see `x = vmap(normal, [0, None])(a, b)` or `x = vfor(lambda i: normal(a[i], b))`, that means that `a` *must* be one-dimensional, `b` *must* be scalar, and `x` *must* be one-dimensional. Similarly, many modern PPLs inherit their indexing behavior from NumPy, which combines broadcasting with lots of other special cases and is [legendarily complicated](https://numpy.org/doc/stable/user/basics.indexing.html#advanced-indexing). Pangolin uses ultra-simple and ultra-legible [full-orthogonal indexing](https://justindomke.github.io/pangolin/interface.html#pangolin.interface.oindex). If you see `u = z[x,y]` then you know that `z.ndim == 2` and `u.ndim == x.ndim + y.ndim` *always*. More complex cases can still be handled with `vmap`. All this code more self-documenting and predictable.
 
 * **Graceful interop.** As much as possible, the system should feel like a natural part of the broader ecosystem, rather than a "new language". In particular, Pangolin tries to avoid several oddities common in other modern PPLs:
 
@@ -67,9 +47,9 @@ This makes many things easy that are typically quite difficult in modern PPLs:
 
 * Say you want to create a new inference algorithm that programatically inspects the model. That's easy, because the IR is just a static graph of random variables.
 
-* Say you want to create a probabilistic model and share it with collaborators, some of whom use JAX and some of whom use PyTorch. That's fine. The former group can use the [JAX backend](pangolin/jax_backend) while the latter group use the [torch backend](pangolin/torch_backend.py).
+* Say you want to create a probabilistic model and share it with collaborators, some of whom use JAX and some of whom use PyTorch. That's fine. The former group can use the [JAX backend](pangolin/jax_backend.py) while the latter group use the [torch backend](pangolin/torch_backend.py).
 
-* Say you want to create a new "backend" that will do inference using a different array computing framework instead of JAX or PyTorch. This is pretty easy. The [torch backend](pangolin/torch_backend.py) is around 1000 lines. The (more capable) [JAX backend](pangolin/jax_backend) is around 2000 lines. The [blackjax interface](pangolin/blackjax.py) is 400 lines.
+* Say you want to create a new "backend" that will do inference using a different array computing framework instead of JAX or PyTorch. This is pretty easy. The [torch backend](pangolin/torch_backend.py) is around 1000 lines. The [JAX backend](pangolin/jax_backend.py) is around 500 lines. The [blackjax interface](pangolin/blackjax.py) is 400 lines.
 
 * Say you hate Pangolin's interface. That's fine. Make a new one! As long as you produce models into the Pangolin IR, you can still use the existing backends.
 
