@@ -69,6 +69,15 @@ __all__ = ["ancestor_sample", "ancestor_sampler", "ancestor_log_prob"]
 ################################################################################
 
 
+def index(array: torch.Tensor, *indices: torch.Tensor) -> torch.Tensor:
+    """Select one entry using exactly one scalar index per array dimension."""
+    if len(indices) != array.ndim:
+        raise ValueError("Index requires one index per array dimension")
+    if any(index.ndim != 0 for index in indices):
+        raise ValueError("Index requires scalar indices")
+    return array[indices]
+
+
 simple_funs: dict[Type[Op], Callable] = {
     ir.Add: lambda a, b: a + b,
     ir.Sub: lambda a, b: a - b,
@@ -102,7 +111,7 @@ simple_funs: dict[Type[Op], Callable] = {
     ir.Diag: torch.diagonal,
     ir.DiagMatrix: torch.diag_embed,
     ir.Softmax: lambda x, axis=-1: torch.nn.Softmax(dim=axis)(x),
-    ir.Index: ir.index_orthogonal_no_slices,
+    ir.Index: index,
 }
 
 
@@ -591,35 +600,37 @@ def log_prob_vmap(op: ir.VMap, value: ArrayLike, parent_values: Sequence[ArrayLi
 log_prob_handlers[ir.VMap] = log_prob_vmap
 
 ################################################################################
-# Transformed
+# Bijected
 ################################################################################
 
 
-def sample_transformed[O: Op, B: ir.Bijector](op: ir.Transformed[O, B], parent_values: Sequence[ArrayLike]):
-    assert isinstance(op, ir.Transformed)
+def sample_transformed[O: Op, B: ir.Bijector](op: ir.Bijected[O, B], parent_values: Sequence[ArrayLike]):
+    assert isinstance(op, ir.Bijected)
     assert op.random
     assert op.base_op.random
 
-    bijector_args = tuple(parent_values[: op.bijector.n_biject_params])
-    dist_args = parent_values[op.bijector.n_biject_params :]
+    n = op.bijector.n_biject_params
+    bijector_args = tuple(parent_values[:n])
+    dist_args = parent_values[n:]
 
     x = sample_op(op.base_op, dist_args)
     y = eval_op(op.bijector.forward, (x,) + bijector_args)
     return y
 
 
-sample_handlers[ir.Transformed] = sample_transformed
+sample_handlers[ir.Bijected] = sample_transformed
 
 
 def log_prob_transformed[O: Op, B: ir.Bijector](
-    op: ir.Transformed[O, B], y: ArrayLike, parent_values: Sequence[ArrayLike]
+    op: ir.Bijected[O, B], y: ArrayLike, parent_values: Sequence[ArrayLike]
 ):
-    assert isinstance(op, ir.Transformed)
+    assert isinstance(op, ir.Bijected)
     assert op.random
     assert op.base_op.random
 
-    bijector_args = tuple(parent_values[: op.bijector.n_biject_params])
-    dist_args = parent_values[op.bijector.n_biject_params :]
+    n = op.bijector.n_biject_params
+    bijector_args = tuple(parent_values[:n])
+    dist_args = parent_values[n:]
 
     x = eval_op(op.bijector.inverse, (y,) + bijector_args)
     log_px = log_prob_op(op.base_op, x, dist_args)
@@ -627,7 +638,7 @@ def log_prob_transformed[O: Op, B: ir.Bijector](
     return log_px - log_jac_det
 
 
-log_prob_handlers[ir.Transformed] = log_prob_transformed
+log_prob_handlers[ir.Bijected] = log_prob_transformed
 
 ################################################################################
 # Functions to do sample and/or log prob on a single node
