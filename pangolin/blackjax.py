@@ -28,7 +28,7 @@ from jax import numpy as jnp
 import jax
 import jax.tree_util
 import numpy as np
-from typing import Callable, Optional, Iterable
+from typing import Callable, Optional, Iterable, Sequence
 from pangolin import ir
 from pangolin.ir import RV
 import blackjax
@@ -37,10 +37,9 @@ import textwrap
 import inspect
 import functools
 
-from pangolin import dag
-from pangolin import jax_backend
+from pangolin import dag, functional, jax_backend
+from pangolin.functional.transforming import apply_transform
 from pangolin.calculate import Calculate
-from pangolin.jax_backend.bijectors import default_bijector_dict
 
 __all__ = [
     # inference drivers
@@ -607,12 +606,11 @@ def run_rwm(log_prob, key, initial_state, num_samples, step_size=1.0):
 
 
 def sample_flat(
-    vars,
-    given_vars,
-    given_vals,
+    vars: Sequence[RV],
+    given_vars: Sequence[RV],
+    given_vals: Sequence[ir.ArrayLike],
     *,
     run_inf=run_nuts,
-    bijector_dict=default_bijector_dict,
     deferred=True,
     **inf_args,
 ):
@@ -622,7 +620,7 @@ def sample_flat(
     Latent variables are split into:
 
     - **MCMC vars**: latents that are ancestors of a given (observed)
-      variable. These are unconstrained via bijectors and sampled by
+      variable. These are unconstrained by an IR graph rewrite and sampled by
       ``run_inf``.
     - **Deferred vars**: latents with no observed descendants. These are
       marginalized out of the MCMC target and ancestor-sampled at the
@@ -631,6 +629,17 @@ def sample_flat(
     The split is exact: no MCMC/given var has a deferred parent, the
     deferred factors integrate to 1 in constrained space, and deferred
     latents are drawn from their true conditional given the MCMC latents.
+
+    With ``deferred=False``, all unobserved random nodes are selected instead.
+    `functional.transform_for` selects a Transform for each selected random node using
+    its rewritten parents. The node is replaced by a constrained-space reconstruction
+    backed by unconstrained randomness. Discrete and unsupported distributions are rejected.
+
+    Observed and deferred nodes keep their Ops while receiving rewritten parents. The actual
+    inference variables are discovered from the resulting graph, and any discrete variables
+    selected for inference are rejected. Initialization holds observations fixed. The final
+    graph evaluation reconstructs requested outputs and samples deferred variables, so no
+    separate numerical constraining step is needed.
     """
     if len(given_vars) != len(given_vals):
         raise ValueError("length of given_vars not equal to length of given_vals")
@@ -640,14 +649,21 @@ def sample_flat(
         raise ValueError(f"Cannot condition on RV with non-random op(s) {nonrandom_ops}")
 
     given_vals = [jnp.array(val) for val in given_vals]
-    all_vars = dag.upstream_nodes(tuple(vars) + tuple(given_vars))
-    latent_vars = [v for v in all_vars if v.op.random and v not in given_vars]
+    roots = given_vars if deferred else (vars, given_vars)
+    selected = set(dag.upstream_nodes(roots)) - set(given_vars)
 
-    if deferred:
-        obs_ancestors = dag.upstream_nodes(tuple(given_vars))
-        mcmc_vars = [v for v in latent_vars if v in obs_ancestors]
-    else:
-        mcmc_vars = latent_vars
+    def rewrite(original: RV, parents: tuple[RV, ...]) -> tuple[RV, None]:
+        rebuilt = RV(original.op, *parents, interface=original.interface)
+        if original in selected and original.op.random:
+            transform = functional.transform_for(rebuilt.op, rebuilt.parents)
+            if transform is not None:
+                _, rebuilt = apply_transform(transform, rebuilt)
+        return rebuilt, None
+
+    (vars, given_vars), _ = functional.graph_scan((list(vars), list(given_vars)), rewrite)
+
+    roots = given_vars if deferred else (vars, given_vars)
+    mcmc_vars = [v for v in dag.upstream_nodes(roots) if v.op.random and v not in given_vars]
 
     # Deferred latents are sampled in constrained space and never enter
     # the unconstrained space, so the discrete restriction applies only
@@ -656,7 +672,7 @@ def sample_flat(
         if v.op.discrete:
             raise ValueError(
                 f"sample_flat does not support discrete latent/unobserved RV "
-                f"with observed descendants (cannot be deferred; saw op {v.op})"
+                f"selected for inference (saw op {v.op})"
             )
 
     seed = np.random.randint(0, 2**32 - 1)
@@ -667,20 +683,14 @@ def sample_flat(
 
         @jax.jit
         def log_prob(mcmc_vals):
-            return jax_backend.ancestor_log_prob_flat(mcmc_vars + given_vars, mcmc_vals + given_vals, bijector_dict)
+            return jax_backend.ancestor_log_prob_flat(
+                mcmc_vars + given_vars, list(mcmc_vals) + given_vals
+            )
 
-        mcmc_vals = jax_backend.ancestor_sample_flat(mcmc_vars, init_key, bijector_dict=bijector_dict)
+        mcmc_vals = jax_backend.ancestor_sample_graph(
+            mcmc_vars, init_key, boundary=dict(zip(given_vars, given_vals, strict=True))
+        )
         mcmc_samps = run_inf(log_prob, inf_key, mcmc_vals, **inf_args)
-
-        if bijector_dict is not None and len(mcmc_samps) > 0:
-
-            def constrain(mcmc_vals):
-                all_unconstrained = jax_backend.ancestor_constrain(
-                    mcmc_vars + given_vars, mcmc_vals + given_vals, bijector_dict
-                )
-                return all_unconstrained[: len(mcmc_vars)]
-
-            mcmc_samps = jax.vmap(constrain)(mcmc_samps)
     else:
         # No continuous latent is an ancestor of an observation, so the
         # request reduces to (conditional) forward sampling.
