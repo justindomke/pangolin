@@ -63,7 +63,8 @@ for c in range(num_candidates):
 
     lo = np.percentile(approval_samps[c], 2.5, axis=1)
     hi = np.percentile(approval_samps[c], 97.5, axis=1)
-    plt.fill_between(np.arange(num_days), lo, hi, color=color, alpha=0.25, label='posterior' if c==0 else None)
+    plt.fill_between(np.arange(num_days), lo, hi, color=color, alpha=0.25,
+        label='posterior' if c==0 else None)
 
     plt.plot(approval_true[c], ':', alpha=0.5, label='true' if c==0 else None, color=color)
 
@@ -75,7 +76,7 @@ plt.legend();
 ![](polling.png)
 
 
-Almost all the work is done using normal Python abstractions. But if you have a lot of data and/or a GPU, you'll likely want to use vectorized instructions. Fortunately, Pangolin offers an exceptionally ergonomic way to do that which *does not rely on broadcasting tricks*:
+Almost all the work is done using normal Python abstractions. But if you have a lot of data and/or a GPU, you'll likely want to use vectorized instructions. Pangolin offers an exceptionally ergonomic way to do that which *does not rely on broadcasting tricks*:
 
 ```python
 # create model
@@ -105,15 +106,13 @@ def polls(i = num_polls):
 approval_samps = pangolin.blackjax.sample(approval, polls, polls_obs, num_samples = 1000)
 ```
 
-Inference on this model is just as efficient as inference on a density expressed in raw JAX using combinations of `vmap` or `scan`.
-
-Don't believe it? Don't like how magical that code looks? Well, in Pangolin you can always look at the internal representation of a model:
+Inference on this model is just as efficient as inference on a density expressed in raw JAX using combinations of `vmap` or `scan`. Don't believe it? Don't like how magical that code looks? Well, you can always look at the internal representation:
 
 ```python
 pi.print_upstream(polls, locals())
 ```
 
-```console
+```text
 shape    | statement
 -------- | ---------
 ()       | a = 0
@@ -134,7 +133,9 @@ shape    | statement
 (30,)    | polls ~ vmap(normal, [0, 0], 30)(g, j)
 ```
 
-Mathematically, the internal representation is just a directed graph of random variables (RVs). Each RV has an operation (Op) and a list of parents. Ops compose with container Ops like `VMap` and `Scan`. That's pretty much all there is to it. This is designed to be simple, explicit, and easy to write an interepreter for. The [JAX backend](https://github.com/justindomke/pangolin/blob/main/pangolin/jax_backend.py) is a single 1000-line long file. It's so simple, because it *only* uses the IR, and has no idea that the ergonomic interface layer even exists.
+(If you prefer, you can also write it using `vmap` and `scan` instead of `loop`.)
+
+Mathematically, the internal representation is just a directed graph of random variables (RVs). Each RV has an operation (Op) and a list of parents. Ops compose with container Ops like `VMap` and `Scan`. That's pretty much all there is to it. This is designed to be simple, explicit. Hence, the [JAX backend](https://github.com/justindomke/pangolin/blob/main/pangolin/jax_backend.py) is a single 1000-line long file. It has no idea that the ergonomic interface layer even exists.
 
 ## Goals
 
