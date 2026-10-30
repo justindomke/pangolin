@@ -9,7 +9,134 @@ research project, it is a quest for ultimate perfection in the art of constructi
 * [API docs](https://justindomke.github.io/pangolin/)
 * [Changelog](CHANGELOG.md)
 
-## Why?
+## Mini-tutorial (Why use Pangolin?)
+
+Because it's easy. Because you barely need to learn any new abstractions to start using it. Here's an example of building a polling model, generating synthetic data, and then doing posterior inference:
+
+```python
+import pangolin
+from pangolin import interface as pi
+from matplotlib import pyplot as plt
+import numpy as np
+
+# setup
+num_candidates = 3
+num_days = 100
+num_polls = 30
+
+candidates = np.random.randint(0, num_candidates, num_polls)
+days       = np.random.randint(0, num_days, num_polls)
+
+# model
+approval_std = [pi.lognormal(0, 1) for _ in range(num_candidates)]
+poll_std     = [pi.lognormal(0, 1) for _ in range(num_candidates)]
+
+approval = [[None] * num_days for _ in range(num_candidates)]
+
+for c in range(num_candidates):
+    for d in range(num_days):
+        if d == 0:
+            prev = pi.uniform(0,100)
+        else:
+            prev = approval[c][d-1]
+        approval[c][d] = pi.normal(prev, approval_std[c])
+
+polls = [None for _ in range(num_polls)]
+
+for i in range(num_polls):
+    c = candidates[i]
+    d = days[i]
+    polls[i] = pi.normal(approval[c][d], poll_std[c])
+
+# synthetic data
+[approval_true, polls_obs] = pangolin.jax_backend.ancestor_sample([approval, polls])
+
+# posterior inference
+approval_samps = pangolin.blackjax.sample(approval, polls, polls_obs, num_samples = 1000)
+
+# plot
+plt.figure()
+for c in range(num_candidates):
+    where = candidates == c
+    l = plt.plot(days[where], np.array(polls_obs)[where], '.', label='data' if c==0 else None)
+    color = l[0].get_color()
+
+    lo = np.percentile(approval_samps[c], 2.5, axis=1)
+    hi = np.percentile(approval_samps[c], 97.5, axis=1)
+    plt.fill_between(np.arange(num_days), lo, hi, color=color, alpha=0.25, label='posterior' if c==0 else None)
+
+    plt.plot(approval_true[c], ':', alpha=0.5, label='true' if c==0 else None, color=color)
+
+plt.xlabel('days')
+plt.ylabel('popularity')
+plt.legend();
+```
+
+![](polling.png)
+
+
+Almost all the work is done using normal Python abstractions. But if you have a lot of data and/or a GPU, you'll likely want to use vectorized instructions. Fortunately, Pangolin offers an exceptionally ergonomic way to do that which *does not rely on broadcasting tricks*:
+
+```python
+# create model
+candidates_rv = pi.constant(candidates)
+days_rv       = pi.constant(days)
+approval_std = pi.lognormal(np.zeros(num_candidates), 1)
+poll_std     = pi.lognormal(np.zeros(num_candidates), 1)
+
+@pi.loop
+def approval(prev, c = num_candidates, d = pi.seq(num_days)):
+    if d is None:
+        return pi.uniform(0, 100)
+    else:
+        return pi.normal(prev[c,d-1], approval_std[c])
+
+@pi.loop
+def polls(i = num_polls):
+    c = candidates_rv[i]
+    d = days_rv[i]
+    
+    return pi.normal(approval[c,d], poll_std[c])
+
+# synthetic data
+(approval_true, polls_obs) = pangolin.jax_backend.ancestor_sample([approval, polls])
+
+# posterior inference
+approval_samps = pangolin.blackjax.sample(approval, polls, polls_obs, num_samples = 1000)
+```
+
+Inference on this model is just as efficient as inference on a density expressed in raw JAX using combinations of `vmap` or `scan`.
+
+Don't believe it? Don't like how magical that code looks? Well, in Pangolin you can always look at the internal representation of a model:
+
+```python
+pi.print_upstream(polls, locals())
+```
+
+```console
+shape    | statement
+-------- | ---------
+()       | a = 0
+()       | b = 100
+(3,)     | c ~ vmap(uniform, [None, None], 3)(a, b)
+(3,)     | d = [0. 0. 0.]
+()       | e = 1
+(3,)     | approval_std ~ vmap(lognormal, [0, None], 3)(d, e)
+(3,)     | f = [0 1 2]
+(3, 100) | approval ~ vmap(scan(composite(3, [index, normal], [[1, 2], [0, 3]]), 100, [None, None]), [0, None, 0], 3)(c, approval_std, f)
+(30,)    | candidates_rv = [2 0 ... 0 0]
+(30,)    | days_rv = [61 44 ... 45 39]
+(30,)    | g = vmap(index, [None, 0, 0], 30)(approval, candidates_rv, days_rv)
+(3,)     | h = [0. 0. 0.]
+()       | i = 1
+(3,)     | poll_std ~ vmap(lognormal, [0, None], 3)(h, i)
+(30,)    | j = vmap(index, [None, 0], 30)(poll_std, candidates_rv)
+(30,)    | polls ~ vmap(normal, [0, 0], 30)(g, j)
+```
+
+Mathematically, the internal representation is just a directed graph of random variables (RVs). Each RV has an operation (Op) and a list of parents. Ops compose with container Ops like `VMap` and `Scan`. That's pretty much all there is to it. This is designed to be simple, explicit, and easy to write an interepreter for. The [JAX backend](https://github.com/justindomke/pangolin/blob/main/pangolin/jax_backend.py) is a single 1000-line long file. It's so simple, because it *only* uses the IR, and has no idea that the ergonomic interface layer even exists.
+
+## Goals
 
 At a high level, Pangolin has two goals:
 
@@ -17,7 +144,7 @@ At a high level, Pangolin has two goals:
 
 2. To make things simple for *researchers* who want to develop new inference algorithms, develop new ways of specifying probabilistic models, share models between different backends (JAX / PyTorch), benchmark inference algorithms written in different languages, etc.
 
-## Why (for end users)?
+## Goals (for end users)
 
 For end-users, Pangolin tries to provide an interface that is simple and explicit. In particular:
 
@@ -37,7 +164,7 @@ For end-users, Pangolin tries to provide an interface that is simple and explici
 
 * In Pangolin you can see the internal representation. After building a model, you can call `print_upstream` to see the internal representation, with the parents and shapes of all random variables.
 
-## Why (for researchers)?
+## Goals (for researchers)
 
 Pangolin is extremely modular. It's build around a simple [internal representation](https://justindomke.github.io/pangolin/ir.html) (IR) in which there are only two types of objects: An `Op` represents a conditional distribution or deterministic function, while an `RV` contains a single `Op` and a list of parent `RV`. Primitives to make evaluation efficient on modern hardware (e.g. `VMap` or `Scan`) wrap individuals `Op`s. That's basically all there is to it.
 
